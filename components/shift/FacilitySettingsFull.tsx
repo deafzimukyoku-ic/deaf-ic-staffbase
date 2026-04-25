@@ -65,6 +65,9 @@ export default function FacilitySettingsFull({ scope }: Props) {
   const [requestDeadline, setRequestDeadline] = useState(20);
   const [transportMinEndTime, setTransportMinEndTime] = useState<string>(DEFAULT_TRANSPORT_MIN_END_TIME);
   const [pickupCooldownMinutes, setPickupCooldownMinutes] = useState<number>(DEFAULT_PICKUP_COOLDOWN_MINUTES);
+  /* migration 116: コアタイム（提供時間） */
+  const [coreStartTime, setCoreStartTime] = useState<string>('10:30');
+  const [coreEndTime, setCoreEndTime] = useState<string>('16:30');
 
   const loadBasics = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -89,10 +92,8 @@ export default function FacilitySettingsFull({ scope }: Props) {
       : allFacs;
     setFacilities(scopedFacs);
 
-    // admin で shiftFacilityId 未設定なら先頭で自動選択
-    if (scope === 'admin' && !shiftFacilityId && scopedFacs[0]) {
-      setShiftFacilityId(scopedFacs[0].id);
-    }
+    /* 初期化は layout に集約。useShiftFacilityId フックは初回 null を返すため、
+       ここで先頭施設を強制セットすると layout が設定した値を上書きしてしまう。fallback 削除。 */
   }, [supabase, scope, shiftFacilityId, setShiftFacilityId]);
 
   const loadSettings = useCallback(async () => {
@@ -117,6 +118,8 @@ export default function FacilitySettingsFull({ scope }: Props) {
         setRequestDeadline(data.request_deadline_day ?? 20);
         setTransportMinEndTime((data.transport_min_end_time ?? DEFAULT_TRANSPORT_MIN_END_TIME).slice(0, 5));
         setPickupCooldownMinutes(data.transport_pickup_cooldown_minutes ?? DEFAULT_PICKUP_COOLDOWN_MINUTES);
+        setCoreStartTime((data.core_start_time ?? '10:30').slice(0, 5));
+        setCoreEndTime((data.core_end_time ?? '16:30').slice(0, 5));
       } else {
         // 設定未存在: shift-puzzle のデフォルトで初期化
         setPickupAreas([]);
@@ -126,6 +129,8 @@ export default function FacilitySettingsFull({ scope }: Props) {
         setRequestDeadline(20);
         setTransportMinEndTime(DEFAULT_TRANSPORT_MIN_END_TIME);
         setPickupCooldownMinutes(DEFAULT_PICKUP_COOLDOWN_MINUTES);
+        setCoreStartTime('10:30');
+        setCoreEndTime('16:30');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '読み込みに失敗しました');
@@ -179,6 +184,8 @@ export default function FacilitySettingsFull({ scope }: Props) {
         request_deadline_day: requestDeadline,
         transport_min_end_time: `${transportMinEndTime}:00`,
         transport_pickup_cooldown_minutes: pickupCooldownMinutes,
+        core_start_time: `${coreStartTime}:00`,
+        core_end_time: `${coreEndTime}:00`,
         updated_at: new Date().toISOString(),
       };
       const { error: upErr } = await supabase
@@ -339,6 +346,33 @@ export default function FacilitySettingsFull({ scope }: Props) {
             className="w-24 outline-none"
             style={inputStyle}
           />
+        </div>
+
+        <div className="flex flex-col gap-2 max-w-2xl">
+          <label className="text-sm font-semibold" style={{ color: 'var(--ink-2)' }}>提供時間（コアタイム）</label>
+          <p className="text-xs" style={{ color: 'var(--ink-3)' }}>
+            シフト表サイドバーの「有資格者基準」「提供時間内の有資格者」判定に使われる中核時間帯。
+            この時間帯を最低 {minQualified} 名の有資格者で常時カバーすることが基準です。
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="time"
+              value={coreStartTime}
+              onChange={(e) => setCoreStartTime(e.target.value || '10:30')}
+              className="w-32 outline-none"
+              style={inputStyle}
+              aria-label="コアタイム開始"
+            />
+            <span style={{ color: 'var(--ink-3)' }}>〜</span>
+            <input
+              type="time"
+              value={coreEndTime}
+              onChange={(e) => setCoreEndTime(e.target.value || '16:30')}
+              className="w-32 outline-none"
+              style={inputStyle}
+              aria-label="コアタイム終了"
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-2 max-w-2xl">

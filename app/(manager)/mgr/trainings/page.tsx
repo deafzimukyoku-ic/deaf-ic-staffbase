@@ -81,10 +81,11 @@ export default function ManagerTrainingsPage() {
         .select('facility:facilities(id, name), facility_id')
         .eq('employee_id', meData.id);
       const mfs = (facs || [])
-        .map((f: { facility_id: string; facility: { id: string; name: string } | null }) => ({
-          id: f.facility_id,
-          name: f.facility?.name ?? '',
-        }))
+        .map((row: unknown) => {
+          const r = row as { facility_id: string; facility: { id: string; name: string } | { id: string; name: string }[] | null };
+          const f = Array.isArray(r.facility) ? r.facility[0] : r.facility;
+          return { id: r.facility_id, name: f?.name ?? '' };
+        })
         .filter((f) => !!f.name);
       const hasAffiliation = mfs.some((f) => f.id === meData.facility_id);
       if (meData.facility_id && !hasAffiliation) {

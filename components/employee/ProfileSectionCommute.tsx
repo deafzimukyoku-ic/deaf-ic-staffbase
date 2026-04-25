@@ -13,14 +13,28 @@ import type { Employee } from '@/lib/types';
 const MAX_IMAGE_SIZE_MB = 10;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
 
+/* 免許種別マスタ（ハードコード）。「その他」選択時のみ自由入力欄が出る。
+   将来 DB マスタ化したくなったら facility_shift_settings 等に移すが、変更頻度が低いのでひとまず固定。 */
+const LICENSE_TYPES: readonly string[] = [
+  '普通自動車第一種',
+  '普通自動車第一種（AT限定）',
+  '普通自動車第二種',
+  '準中型自動車第一種',
+  '中型自動車第一種',
+  '中型自動車第二種',
+  '大型自動車第一種',
+  '大型自動車第二種',
+  'その他',
+];
+
 type CommuteFields = Pick<Employee,
   'has_car_commute' | 'is_shuttle_driver' |
   'car_model' | 'car_plate_number' | 'license_type' | 'license_number' |
   'license_expiry' | 'insurance_company' | 'insurance_policy_number' |
-  'insurance_expiry' | 'vehicle_inspection_expiry' | 'parking_location' |
+  'insurance_expiry' | 'vehicle_inspection_expiry' |
   'commute_distance' |
   'driving_experience' | 'accident_history' | 'training_attendance' |
-  'license_image_path' | 'commute_route_image_path' |
+  'license_image_path' | 'license_image_back_path' | 'commute_route_image_path' |
   'commute_method' | 'commute_time_minutes' |
   'route_section1_route' | 'route_section1_transport' | 'route_section1_cost' |
   'route_section2_route' | 'route_section2_transport' | 'route_section2_cost' |
@@ -139,6 +153,22 @@ export function ProfileSectionCommute({ data, onChange, employeeId }: Props) {
             </label>
           </div>
 
+          {/* 通勤経路画像（誰でもアップロード可能。Google マップで自宅と施設の経路をスクショして添付してもらう） */}
+          <div className="border-t border-diletto-gray/10 pt-4 space-y-2">
+            <p className="text-sm font-medium text-diletto-blue">通勤経路の画像</p>
+            <p className="text-xs text-diletto-gray">
+              📍 Google マップで「自宅 → 施設」の経路を検索し、ルートが見える状態でスクリーンショットを撮ってアップロードしてください。
+            </p>
+            <ImageUploadField
+              label="通勤経路スクリーンショット"
+              path={data.commute_route_image_path || null}
+              fieldKey="commute_route_image_path"
+              uploading={uploading === 'commute_route_image_path'}
+              onUpload={handleImageUpload}
+              onClear={() => update('commute_route_image_path', null)}
+            />
+          </div>
+
           {/* 公共交通機関の区間情報 */}
           {data.commute_method === 'public_transport' && (
             <div className="border-t border-diletto-gray/10 pt-4 space-y-4">
@@ -178,21 +208,76 @@ export function ProfileSectionCommute({ data, onChange, employeeId }: Props) {
             </div>
           )}
 
+          {/* 免許情報（マイカー通勤 OR 送迎運転者 ならどちらでも表示） */}
+          {showDrivingFields && (
+            <div className="border-t border-diletto-gray/10 pt-4 space-y-4">
+              <p className="text-sm font-medium text-diletto-blue">免許情報</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>免許種別</Label>
+                  <select
+                    value={LICENSE_TYPES.includes(data.license_type ?? '') ? (data.license_type ?? '') : (data.license_type ? 'その他' : '')}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === 'その他') {
+                        /* 「その他」選択時は空文字にして自由入力欄を表示 */
+                        update('license_type', '');
+                      } else {
+                        update('license_type', v || null);
+                      }
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                  >
+                    <option value="">選択してください</option>
+                    {LICENSE_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  {/* 「その他」が選ばれている、または既存値がプルダウン候補に含まれない場合、自由入力欄を出す */}
+                  {(data.license_type !== null && !LICENSE_TYPES.includes(data.license_type ?? '')) && (
+                    <Input
+                      value={data.license_type || ''}
+                      onChange={(e) => update('license_type', e.target.value || null)}
+                      placeholder="その他の免許種別を入力"
+                    />
+                  )}
+                </div>
+                <Field label="免許証番号" value={data.license_number || ''} onChange={(v) => update('license_number', v || null)} />
+              </div>
+              <div className="space-y-2">
+                <Label>免許有効期限</Label>
+                <Input type="date" value={data.license_expiry || ''} onChange={(e) => update('license_expiry', e.target.value || null)} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ImageUploadField
+                  label="免許証の写真（表面）*"
+                  path={data.license_image_path || null}
+                  fieldKey="license_image_path"
+                  uploading={uploading === 'license_image_path'}
+                  onUpload={handleImageUpload}
+                  onClear={() => update('license_image_path', null)}
+                />
+                <ImageUploadField
+                  label="免許証の写真（裏面）*"
+                  path={data.license_image_back_path || null}
+                  fieldKey="license_image_back_path"
+                  uploading={uploading === 'license_image_back_path'}
+                  onUpload={handleImageUpload}
+                  onClear={() => update('license_image_back_path', null)}
+                />
+              </div>
+              <p className="text-[11px] text-diletto-gray-light">
+                ※ 表面・裏面ともに必須。記載事項変更欄を含めて全部撮影してください。
+              </p>
+            </div>
+          )}
+
           {data.has_car_commute && (
             <div className="border-t border-diletto-gray/10 pt-4 space-y-4">
               <p className="text-sm font-medium text-diletto-blue">車両情報</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="車種" value={data.car_model || ''} onChange={(v) => update('car_model', v || null)} placeholder="トヨタ プリウス" />
                 <Field label="ナンバープレート" value={data.car_plate_number || ''} onChange={(v) => update('car_plate_number', v || null)} placeholder="名古屋 300 あ 1234" />
-              </div>
-              <p className="text-sm font-medium text-diletto-blue pt-2">免許情報</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="免許種別" value={data.license_type || ''} onChange={(v) => update('license_type', v || null)} placeholder="普通自動車第一種" />
-                <Field label="免許証番号" value={data.license_number || ''} onChange={(v) => update('license_number', v || null)} />
-              </div>
-              <div className="space-y-2">
-                <Label>免許有効期限</Label>
-                <Input type="date" value={data.license_expiry || ''} onChange={(e) => update('license_expiry', e.target.value || null)} />
               </div>
 
               <p className="text-sm font-medium text-diletto-blue pt-2">任意保険</p>
@@ -210,7 +295,6 @@ export function ProfileSectionCommute({ data, onChange, employeeId }: Props) {
                   <Input type="date" value={data.vehicle_inspection_expiry || ''} onChange={(e) => update('vehicle_inspection_expiry', e.target.value || null)} />
                 </div>
               </div>
-              <Field label="駐車場所" value={data.parking_location || ''} onChange={(v) => update('parking_location', v || null)} />
               <div className="space-y-2">
                 <Label>通勤距離（km）</Label>
                 <Input type="number" step="0.1" value={data.commute_distance || ''} onChange={(e) => update('commute_distance', e.target.value || null)} />

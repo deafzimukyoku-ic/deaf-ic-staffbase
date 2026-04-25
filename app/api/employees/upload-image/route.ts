@@ -48,8 +48,8 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 
-    // 固定カラム（license_image_path, commute_route_image_path）の場合はemployeesテーブルを更新
-    const fixedImageColumns = ['license_image_path', 'commute_route_image_path'];
+    // 固定カラム（license_image_path / license_image_back_path / commute_route_image_path）の場合は employees テーブルを直接更新
+    const fixedImageColumns = ['license_image_path', 'license_image_back_path', 'commute_route_image_path'];
     if (fixedImageColumns.includes(field_key)) {
       await adminClient
         .from('employees')

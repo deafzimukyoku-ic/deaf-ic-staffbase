@@ -69,6 +69,11 @@
     <li>✅ <b>権限マトリクス</b> /admin/access-matrix 新規 — 管理者・マネージャー一覧 + 施設アクセス○×トグル + 招待モーダル</li>
     <li>✅ <b>役職権限の分離</b> — positions.system_role と同期トリガー削除（migration 115・要適用）</li>
     <li>✅ <b>部署系完全削除</b> — departments / employee_departments / manager_departments テーブル + employees.department drop（migration 115）/ コード側は 16 ファイルから dept 参照を全除去済</li>
+    <li>✅ <b>計画 A: sticky 透けバグ修正</b> — `--*-pale-solid` 4 変数を globals.css に定義（未定義で transparent 扱いになっていた根本原因）</li>
+    <li>✅ <b>施設絵文字（C案）</b> — 名前先頭に絵文字入れる運用 / 全画面の hard-coded 🏢 prefix 削除</li>
+    <li>✅ <b>計画 B: シフト表サイドバー再設計</b> — 4 行構成（出勤者数 / 有資格者基準 ✓✗ / 提供時間内の有資格者 / 余力 ratio）。余力 ≥4 で赤警告。コアタイム事業所別設定可（migration 116 要適用）</li>
+    <li>✅ <b>施設並び順 + ON/OFF (②)</b> — ドラッグ&ドロップ並び替え + シフト/送迎 ON/OFF。シフト OFF の事業所はセレクタ・ナビから非表示（migration 116 要適用）</li>
+    <li>✅ <b>シフトモード初期値の修正 (①)</b> — 自分の所属施設を優先選択</li>
     <li>✅ <b>UI 改修系</b>（既読/未読赤統一・カレンダー色付け・進捗バー段階色・遵守事項同意文言・送迎表 padding 統一・印刷範囲・編集者表示・ダッシュボード拡張・view_logs ロギング・「最近の更新」折りたたみ＋マニュアル統合）すべて完了</li>
   </ul>
   <p style="margin:8px 0 0; color:#78350f; font-size:12px;">※ 個別 Phase 行は古い計画段階の項目で更新が追いついていません。実装の真の状態はこのサマリーが優先。</p>

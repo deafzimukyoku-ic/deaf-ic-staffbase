@@ -121,9 +121,8 @@ export default function ScheduleGridFull({
         <thead>
           <tr>
             <th
-              className="sticky left-0 top-0 z-50 px-4 py-4 text-left font-bold"
+              className="schedule-grid-sticky-corner sticky left-0 top-0 z-50 px-4 py-4 text-left font-bold"
               style={{
-                background: 'var(--bg)',
                 borderBottom: '2px solid var(--rule-strong)',
                 borderRight: '2px solid var(--rule-strong)',
                 minWidth: '160px',
@@ -170,9 +169,8 @@ export default function ScheduleGridFull({
           {children.map((child) => (
             <tr key={child.id} className="group cursor-pointer transition-colors">
               <td
-                className="sticky left-0 z-20 px-4 py-3 font-semibold whitespace-nowrap group-hover:!bg-[var(--accent-pale)] transition-colors"
+                className="schedule-grid-sticky-child sticky left-0 z-30 px-4 py-3 font-semibold whitespace-nowrap"
                 style={{
-                  background: 'var(--white)',
                   borderBottom: '1px solid var(--rule)',
                   borderRight: '2px solid var(--rule-strong)',
                   color: 'var(--ink)',
@@ -255,9 +253,8 @@ export default function ScheduleGridFull({
 
           <tr>
             <td
-              className="sticky left-0 bottom-0 z-50 px-4 py-3 font-bold"
+              className="schedule-grid-sticky-corner sticky left-0 bottom-0 z-50 px-4 py-3 font-bold"
               style={{
-                background: 'var(--bg)',
                 borderTop: '2px solid var(--rule-strong)',
                 borderRight: '2px solid var(--rule-strong)',
                 color: 'var(--ink)',

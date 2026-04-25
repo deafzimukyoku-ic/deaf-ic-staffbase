@@ -46,7 +46,7 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
       const tid = me.tenant_id;
 
       const [facs, poss, cfs, banks] = await Promise.all([
-        supabase.from('facilities').select('*').eq('tenant_id', tid).order('created_at'),
+        supabase.from('facilities').select('*').eq('tenant_id', tid).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
         supabase.from('positions').select('id, name').eq('tenant_id', tid).order('display_order'),
         supabase.from('custom_employee_fields').select('*').eq('tenant_id', tid).eq('is_active', true).order('display_order'),
         supabase.from('tenant_payroll_banks').select('bank_name').eq('tenant_id', tid).order('display_order'),

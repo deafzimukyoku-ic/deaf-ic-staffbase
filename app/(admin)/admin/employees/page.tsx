@@ -41,7 +41,7 @@ export default function EmployeesPage() {
 
       const [empRes, facRes] = await Promise.all([
         supabase.from('employees').select('*').eq('tenant_id', me.tenant_id).order('employee_number'),
-        supabase.from('facilities').select('id, tenant_id, name, address, created_at').eq('tenant_id', me.tenant_id).order('created_at'),
+        supabase.from('facilities').select('id, tenant_id, name, address, created_at').eq('tenant_id', me.tenant_id).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
       ]);
 
       setEmployees((empRes.data as Employee[]) || []);

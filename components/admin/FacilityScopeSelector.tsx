@@ -20,7 +20,7 @@ export function FacilityScopeSelector({ tenantId, targetType, targetFacilityIds,
   useEffect(() => {
     if (!tenantId) return;
     const supabase = createClient();
-    supabase.from('facilities').select('id, name').eq('tenant_id', tenantId).order('created_at').then(({ data }) => {
+    supabase.from('facilities').select('id, name').eq('tenant_id', tenantId).order('display_order', { ascending: true }).order('created_at', { ascending: true }).then(({ data }) => {
       setFacilities((data as Facility[]) || []);
     });
   }, [tenantId]);

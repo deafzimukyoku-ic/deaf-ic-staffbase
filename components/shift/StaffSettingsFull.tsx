@@ -251,10 +251,9 @@ export default function StaffSettingsFull({ scope }: Props) {
       : all;
     setFacilities(scoped);
 
-    // admin かつ shiftFacilityId 未設定なら先頭で自動選択
-    if (scope === 'admin' && !shiftFacilityId && scoped[0]) {
-      setShiftFacilityId(scoped[0].id);
-    }
+    /* 初期化は layout に集約。useShiftFacilityId フックは初回 null を返すため、
+       ここで先頭施設を強制セットすると layout が設定した値（所属 or ユーザー切替）を
+       上書きしてしまう。fallback は削除。 */
   }, [supabase, scope, shiftFacilityId, setShiftFacilityId]);
 
   const loadFacilityData = useCallback(async () => {

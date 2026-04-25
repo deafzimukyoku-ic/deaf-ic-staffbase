@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import MyShiftsView from '@/components/shift/MyShiftsView';
+
+export const dynamic = 'force-dynamic';
 
 // employee 自身のシフト閲覧画面（タスクF）
 // RLS により ready/published の自分の分のみ取得される（migration 107）
@@ -23,5 +26,9 @@ export default async function EmployeeShiftsPage() {
     );
   }
 
-  return <MyShiftsView employeeId={me.id} tenantId={me.tenant_id} facilityId={me.facility_id} />;
+  return (
+    <Suspense fallback={null}>
+      <MyShiftsView employeeId={me.id} tenantId={me.tenant_id} facilityId={me.facility_id} />
+    </Suspense>
+  );
 }

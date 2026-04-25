@@ -2,8 +2,13 @@
 
 export const dynamic = 'force-dynamic';
 
+import { Suspense } from 'react';
 import TransportFull from '@/components/shift/TransportFull';
 
 export default function ManagerShiftsTransportPage() {
-  return <TransportFull role="manager" />;
+  return (
+    <Suspense fallback={null}>
+      <TransportFull role="manager" />
+    </Suspense>
+  );
 }

@@ -65,6 +65,12 @@ create policy manager_manage_trainings on trainings
     )
   );
 
+/* manuals: 091 の "manager can manage manuals in own depts" は dept 参照のみだったので drop。
+   manuals は target_facility_ids を持たないテーブルなので、
+   manager のアクセスは tenant 共通の SELECT ポリシー (091 の "tenant members can read manuals") で
+   read-only に切替（書込は admin 限定の "admin can manage manuals" が継続）。 */
+drop policy if exists "manager can manage manuals in own depts" on manuals;
+
 -- ============================================================
 -- 2. get_manager_subordinate_ids() を dept 参照なしで再作成
 -- ============================================================

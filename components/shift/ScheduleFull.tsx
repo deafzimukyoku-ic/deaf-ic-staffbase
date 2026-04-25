@@ -127,16 +127,10 @@ export default function ScheduleFull({ scope }: Props) {
     if (!meRow) return;
     setMe(meRow);
 
-    // admin で shiftFacilityId 未設定 → 先頭 facility を選んで永続化（layout 側でも同じことをするが冪等）
-    if (scope === 'admin' && !shiftFacilityId) {
-      const { data: facData } = await supabase
-        .from('facilities')
-        .select('id')
-        .eq('tenant_id', meRow.tenant_id)
-        .order('created_at')
-        .limit(1);
-      if (facData && facData.length > 0) setShiftFacilityId((facData[0] as { id: string }).id);
-    }
+    /* 初期化は (admin)/(manager)/layout.tsx に集約済み。
+       useShiftFacilityId は最初の render で null を返すため、ここで fallback set すると
+       layout が決めた値（自分の所属 or ユーザー切替値）を不正に上書きしてしまう。
+       fallback は削除した。 */
   }, [supabase, scope, shiftFacilityId, setShiftFacilityId]);
 
   const fetchAll = useCallback(async () => {

@@ -250,7 +250,7 @@ function FacilityHeaderSelector({ facilities, value, onChange }: { facilities: F
     >
       {facilities.length > 1 && value === null && <option value="">担当施設を選択</option>}
       {facilities.map((f) => (
-        <option key={f.id} value={f.id}>🏢 {f.name}</option>
+        <option key={f.id} value={f.id}>{f.name}</option>
       ))}
     </select>
   );
@@ -302,26 +302,46 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
         userName: `${emp.last_name} ${emp.first_name}`.trim(),
       });
 
-      // 担当施設取得（manager_facilities + 自分の facility）
+      /* 担当施設取得（manager_facilities + 自分の facility）。
+         migration 116: shift_enabled=false の施設は除外 + display_order 順 */
       const { data: mfs } = await supabase
         .from('manager_facilities')
-        .select('facility_id, facility:facilities(id, name)')
+        .select('facility_id, facility:facilities(id, name, display_order, shift_enabled)')
         .eq('employee_id', emp.id);
-      const list: FacilityLite[] = [];
+      type FacilityWithMeta = FacilityLite & { display_order: number; shift_enabled: boolean };
+      const collected: FacilityWithMeta[] = [];
       const seen = new Set<string>();
       if (emp.facility_id) {
-        const { data: own } = await supabase.from('facilities').select('id, name').eq('id', emp.facility_id).single();
-        if (own) { list.push({ id: own.id, name: own.name }); seen.add(own.id); }
+        const { data: own } = await supabase
+          .from('facilities')
+          .select('id, name, display_order, shift_enabled')
+          .eq('id', emp.facility_id)
+          .single();
+        if (own && own.shift_enabled !== false) {
+          collected.push({ id: own.id, name: own.name, display_order: own.display_order ?? 0, shift_enabled: own.shift_enabled ?? true });
+          seen.add(own.id);
+        }
       }
       for (const mf of (mfs || [])) {
-        const raw = (mf as unknown as { facility: { id: string; name: string } | { id: string; name: string }[] | null }).facility;
+        const raw = (mf as unknown as { facility: { id: string; name: string; display_order: number; shift_enabled: boolean } | { id: string; name: string; display_order: number; shift_enabled: boolean }[] | null }).facility;
         const f = Array.isArray(raw) ? raw[0] : raw;
-        if (f && !seen.has(f.id)) { list.push({ id: f.id, name: f.name }); seen.add(f.id); }
+        if (f && !seen.has(f.id) && f.shift_enabled !== false) {
+          collected.push({ id: f.id, name: f.name, display_order: f.display_order ?? 0, shift_enabled: f.shift_enabled ?? true });
+          seen.add(f.id);
+        }
       }
+      collected.sort((a, b) => a.display_order - b.display_order);
+      const list: FacilityLite[] = collected.map(({ id, name }) => ({ id, name }));
       setFacilities(list);
 
-      // ヘッダーセレクタの初期値: 既に選択済みでなければ最初の担当施設
-      if (!facilityId && list.length > 0) {
+      /* ① 仕様: 初期値は本人の所属施設 (emp.facility_id) を優先。
+         localStorage 保存値が現リストに含まれるなら維持。 */
+      const inAllowed = (id: string | null) => !!id && list.some((f) => f.id === id);
+      if (inAllowed(facilityId)) {
+        /* keep */
+      } else if (inAllowed(emp.facility_id)) {
+        setFacilityId(emp.facility_id!);
+      } else if (list.length > 0) {
         setFacilityId(list[0].id);
       }
     }

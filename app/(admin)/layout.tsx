@@ -84,12 +84,21 @@ function SidebarNav({
   pathname,
   mode,
   onNavigate,
+  transportEnabled,
 }: {
   pathname: string;
   mode: Mode;
   onNavigate?: () => void;
+  /** false の場合、シフトモードのナビから送迎表 / 週次送迎を除外（migration 116） */
+  transportEnabled: boolean;
 }) {
-  const items = mode === 'staff' ? staffNav : shiftNav;
+  const baseItems = mode === 'staff' ? staffNav : shiftNav;
+  const items = mode === 'shift' && !transportEnabled
+    ? baseItems.filter((it) => it.kind !== 'link' || (
+        it.href !== '/admin/shifts/transport' &&
+        it.href !== '/admin/shifts/output/weekly-transport'
+      ))
+    : baseItems;
 
   // アコーディオン展開状態（デフォルト: そのアコーディオン配下のURLがアクティブなら展開）
   const initialOpen = useMemo(() => {
@@ -194,10 +203,12 @@ function SidebarContent({
   pathname,
   mode,
   onNavigate,
+  transportEnabled,
 }: {
   pathname: string;
   mode: Mode;
   onNavigate?: () => void;
+  transportEnabled: boolean;
 }) {
   const homeHref = mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard';
   return (
@@ -209,7 +220,7 @@ function SidebarContent({
       </div>
       <ModeLabel mode={mode} />
       <ScrollArea className="flex-1 py-3">
-        <SidebarNav pathname={pathname} mode={mode} onNavigate={onNavigate} />
+        <SidebarNav pathname={pathname} mode={mode} onNavigate={onNavigate} transportEnabled={transportEnabled} />
       </ScrollArea>
     </div>
   );
@@ -250,6 +261,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [mode, setMode] = useState<Mode>('staff');
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [shiftFacilityId] = useShiftFacilityId();
+  /* migration 116: 選択中事業所の transport_enabled が false なら nav から送迎関連を非表示 */
+  const transportEnabled = useMemo(() => {
+    if (!shiftFacilityId) return true;
+    const f = facilities.find((x) => x.id === shiftFacilityId);
+    return f ? (f as Facility & { transport_enabled?: boolean }).transport_enabled !== false : true;
+  }, [facilities, shiftFacilityId]);
 
   // localStorage から復元 + URL 判定で上書き
   useEffect(() => {
@@ -274,7 +291,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       const { data: emp } = await supabase
         .from('employees')
-        .select('last_name, first_name, tenant_id')
+        .select('last_name, first_name, tenant_id, facility_id')
         .eq('auth_user_id', user.id)
         .single();
       if (!emp) return;
@@ -290,22 +307,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         userName: `${emp.last_name} ${emp.first_name}`.trim(),
       });
 
-      // facility 一覧（シフトモード上部セレクタ用）
+      /* facility 一覧（シフトモード上部セレクタ用）。
+         migration 116: display_order 順 + shift_enabled=true のみセレクタに出す。 */
       const { data: facData } = await supabase
         .from('facilities')
-        .select('id, tenant_id, name, address, created_at')
+        .select('id, tenant_id, name, address, created_at, display_order, shift_enabled, transport_enabled')
         .eq('tenant_id', emp.tenant_id)
-        .order('created_at');
+        .eq('shift_enabled', true)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
       const all = (facData as Facility[]) || [];
       setFacilities(all);
-      // 初期選択がなければ先頭を localStorage に保存
+      /* 初期選択ロジック（① 仕様改）:
+         admin はレイアウトマウント（ログイン直後・リロード・新規タブ）のたびに
+         「自分の所属施設」を優先で再セット。同タブ内のドロップダウン切替は
+         localStorage 経由で維持され、内部ナビでは layout が再マウントされないため失われない。
+         所属が現リストに含まれない（ shift_enabled=false 等）場合のみ stored / 先頭にフォールバック。 */
       const stored = (() => {
         try { return localStorage.getItem('shift-facility-id'); } catch { return null; }
       })();
-      if (!stored && all.length > 0) {
-        setStoredFacilityId(all[0].id);
-      } else if (stored && all.length > 0 && !all.some((f) => f.id === stored)) {
-        // 削除済み facility の id が残っていたら先頭にリセット
+      const inAllowed = (id: string | null) => !!id && all.some((f) => f.id === id);
+      if (inAllowed(emp.facility_id)) {
+        setStoredFacilityId(emp.facility_id!);
+      } else if (inAllowed(stored)) {
+        /* keep */
+      } else if (all.length > 0) {
         setStoredFacilityId(all[0].id);
       }
     }
@@ -338,7 +364,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex h-screen bg-diletto-beige">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col border-r border-diletto-gray/10 w-64">
-        <SidebarContent pathname={pathname} mode={mode} />
+        <SidebarContent pathname={pathname} mode={mode} transportEnabled={transportEnabled} />
       </aside>
 
       {/* Main area */}
@@ -352,7 +378,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </svg>
             </SheetTrigger>
             <SheetContent side="left" className="w-[260px] p-0">
-              <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} />
+              <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} transportEnabled={transportEnabled} />
             </SheetContent>
           </Sheet>
           <Link href={mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard'} className="flex items-center">
@@ -366,7 +392,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className="h-8 rounded-md border border-diletto-gray/15 bg-white px-2 text-xs font-medium text-diletto-ink max-w-[120px]"
                 aria-label="表示中の事業所"
               >
-                {facilities.map((f) => (<option key={f.id} value={f.id}>🏢 {f.name}</option>))}
+                {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
               </select>
             )}
             <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">
@@ -402,7 +428,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className="h-9 rounded-md border border-diletto-gray/15 bg-white px-3 text-sm font-medium text-diletto-ink"
                 aria-label="表示中の事業所"
               >
-                {facilities.map((f) => (<option key={f.id} value={f.id}>🏢 {f.name}</option>))}
+                {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
               </select>
             )}
             <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">

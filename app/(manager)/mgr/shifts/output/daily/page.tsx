@@ -2,8 +2,13 @@
 
 export const dynamic = 'force-dynamic';
 
+import { Suspense } from 'react';
 import DailyOutputFull from '@/components/shift/DailyOutputFull';
 
 export default function ManagerDailyOutputPage() {
-  return <DailyOutputFull role="manager" />;
+  return (
+    <Suspense fallback={null}>
+      <DailyOutputFull role="manager" />
+    </Suspense>
+  );
 }

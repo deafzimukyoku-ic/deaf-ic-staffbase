@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import MyRequestsView from '@/components/shift/MyRequestsView';
+
+export const dynamic = 'force-dynamic';
 
 // employee 自身の休み希望提出（タスクC-1）
 export default async function EmployeeRequestsPage() {
@@ -22,5 +25,9 @@ export default async function EmployeeRequestsPage() {
     );
   }
 
-  return <MyRequestsView employeeId={me.id} tenantId={me.tenant_id} facilityId={me.facility_id} />;
+  return (
+    <Suspense fallback={null}>
+      <MyRequestsView employeeId={me.id} tenantId={me.tenant_id} facilityId={me.facility_id} />
+    </Suspense>
+  );
 }

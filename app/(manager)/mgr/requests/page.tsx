@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import AdminRequestsView from '@/components/shift/AdminRequestsView';
+
+export const dynamic = 'force-dynamic';
 
 // manager: 自施設に固定（forceFacilityId で渡す）
 export default async function ManagerRequestsPage() {
@@ -22,5 +25,9 @@ export default async function ManagerRequestsPage() {
     );
   }
 
-  return <AdminRequestsView forceFacilityId={me.facility_id} />;
+  return (
+    <Suspense fallback={null}>
+      <AdminRequestsView forceFacilityId={me.facility_id} />
+    </Suspense>
+  );
 }

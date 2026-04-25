@@ -391,7 +391,7 @@ function ReminderModal({
                         {r.last_name} {r.first_name}
                       </Link>
                       <div className="text-[10px] text-diletto-gray-light">
-                        {r.facility_id && <>🏢 {facilityMap.get(r.facility_id) || '-'}</>}
+                        {r.facility_id && <>{facilityMap.get(r.facility_id) || '-'}</>}
                         {lastIso && <span className="ml-2">📅 最終{lastLabel}: {formatJpDate(lastIso)}</span>}
                       </div>
                     </div>

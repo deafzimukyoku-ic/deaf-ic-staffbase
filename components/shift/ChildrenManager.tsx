@@ -320,7 +320,7 @@ export function ChildrenManager({ scope }: Props) {
                           </Badge>
                           {facility && (
                             <Badge variant="outline" className="text-[10px] border-diletto-gray/20">
-                              🏢 {facility.name}
+                              {facility.name}
                             </Badge>
                           )}
                           {!c.is_active && (

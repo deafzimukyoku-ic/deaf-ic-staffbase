@@ -2,8 +2,13 @@
 
 export const dynamic = 'force-dynamic';
 
+import { Suspense } from 'react';
 import ScheduleFull from '@/components/shift/ScheduleFull';
 
 export default function AdminShiftsSchedulePage() {
-  return <ScheduleFull scope="admin" />;
+  return (
+    <Suspense fallback={null}>
+      <ScheduleFull scope="admin" />
+    </Suspense>
+  );
 }

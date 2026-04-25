@@ -23,6 +23,7 @@ interface ComplianceDoc {
   content: string;
   admin_comment: string | null;
   updated_at: string;
+  created_at?: string;
   category_id: string | null;
   target_type: TargetType;
   target_facility_ids: string[];

@@ -104,6 +104,7 @@ export interface Employee {
   commute_route_detail: string | null;
   // 画像
   license_image_path: string | null;
+  license_image_back_path: string | null; // 裏面（migration 117）
   commute_route_image_path: string | null;
   // 緊急連絡先1
   emergency1_name: string | null;
@@ -187,12 +188,16 @@ export interface Employee {
 }
 
 // --- Facilities ---
+// migration 116 で display_order / shift_enabled / transport_enabled 追加。
 export interface Facility {
   id: string;
   tenant_id: string;
   name: string;
   address: string;
   created_at: string;
+  display_order?: number;
+  shift_enabled?: boolean;
+  transport_enabled?: boolean;
 }
 
 // --- Shift-maker: 児童・送迎エリア ---

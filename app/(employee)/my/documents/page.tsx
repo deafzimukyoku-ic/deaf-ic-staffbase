@@ -225,6 +225,7 @@ export default function MyDocumentsPage() {
             customFields={employeeData.custom_fields}
             customFieldDefs={imageFieldDefs}
             editable
+            hideDriverFixedImages
             onImageUpdated={(fieldKey, path) => {
               setEmployeeData((prev) => {
                 if (!prev) return prev;

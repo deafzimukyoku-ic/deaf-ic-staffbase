@@ -590,15 +590,17 @@ export default function TransportDayView({
                       Phase 47 (⑤): 児童名を太字 + サイズ大きく（1.05rem, 700）
                       Phase 47 (⑥): position:sticky で横スクロール時に左端固定 */}
                   <td
-                    className="px-2 py-2 align-top group-hover:!bg-[var(--accent-pale-solid)] transition-colors"
+                    className="transport-day-sticky-child px-2 py-2 align-top"
+                    data-row-bg={
+                      child.isUnassigned ? 'red-pale' : rowIdx % 2 === 0 ? 'white' : 'bg'
+                    }
                     style={{
                       borderBottom: isExpanded ? 'none' : '1px solid var(--rule)',
                       borderRight: cellBorderRight,
                       color: child.isUnassigned ? 'var(--red)' : 'var(--ink)',
                       position: 'sticky',
                       left: 0,
-                      zIndex: 1,
-                      background: rowBg,
+                      zIndex: 5,
                     }}
                   >
                     <div className="flex flex-col items-start gap-1">

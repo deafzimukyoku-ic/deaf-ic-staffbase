@@ -30,6 +30,43 @@
 | 113 | 113_child_display_order_memory.sql | 児童 DnD 並び順記憶テーブル（slot_signature, child_id, display_order） | ✅ |
 | 114 | 114_employees_qualifications_array_fix.sql | employees.qualifications を text → text[] に変換（104 が `add column if not exists` で skip された型ズレを是正） | ✅ |
 | 115 | 115_remove_departments_and_position_role.sql | (A) departments / employee_departments / manager_departments 完全削除 + employees.department drop / (B) positions.system_role + 同期トリガー削除（役職→ロール自動連動を切断） | 🆕 未適用 |
+| 116 | 116_facility_core_time_and_meta.sql | (A) facility_shift_settings.core_start_time / core_end_time（コアタイム事業所別設定） / (B) facilities に display_order / shift_enabled / transport_enabled 追加（並び順 + シフト/送迎 ON/OFF） | 🆕 未適用 |
+
+---
+
+## 0.09 計画 A/B + 施設順 ON/OFF + sticky 透けバグ修正（2026-04-25）
+
+### sticky 透けバグ（計画 A）
+- `app/globals.css` に **`--accent-pale-solid` / `--red-pale-solid` / `--gold-pale-solid` / `--green-pale-solid` を新規定義**
+- 元々 hex 不透明色だったが、shift-puzzle 移植コードが `-solid` サフィックスで参照していたため未定義 → transparent 扱い → スクロール時に下層が透けるバグ。1 行修正で全画面解消
+
+### 施設絵文字運用（C案）
+- DB 変更なし。事業所名の先頭に絵文字を入れる運用（例: 「🌸 パステル」）
+- 全画面の hard-coded `🏢 {f.name}` prefix を削除（admin/manager layout / access-matrix / ChildrenManager / ProgressDashboard）
+
+### シフト表サイドバー新4行構成（計画 B）
+| 行 | ロジック |
+|---|---|
+| 出勤者数 | 既存（assignment_type='normal' の重複ない employee_id 数） |
+| 有資格者基準 | コアタイム重複の有資格者数 ≥ `min_qualified_staff` → ✓/✗ |
+| 提供時間内の有資格者 | コアタイム中の有資格者最小人数（30分刻み）。`min_qualified_staff` 未満で赤 |
+| 余力 | 児童数 ÷ コアタイム出勤職員数。<3 緑 / 3〜4 黄 / **≥4 赤+⚠** |
+
+### 関連ファイル
+- `lib/logic/qualifiedCoverage.ts`: `coreStartTime/coreEndTime` 引数追加、`coreStaffCount` を `CoverageResult` に追加
+- `components/shift/ShiftFull.tsx`: `facility_shift_settings` から `core_start_time / core_end_time / min_qualified_staff` 取得 → grid に渡す
+- `components/shift/ShiftGridFull.tsx`: 3 行 → 4 行構成。新指標で再描画
+- `components/shift/FacilitySettingsFull.tsx`: コアタイム編集 UI 追加
+
+### 施設並び順 + ON/OFF（②）
+- `app/(admin)/layout.tsx`: facility 取得を `display_order` ASC + `shift_enabled=true` 絞り。`transport_enabled=false` の facility 選択中は nav から「送迎表」「週次送迎」を非表示。`useMemo` で `transportEnabled` 算出
+- `app/(manager)/layout.tsx`: 同様に display_order ソート + shift_enabled フィルタ
+- `app/(admin)/admin/settings/page.tsx`: 施設行をドラッグ&ドロップ並び替え（@dnd-kit）+ 「シフト」「送迎」2 トグル
+- `lib/types.ts`: `Facility` に `display_order? / shift_enabled? / transport_enabled?` 追加（optional で互換維持）
+
+### シフトモード初期値の修正（①）
+- 旧: localStorage 値があればそれ、なければ `list[0]`
+- 新: 1) localStorage 値がアクセス可能リストに含まれるなら維持 / 2) `employees.facility_id` を優先 / 3) フォールバックで `list[0]`
 
 ---
 

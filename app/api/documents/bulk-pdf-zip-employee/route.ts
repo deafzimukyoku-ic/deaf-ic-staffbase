@@ -60,8 +60,7 @@ export async function POST(request: NextRequest) {
     .select('*')
     .eq('tenant_id', template.tenant_id)
     .eq('status', 'active')
-    .neq('role', 'admin')
-    .neq('role');
+    .neq('role', 'admin');
 
   if (template.visibility_condition === 'car_commute_only') {
     query = query.eq('has_car_commute', true);

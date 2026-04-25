@@ -78,6 +78,11 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   const [shiftRequests, setShiftRequests] = useState<ShiftRequestRow[]>([]);
   const [cells, setCells] = useState<ShiftCell[]>([]);
   const [warnings, setWarnings] = useState<ShiftWarning[]>([]);
+  /* migration 116: facility_shift_settings から取得（コアタイム + 有資格者基準）。
+     未設定時は default 10:30〜16:30 / min=2 で動く。 */
+  const [coreStartTime, setCoreStartTime] = useState<string | null>(null);
+  const [coreEndTime, setCoreEndTime] = useState<string | null>(null);
+  const [minQualifiedStaff, setMinQualifiedStaff] = useState<number>(2);
 
   // 月全体の publish_status を集約。「全行 published」なら published、「全行 ready」なら ready、
   // 「全行 draft」なら draft、混在なら mixed。
@@ -173,6 +178,16 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         .eq('facility_id', facilityId)
         .gte('date', from)
         .lte('date', to);
+
+      // facility_shift_settings: コアタイム + 有資格者基準（migration 116）
+      const { data: fss } = await supabase
+        .from('facility_shift_settings')
+        .select('core_start_time, core_end_time, min_qualified_staff')
+        .eq('facility_id', facilityId)
+        .maybeSingle();
+      setCoreStartTime((fss?.core_start_time as string | null) ?? null);
+      setCoreEndTime((fss?.core_end_time as string | null) ?? null);
+      setMinQualifiedStaff((fss?.min_qualified_staff as number | null) ?? 2);
 
       setStaff(staffRows);
       setScheduleEntries((entries ?? []) as ScheduleEntryRow[]);
@@ -580,6 +595,9 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                 warnings={warnings}
                 onCellClick={handleCellClick}
                 childrenCountByDate={childrenCountByDate}
+                coreStartTime={coreStartTime}
+                coreEndTime={coreEndTime}
+                minQualifiedStaff={minQualifiedStaff}
               />
             </div>
 

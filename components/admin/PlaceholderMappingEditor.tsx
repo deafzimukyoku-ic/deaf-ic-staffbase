@@ -43,7 +43,6 @@ const employeeFields: { value: string; label: string }[] = [
   { value: 'insurance_policy_number', label: '保険証券番号' },
   { value: 'insurance_expiry', label: '保険有効期限' },
   { value: 'vehicle_inspection_expiry', label: '車検有効期限' },
-  { value: 'parking_location', label: '駐車場所' },
   { value: 'commute_distance', label: '通勤距離' },
   // 運転関連
   { value: 'driving_experience', label: '運転経歴' },

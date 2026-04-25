@@ -29,7 +29,7 @@ export default function AdminDashboardPage() {
         supabase.from('announcements').select('id').eq('tenant_id', tid),
         supabase.from('manuals').select('id').eq('tenant_id', tid),
         supabase.from('employees').select('id, last_name, first_name, last_name_kana, first_name_kana, status, facility_id').eq('tenant_id', tid),
-        supabase.from('facilities').select('id, name').eq('tenant_id', tid).order('created_at'),
+        supabase.from('facilities').select('id, name').eq('tenant_id', tid).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
         supabase.from('document_submissions').select('employee_id, submitted_at').eq('status', 'submitted'),
         supabase.from('compliance_acknowledgments').select('employee_id, acknowledged_at'),
         supabase.from('training_submissions').select('employee_id, submitted_at').eq('result', 'passed'),

@@ -1,6 +1,14 @@
+'use client';
+
+export const dynamic = 'force-dynamic';
+
+import { Suspense } from 'react';
 import AdminRequestsView from '@/components/shift/AdminRequestsView';
 
-// admin: 全 facility から1つを選んで表示。facility_id はヘッダーセレクタ (useShiftFacilityId)
 export default function AdminRequestsPage() {
-  return <AdminRequestsView />;
+  return (
+    <Suspense fallback={null}>
+      <AdminRequestsView />
+    </Suspense>
+  );
 }

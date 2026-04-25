@@ -97,7 +97,7 @@ export default function AccessMatrixPage() {
       setTenantId(me.tenant_id);
 
       const [facRes, empRes, mfRes] = await Promise.all([
-        supabase.from('facilities').select('id, name').eq('tenant_id', me.tenant_id).order('name'),
+        supabase.from('facilities').select('id, name').eq('tenant_id', me.tenant_id).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
         supabase
           .from('employees')
           .select('id, employee_number, last_name, first_name, email, role, facility_id')
@@ -260,7 +260,7 @@ export default function AccessMatrixPage() {
                     key={f.id}
                     className="text-center px-3 py-2 text-xs font-bold text-diletto-gray-light uppercase whitespace-nowrap"
                   >
-                    🏢 {f.name}
+                    {f.name}
                   </th>
                 ))}
               </tr>
@@ -597,7 +597,7 @@ function AddManagerDialog({
               <option value="">（未設定）</option>
               {facilities.map((f) => (
                 <option key={f.id} value={f.id}>
-                  🏢 {f.name}
+                  {f.name}
                 </option>
               ))}
             </select>
@@ -621,7 +621,7 @@ function AddManagerDialog({
                             : 'bg-white text-diletto-gray border-diletto-gray/20 hover:bg-diletto-beige'
                         }`}
                       >
-                        🏢 {f.name} {checked ? '✓' : ''}
+                        {f.name} {checked ? '✓' : ''}
                       </button>
                     );
                   })}

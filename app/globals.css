@@ -80,6 +80,61 @@
   --rule-strong: #c8c8c0;
   --bg: #f5f4f0;
   --white: #ffffff;
+  /* sticky セル用の不透明版（スクロール時に下層が透けるバグ対策）。
+     --*-pale はもともと不透明 hex だが、shift-puzzle 由来コードが
+     「sticky 用は明示的に -solid サフィックスで参照」する規約だったため、
+     未定義のまま使われて transparent 扱いになっていた。 */
+  --accent-pale-solid: #e8ecf7;
+  --red-pale-solid:    #f7e8e8;
+  --gold-pale-solid:   #f7efdd;
+  --green-pale-solid:  #e6f2eb;
+}
+
+/* ===== sticky セルの透けバグ対策（恒久版） =====
+   - var() の解決が遅延した瞬間に transparent になるケースを潰すため、
+     シフト/送迎/利用表のグリッド sticky セルに直接 hex 背景を当てる
+   - isolation: isolate で stacking context を独立させ、隣接非 sticky セルが
+     z-index 比較で上に乗る現象を遮断
+   - transform: translateZ(0) で GPU layer 化（hover/transition 中の半透明描画も解消）
+   - tbody が <tr style="background"> を持っているとき、cell が opaque でも
+     描画タイミングで漏れる Chromium バグへの保険 */
+.shift-grid-sticky-staff,
+.shift-grid-sticky-corner,
+.shift-grid-sticky-bottom {
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+.shift-grid-sticky-staff {
+  background-color: #ffffff !important;
+}
+.shift-grid-sticky-staff[data-qualified="true"] {
+  background-color: #f7efdd !important; /* gold-pale-solid */
+}
+.shift-grid-sticky-corner {
+  background-color: #f5f4f0 !important; /* bg */
+}
+.shift-grid-sticky-bottom {
+  background-color: #f5f4f0 !important; /* bg */
+}
+.transport-day-sticky-child {
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+.transport-day-sticky-child[data-row-bg="white"] { background-color: #ffffff !important; }
+.transport-day-sticky-child[data-row-bg="bg"] { background-color: #f5f4f0 !important; }
+.transport-day-sticky-child[data-row-bg="red-pale"] { background-color: #f7e8e8 !important; }
+.schedule-grid-sticky-child {
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  background-color: #ffffff !important;
+}
+.schedule-grid-sticky-corner {
+  isolation: isolate;
+  transform: translateZ(0);
+  background-color: #f5f4f0 !important;
 }
 
 :root {

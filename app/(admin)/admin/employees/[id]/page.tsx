@@ -759,6 +759,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               employeeId={employee.id}
               tenantId={employee.tenant_id}
               licensePath={employee.license_image_path}
+              licenseBackPath={employee.license_image_back_path}
               commuteRoutePath={employee.commute_route_image_path}
               customFields={employee.custom_fields}
               customFieldDefs={imageFieldDefs}

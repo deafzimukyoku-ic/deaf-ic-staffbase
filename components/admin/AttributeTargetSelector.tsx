@@ -39,7 +39,7 @@ export function AttributeTargetSelector({
     useEffect(() => {
         if (!tenantId) return;
         Promise.all([
-            supabase.from('facilities').select('id, name').eq('tenant_id', tenantId).order('created_at'),
+            supabase.from('facilities').select('id, name').eq('tenant_id', tenantId).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
             supabase.from('positions').select('id, name').eq('tenant_id', tenantId).order('display_order'),
         ]).then(([facRes, posRes]) => {
             setFacilities((facRes.data as Facility[]) || []);

@@ -20,33 +20,43 @@ interface Props {
   employeeId: string;
   tenantId: string;
   licensePath: string | null;
+  /** 免許証 裏面（migration 117）。社員プロフィールで両面アップロード可能。 */
+  licenseBackPath?: string | null;
   commuteRoutePath: string | null;
   customFields: Record<string, string> | null;
   customFieldDefs: ImageFieldDef[];
   /** true = アップロード可能、false = 閲覧のみ */
   editable?: boolean;
   onImageUpdated?: (fieldKey: string, path: string) => void;
+  /** true: 免許証(表/裏) / 通勤経路の固定枠を非表示（社員側 /my/documents 用。
+       これらは ProfileSectionCommute（通勤・車両情報）に移動した）。 */
+  hideDriverFixedImages?: boolean;
 }
 
 export function EmployeeImagesCard({
   employeeId,
   tenantId,
   licensePath,
+  licenseBackPath = null,
   commuteRoutePath,
   customFields,
   customFieldDefs,
   editable = false,
   onImageUpdated,
+  hideDriverFixedImages = false,
 }: Props) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabase = createClient();
   const [uploading, setUploading] = useState<string | null>(null);
 
-  // 固定画像 + カスタム画像フィールドを統合
-  const fixedImages: { fieldKey: string; label: string; path: string | null }[] = [
-    { fieldKey: 'license_image_path', label: '免許証の写真', path: licensePath },
-    { fieldKey: 'commute_route_image_path', label: '通勤経路の画像', path: commuteRoutePath },
-  ];
+  // 固定画像 + カスタム画像フィールドを統合（hideDriverFixedImages=true なら固定 3 枠を除外）
+  const fixedImages: { fieldKey: string; label: string; path: string | null }[] = hideDriverFixedImages
+    ? []
+    : [
+        { fieldKey: 'license_image_path', label: '免許証の写真（表面）', path: licensePath },
+        { fieldKey: 'license_image_back_path', label: '免許証の写真（裏面）', path: licenseBackPath },
+        { fieldKey: 'commute_route_image_path', label: '通勤経路の画像', path: commuteRoutePath },
+      ];
 
   const customImages = customFieldDefs
     .filter((d) => d.field_type === 'image')

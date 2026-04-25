@@ -46,6 +46,12 @@ interface ShiftGridProps {
   warnings: ShiftWarning[];
   onCellClick: (staffId: string, date: string) => void;
   childrenCountByDate?: Map<string, number>;
+  /** facility_shift_settings.core_start_time (HH:MM)。未指定時は 10:30 */
+  coreStartTime?: string | null;
+  /** facility_shift_settings.core_end_time (HH:MM)。未指定時は 16:30 */
+  coreEndTime?: string | null;
+  /** facility_shift_settings.min_qualified_staff。「有資格者基準」判定用 */
+  minQualifiedStaff?: number;
 }
 
 const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; color: string; bg: string }> = {
@@ -65,6 +71,9 @@ export default function ShiftGridFull({
   warnings,
   onCellClick,
   childrenCountByDate,
+  coreStartTime,
+  coreEndTime,
+  minQualifiedStaff = 2,
 }: ShiftGridProps) {
   const daysInMonth = getDaysInMonth(new Date(year, month - 1));
   const dates: { day: number; dow: number; dateStr: string }[] = [];
@@ -138,6 +147,8 @@ export default function ShiftGridFull({
         shifts: cells,
         staffQualifiedMap,
         scheduleCount,
+        coreStartTime,
+        coreEndTime,
       })
     );
   });
@@ -172,9 +183,8 @@ export default function ShiftGridFull({
         <thead>
           <tr>
             <th
-              className="sticky left-0 top-0 z-50 px-4 py-4 text-left font-bold"
+              className="shift-grid-sticky-corner sticky left-0 top-0 z-50 px-4 py-4 text-left font-bold"
               style={{
-                background: 'var(--bg)',
                 borderBottom: '2px solid var(--rule-strong)',
                 borderRight: '2px solid var(--rule-strong)',
                 minWidth: '160px',
@@ -242,9 +252,9 @@ export default function ShiftGridFull({
               style={s.is_qualified ? { background: 'var(--gold-pale, #fdf6e3)' } : undefined}
             >
               <td
-                className="sticky left-0 z-20 px-4 py-3 font-semibold whitespace-nowrap group-hover:!bg-[var(--accent-pale-solid)] transition-colors"
+                className="shift-grid-sticky-staff sticky left-0 z-30 px-4 py-3 font-semibold whitespace-nowrap"
+                data-qualified={s.is_qualified ? 'true' : 'false'}
                 style={{
-                  background: s.is_qualified ? 'var(--gold-pale-solid)' : 'var(--white)',
                   borderBottom: '1px solid var(--rule)',
                   borderRight: '2px solid var(--rule-strong)',
                   color: 'var(--ink)',
@@ -377,9 +387,8 @@ export default function ShiftGridFull({
 
           <tr>
             <td
-              className="sticky left-0 bottom-0 z-50 px-4 py-3 font-bold"
+              className="shift-grid-sticky-corner sticky left-0 bottom-0 z-50 px-4 py-3 font-bold"
               style={{
-                background: 'var(--bg)',
                 borderTop: '2px solid var(--rule-strong)',
                 borderRight: '2px solid var(--rule-strong)',
                 color: 'var(--ink)',
@@ -407,25 +416,27 @@ export default function ShiftGridFull({
             })}
           </tr>
 
+          {/* 有資格者基準: コアタイム重複の有資格者数が min_qualified_staff 以上か（✓/✗） */}
           <CoverageRow
-            label="有資格者"
-            title="コアタイム(10:30〜16:30)に重なる有資格者数"
+            label="有資格者基準"
+            title={`コアタイム(${(coreStartTime ?? '10:30').slice(0,5)}〜${(coreEndTime ?? '16:30').slice(0,5)})に重なる有資格者数が ${minQualifiedStaff} 名以上か`}
             dates={dates}
             getCellBg={getCellBg}
             render={(d) => {
               const cov = coverageByDate.get(d.dateStr);
               if (!cov) return { value: '', color: 'var(--ink-3)' };
               if (d.dow === 0 && cov.childrenCount === 0) return { value: '', color: 'var(--ink-3)' };
-              if (cov.qualifiedCount === 0) return { value: '', color: 'var(--ink-3)' };
-              return {
-                value: String(cov.qualifiedCount),
-                color: cov.qualifiedCount >= 2 ? 'var(--green)' : 'var(--gold)',
-              };
+              const ok = cov.qualifiedCount >= minQualifiedStaff;
+              return ok
+                ? { value: '✓', color: 'var(--green)' }
+                : { value: '✗', color: 'var(--red)', bg: 'var(--red-pale)' };
             }}
           />
+
+          {/* 提供時間内の有資格者: コアタイム中の最小有資格者数（min_qualified_staff を下回ると赤） */}
           <CoverageRow
-            label="提供時間"
-            title="コアタイムを常時2名以上で満たしているか"
+            label="提供時間内の有資格者"
+            title={`コアタイム中の有資格者最小人数（30分刻みで走査）。${minQualifiedStaff} 名未満で警告`}
             dates={dates}
             getCellBg={getCellBg}
             render={(d) => {
@@ -435,28 +446,37 @@ export default function ShiftGridFull({
               if (cov.minCoverage === '不足') {
                 return { value: '不足', color: 'var(--red)', bg: 'var(--red-pale)' };
               }
-              return { value: String(cov.minCoverage), color: 'var(--green)' };
+              const n = cov.minCoverage as number;
+              const color =
+                n < minQualifiedStaff ? 'var(--red)'
+                : n === minQualifiedStaff ? 'var(--gold)'
+                : 'var(--green)';
+              return { value: String(n), color, bg: n < minQualifiedStaff ? 'var(--red-pale)' : undefined };
             }}
           />
+
+          {/* 余力: 児童数 ÷ コアタイム出勤者数。≥4 で赤警告（職員1人で4人以上=不可能） */}
           <CoverageRow
             label="余力"
-            title={'3名重複時間が確保できているか（児童11人以上は自動判定せず「要確認」）'}
+            title={'児童数 ÷ コアタイム出勤職員数。3 未満は緑 / 3〜4 未満は黄 / 4 以上は赤（1 職員で 4 人以上は警告）'}
             dates={dates}
             getCellBg={getCellBg}
             isLast
             render={(d) => {
               const cov = coverageByDate.get(d.dateStr);
               if (!cov || cov.childrenCount === 0) return { value: '', color: 'var(--ink-3)' };
-              if (cov.additional === 'OK') return { value: 'OK', color: 'var(--green)' };
-              if (cov.additional === '不足') {
-                return { value: '不足', color: 'var(--red)', bg: 'var(--red-pale)' };
+              if (cov.coreStaffCount === 0) {
+                return { value: '⚠ 職員0', color: 'var(--red)', bg: 'var(--red-pale)', fontSize: '0.6rem' };
               }
-              return {
-                value: `要確認(${cov.childrenCount})`,
-                color: 'var(--gold)',
-                bg: 'var(--gold-pale, #fdf6e3)',
-                fontSize: '0.62rem',
-              };
+              const ratio = cov.childrenCount / cov.coreStaffCount;
+              const r1 = Math.round(ratio * 10) / 10;
+              if (ratio >= 4) {
+                return { value: `⚠ ${r1}`, color: 'var(--red)', bg: 'var(--red-pale)', fontSize: '0.7rem' };
+              }
+              if (ratio >= 3) {
+                return { value: String(r1), color: 'var(--gold)', bg: 'var(--gold-pale-solid)' };
+              }
+              return { value: String(r1), color: 'var(--green)' };
             }}
           />
         </tbody>
@@ -483,9 +503,8 @@ function CoverageRow({ label, title, dates, getCellBg, render, isLast }: Coverag
   return (
     <tr>
       <td
-        className="sticky left-0 bottom-0 z-50 px-4 py-2 font-semibold text-xs"
+        className="shift-grid-sticky-corner sticky left-0 bottom-0 z-50 px-4 py-2 font-semibold text-xs"
         style={{
-          background: 'var(--bg)',
           borderTop: '1px solid var(--rule)',
           borderBottom: isLast ? 'none' : '1px solid var(--rule)',
           borderRight: '2px solid var(--rule-strong)',

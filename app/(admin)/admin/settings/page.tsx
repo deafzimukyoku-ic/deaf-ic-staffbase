@@ -15,6 +15,23 @@ import type { ProfileSectionKey } from '@/lib/constants';
 import { toast } from 'sonner';
 import type { CustomFieldType, CategoryType, Position } from '@/lib/types';
 import { CategoryManager } from '@/components/admin/CategoryManager';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   text: 'テキスト',
@@ -29,7 +46,11 @@ export default function SettingsPage() {
   const [company, setCompany] = useState({ company_name: '', representative_title: '', representative_name: '', representative_honorific: '様' });
   const [values, setValues] = useState({ company_philosophy: '', action_guidelines: '', core_values: '', valued_behaviors: '', avoided_behaviors: '', ideal_culture: '' });
   const [banks, setBanks] = useState<{ bank_name: string; is_default: boolean }[]>([]);
-  const [facilities, setFacilities] = useState<{ id?: string; name: string; address: string }[]>([]);
+  /* migration 116: facilities に display_order / shift_enabled / transport_enabled を追加。
+     UI でドラッグ&ドロップ並び替え + 2 トグルを編集可能に。 */
+  const [facilities, setFacilities] = useState<
+    { id?: string; name: string; address: string; display_order: number; shift_enabled: boolean; transport_enabled: boolean }[]
+  >([]);
   const [positions, setPositions] = useState<(Omit<Position, 'tenant_id' | 'created_at' | 'id'> & { id?: string })[]>([]);
   const [customFields, setCustomFields] = useState<{ id?: string; field_key: string; label: string; field_type: CustomFieldType; options: string[]; display_order: number; is_active: boolean }[]>([]);
   const [sectionVisibility, setSectionVisibility] = useState<Record<ProfileSectionKey, boolean>>(
@@ -58,8 +79,24 @@ export default function SettingsPage() {
       const { data: bankData } = await supabase.from('tenant_payroll_banks').select('bank_name, is_default').eq('tenant_id', me.tenant_id).order('display_order');
       if (bankData) setBanks(bankData);
 
-      const { data: facilityData } = await supabase.from('facilities').select('id, name, address').eq('tenant_id', me.tenant_id).order('created_at');
-      if (facilityData) setFacilities(facilityData);
+      const { data: facilityData } = await supabase
+        .from('facilities')
+        .select('id, name, address, display_order, shift_enabled, transport_enabled')
+        .eq('tenant_id', me.tenant_id)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
+      if (facilityData) {
+        setFacilities(
+          facilityData.map((f: Record<string, unknown>) => ({
+            id: f.id as string | undefined,
+            name: (f.name as string) ?? '',
+            address: (f.address as string) ?? '',
+            display_order: (f.display_order as number | null) ?? 0,
+            shift_enabled: (f.shift_enabled as boolean | null) ?? true,
+            transport_enabled: (f.transport_enabled as boolean | null) ?? true,
+          })),
+        );
+      }
 
       const { data: posData } = await supabase.from('positions').select('id, name, display_order').eq('tenant_id', me.tenant_id).order('display_order');
       if (posData) setPositions(posData);
@@ -109,16 +146,35 @@ export default function SettingsPage() {
       await supabase.from('facilities').delete().eq('id', f.id);
     }
 
-    for (const f of facilities.filter((f) => f.id)) {
-      if (f.name.trim()) {
-        await supabase.from('facilities').update({ name: f.name.trim(), address: f.address.trim() }).eq('id', f.id!);
-      }
+    /* 既存施設: display_order / shift_enabled / transport_enabled も update */
+    for (let i = 0; i < facilities.length; i++) {
+      const f = facilities[i];
+      if (!f.id || !f.name.trim()) continue;
+      await supabase
+        .from('facilities')
+        .update({
+          name: f.name.trim(),
+          address: f.address.trim(),
+          display_order: i,
+          shift_enabled: f.shift_enabled,
+          transport_enabled: f.transport_enabled,
+        })
+        .eq('id', f.id);
     }
 
-    const newFacilities = facilities.filter((f) => !f.id && f.name.trim());
-    if (newFacilities.length > 0) {
+    const newFacilitiesWithIdx = facilities
+      .map((f, idx) => ({ f, idx }))
+      .filter(({ f }) => !f.id && f.name.trim());
+    if (newFacilitiesWithIdx.length > 0) {
       await supabase.from('facilities').insert(
-        newFacilities.map((f) => ({ tenant_id: tenantId, name: f.name.trim(), address: f.address.trim() }))
+        newFacilitiesWithIdx.map(({ f, idx }) => ({
+          tenant_id: tenantId,
+          name: f.name.trim(),
+          address: f.address.trim(),
+          display_order: idx,
+          shift_enabled: f.shift_enabled,
+          transport_enabled: f.transport_enabled,
+        })),
       );
     }
 
@@ -195,8 +251,24 @@ export default function SettingsPage() {
     setSaving(false);
 
     // リロード（新規作成分のIDを取得）
-    const { data: reloadedFacilities } = await supabase.from('facilities').select('id, name, address').eq('tenant_id', tenantId).order('created_at');
-    if (reloadedFacilities) setFacilities(reloadedFacilities);
+    const { data: reloadedFacilities } = await supabase
+      .from('facilities')
+      .select('id, name, address, display_order, shift_enabled, transport_enabled')
+      .eq('tenant_id', tenantId)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+    if (reloadedFacilities) {
+      setFacilities(
+        reloadedFacilities.map((f: Record<string, unknown>) => ({
+          id: f.id as string | undefined,
+          name: (f.name as string) ?? '',
+          address: (f.address as string) ?? '',
+          display_order: (f.display_order as number | null) ?? 0,
+          shift_enabled: (f.shift_enabled as boolean | null) ?? true,
+          transport_enabled: (f.transport_enabled as boolean | null) ?? true,
+        })),
+      );
+    }
 
     const { data: reloadedPositions } = await supabase.from('positions').select('id, name, display_order').eq('tenant_id', tenantId).order('display_order');
     if (reloadedPositions) setPositions(reloadedPositions);
@@ -306,28 +378,30 @@ export default function SettingsPage() {
         {/* 組織タブ */}
         <TabsContent value="organization" className="space-y-6">
           <Card>
-            <CardHeader><CardTitle className="text-base">施設（事業所）</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">施設（事業所）</CardTitle>
+              <p className="text-[11px] text-diletto-gray-light mt-1">
+                左端 ⋮⋮ をドラッグで並び替え。並び順は全画面のセレクタ・一覧に反映されます。<br />
+                「シフト管理」OFF の施設はシフトモードのセレクタ・ナビから非表示。「送迎」OFF は送迎関連のみ非表示。
+              </p>
+            </CardHeader>
             <CardContent className="space-y-3">
-              {facilities.map((f, i) => (
-                <div key={f.id || `new-${i}`} className="flex gap-2 items-end">
-                  <div className="flex-1 space-y-1">
-                    <Input
-                      placeholder="事業所名"
-                      value={f.name}
-                      onChange={(e) => { const next = [...facilities]; next[i] = { ...next[i], name: e.target.value }; setFacilities(next); }}
-                    />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <Input
-                      placeholder="住所"
-                      value={f.address}
-                      onChange={(e) => { const next = [...facilities]; next[i] = { ...next[i], address: e.target.value }; setFacilities(next); }}
-                    />
-                  </div>
-                  <Button size="sm" variant="ghost" className="text-diletto-red" onClick={() => setFacilities(facilities.filter((_, j) => j !== i))}>削除</Button>
-                </div>
-              ))}
-              <Button variant="outline" className="w-full" onClick={() => setFacilities([...facilities, { name: '', address: '' }])}>+ 施設を追加</Button>
+              <FacilitySortableList
+                facilities={facilities}
+                onChange={setFacilities}
+              />
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() =>
+                  setFacilities([
+                    ...facilities,
+                    { name: '', address: '', display_order: facilities.length, shift_enabled: true, transport_enabled: true },
+                  ])
+                }
+              >
+                + 施設を追加
+              </Button>
             </CardContent>
           </Card>
 
@@ -336,20 +410,9 @@ export default function SettingsPage() {
             <CardContent className="space-y-3">
               <p className="text-[10px] text-diletto-gray-light mb-2">
                 ※ 役職は表示用ラベルです。システム権限は <a className="text-diletto-blue underline" href="/admin/access-matrix">権限マトリクス</a> から個別に設定してください。
+                左端 ⋮⋮ をドラッグで並び替え。
               </p>
-              {positions.map((p, i) => (
-                <div key={p.id || `new-pos-${i}`} className="flex gap-2 items-center">
-                  <Input
-                    className="flex-1"
-                    placeholder="役職名"
-                    value={p.name}
-                    onChange={(e) => { const next = [...positions]; next[i] = { ...next[i], name: e.target.value }; setPositions(next); }}
-                  />
-                  <Button size="sm" variant="ghost" className="text-diletto-red p-2" onClick={() => setPositions(positions.filter((_, j) => j !== i))}>
-                    <span className="text-xs">削除</span>
-                  </Button>
-                </div>
-              ))}
+              <PositionSortableList positions={positions} onChange={setPositions} />
               <Button variant="outline" className="w-full text-xs" onClick={() => setPositions([...positions, { name: '', display_order: positions.length }])}>+ 役職を追加</Button>
             </CardContent>
           </Card>
@@ -514,5 +577,230 @@ function NavCard({ title, icon, description, onClick }: { title: string; icon: s
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/* ===== 施設一覧: ドラッグ&ドロップ並び替え + 2 トグル (migration 116) ===== */
+type FacilityRow = {
+  id?: string;
+  name: string;
+  address: string;
+  display_order: number;
+  shift_enabled: boolean;
+  transport_enabled: boolean;
+};
+
+function FacilitySortableList({
+  facilities,
+  onChange,
+}: {
+  facilities: FacilityRow[];
+  onChange: (next: FacilityRow[]) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  /* 並び替え時の id は existing は f.id、未保存の新規行は idx ベースの一時 id を使う */
+  const itemIds = facilities.map((f, i) => f.id ?? `__new_${i}`);
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = itemIds.indexOf(String(active.id));
+    const to = itemIds.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    onChange(arrayMove(facilities, from, to));
+  };
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+        {facilities.map((f, i) => (
+          <FacilityRowItem
+            key={itemIds[i]}
+            sortableId={itemIds[i]}
+            facility={f}
+            onChange={(next) => {
+              const nextArr = [...facilities];
+              nextArr[i] = next;
+              onChange(nextArr);
+            }}
+            onDelete={() => onChange(facilities.filter((_, j) => j !== i))}
+          />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function FacilityRowItem({
+  sortableId,
+  facility,
+  onChange,
+  onDelete,
+}: {
+  sortableId: string;
+  facility: FacilityRow;
+  onChange: (next: FacilityRow) => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: sortableId,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  const Toggle = ({ checked, onToggle, label }: { checked: boolean; onToggle: () => void; label: string }) => (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`${label}: ${checked ? 'ON' : 'OFF'}`}
+      className={`text-[10px] font-bold px-2 py-1 rounded border transition-colors whitespace-nowrap ${
+        checked
+          ? 'bg-diletto-blue text-white border-diletto-blue'
+          : 'bg-white text-diletto-gray-light border-diletto-gray/20'
+      }`}
+    >
+      {label} {checked ? 'ON' : 'OFF'}
+    </button>
+  );
+  return (
+    <div ref={setNodeRef} style={style} className="flex gap-2 items-center bg-white">
+      <button
+        type="button"
+        className="cursor-grab text-diletto-gray-light hover:text-diletto-ink px-1 select-none"
+        title="ドラッグで並び替え"
+        {...attributes}
+        {...listeners}
+        aria-label="並び替えハンドル"
+      >
+        ⋮⋮
+      </button>
+      <div className="flex-1 space-y-1">
+        <Input
+          placeholder="事業所名（先頭に絵文字も可: 🌸 パステル）"
+          value={facility.name}
+          onChange={(e) => onChange({ ...facility, name: e.target.value })}
+        />
+      </div>
+      <div className="flex-1 space-y-1">
+        <Input
+          placeholder="住所"
+          value={facility.address}
+          onChange={(e) => onChange({ ...facility, address: e.target.value })}
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Toggle
+          checked={facility.shift_enabled}
+          onToggle={() => onChange({ ...facility, shift_enabled: !facility.shift_enabled })}
+          label="シフト"
+        />
+        <Toggle
+          checked={facility.transport_enabled}
+          onToggle={() => onChange({ ...facility, transport_enabled: !facility.transport_enabled })}
+          label="送迎"
+        />
+      </div>
+      <Button size="sm" variant="ghost" className="text-diletto-red" onClick={onDelete}>
+        削除
+      </Button>
+    </div>
+  );
+}
+
+/* ===== 役職一覧: ドラッグ&ドロップ並び替え（display_order 昇順保存） ===== */
+type PositionRow = { id?: string; name: string; display_order: number };
+
+function PositionSortableList({
+  positions,
+  onChange,
+}: {
+  positions: PositionRow[];
+  onChange: (next: PositionRow[]) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const itemIds = positions.map((p, i) => p.id ?? `__new_pos_${i}`);
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = itemIds.indexOf(String(active.id));
+    const to = itemIds.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    const moved = arrayMove(positions, from, to);
+    /* display_order を array index に再採番 */
+    onChange(moved.map((p, idx) => ({ ...p, display_order: idx })));
+  };
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+        {positions.map((p, i) => (
+          <PositionRowItem
+            key={itemIds[i]}
+            sortableId={itemIds[i]}
+            position={p}
+            onChange={(next) => {
+              const arr = [...positions];
+              arr[i] = next;
+              onChange(arr);
+            }}
+            onDelete={() => onChange(positions.filter((_, j) => j !== i))}
+          />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function PositionRowItem({
+  sortableId,
+  position,
+  onChange,
+  onDelete,
+}: {
+  sortableId: string;
+  position: PositionRow;
+  onChange: (next: PositionRow) => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: sortableId,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex gap-2 items-center bg-white">
+      <button
+        type="button"
+        className="cursor-grab text-diletto-gray-light hover:text-diletto-ink px-1 select-none"
+        title="ドラッグで並び替え"
+        {...attributes}
+        {...listeners}
+        aria-label="並び替えハンドル"
+      >
+        ⋮⋮
+      </button>
+      <Input
+        className="flex-1"
+        placeholder="役職名"
+        value={position.name}
+        onChange={(e) => onChange({ ...position, name: e.target.value })}
+      />
+      <Button size="sm" variant="ghost" className="text-diletto-red p-2" onClick={onDelete}>
+        <span className="text-xs">削除</span>
+      </Button>
+    </div>
   );
 }
