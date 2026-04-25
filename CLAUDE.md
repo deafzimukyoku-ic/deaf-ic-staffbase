@@ -180,7 +180,7 @@ deaf-ic/
 - `is_confirmed=true` レコードの自動上書き禁止
 - LibreOffice 導入禁止 / AI診断結果の employee 閲覧禁止 / 電子署名禁止
 - PPTX アップロード禁止（PDF のみ）
-- タグのフォントファミリー変更禁止（Noto Sans JP 固定）
+- タグのフォントファミリーは IPAex 明朝 固定（IPA Font License v1.0 で同梱、MS 明朝相当）
 - タグの装飾機能（太字/斜体/下線/色/回転）禁止
 
 ---
@@ -197,7 +197,7 @@ staffbase ベース:
 - `PDF_PARSE_MODEL='claude-sonnet-4-20250514'`（PDF解析、shift-maker 由来）
 - `FONT_SIZES=[8,10,12,14,16,18,20,24,28,32,36,48]`
 - `DEFAULT_FONT_SIZE=10`
-- `FONT_FAMILY='Noto Sans JP'`（固定）
+- `FONT_FAMILY='IPAex Mincho'`（固定。`public/fonts/IPAexMincho-Regular.ttf` を埋め込み）
 - `PDF_ASCENT_RATIO=0.76`
 - `MAPPING_SOURCE_TYPES: employee|tenant|form_data|fixed|custom_field`
 - `INPUT_TYPES: text|textarea|date|number|select`
@@ -293,7 +293,7 @@ shift-maker 由来:
 
 ### PDFテンプレート / タグ配置 / 差し込み生成
 - staffbase の既存仕様を踏襲
-- Noto Sans JP 固定
+- IPAex 明朝 固定（MS 明朝相当）/ エディタのタグ表示は `|__○○__` プレーンテキスト形式
 - 1テンプレートあたり同tag_keyは1つまで（UNIQUE）
 - 座標: PDF points 左上原点、変換時 `y = pageHeight - yFromTop - (fontSize × 0.76)`
 

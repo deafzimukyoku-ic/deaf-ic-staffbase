@@ -117,7 +117,9 @@ export const MAX_PDF_FILE_SIZE_MB = 20;
 export const FONT_SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48] as const;
 export type FontSize = (typeof FONT_SIZES)[number];
 export const DEFAULT_FONT_SIZE = 10;
-export const FONT_FAMILY = 'Noto Sans JP' as const;
+/* タグ・PDF 描画フォント。IPAex 明朝（IPA Font License v1.0）を埋め込みで使用。
+   MS 明朝とほぼ同等の字形で、Linux サーバ（Vercel）でも問題なくレンダリング可能。 */
+export const FONT_FAMILY = 'IPAex Mincho' as const;
 export const PDF_ASCENT_RATIO = 0.76;
 
 export const TEMPLATE_TYPES = ['docx', 'pdf'] as const;

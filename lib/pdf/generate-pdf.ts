@@ -1,13 +1,13 @@
 /**
  * pdf-lib による差込 PDF 生成
  * テンプレート PDF にタグの値を配置して PDF バイナリを生成する
- * StaffBase 版: Noto Sans JP 固定、装飾なし（font_size のみ）
+ * deaf-ic 版: IPAex 明朝固定（MS 明朝相当）、装飾なし（font_size のみ）
  * テキスト折り返し対応: タグのX位置から右端までの幅で自動改行
  */
 
 import { PDFDocument, PDFFont, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { loadNotoSansJp, convertYToPdfLib } from './pdf-utils';
+import { loadIpaexMincho, convertYToPdfLib } from './pdf-utils';
 
 const RIGHT_MARGIN = 20; // 右端からの余白（PDF points）
 const LINE_HEIGHT_RATIO = 1.5; // 行間倍率
@@ -56,8 +56,8 @@ export async function renderMergedPdf(
   const pdfDoc = await PDFDocument.load(templatePdfBytes);
   pdfDoc.registerFontkit(fontkit);
 
-  const fontBytes = await loadNotoSansJp();
-  const notoSans = await pdfDoc.embedFont(fontBytes, { subset: false });
+  const fontBytes = await loadIpaexMincho();
+  const ipaexMincho = await pdfDoc.embedFont(fontBytes, { subset: false });
 
   const pages = pdfDoc.getPages();
   const black = rgb(0, 0, 0);
@@ -74,7 +74,7 @@ export async function renderMergedPdf(
     // 折り返し幅: タグのX位置から右端余白までの距離
     const maxWidth = pageWidth - placement.x - RIGHT_MARGIN;
 
-    const lines = wrapText(placement.value, notoSans, placement.font_size, maxWidth);
+    const lines = wrapText(placement.value, ipaexMincho, placement.font_size, maxWidth);
     const lineSpacing = placement.font_size * LINE_HEIGHT_RATIO;
 
     for (let i = 0; i < lines.length; i++) {
@@ -84,7 +84,7 @@ export async function renderMergedPdf(
         x: placement.x,
         y,
         size: placement.font_size,
-        font: notoSans,
+        font: ipaexMincho,
         color: black,
       });
     }

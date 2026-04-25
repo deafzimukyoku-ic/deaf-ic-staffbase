@@ -123,7 +123,7 @@ export default function PdfEditorToolbar({
                     : 'border-diletto-gray/20 bg-white text-diletto-ink hover:border-diletto-blue/30'}
                 `}
               >
-                <span className="truncate">[{tag.display_name}]</span>
+                <span className="truncate" style={{ fontFamily: 'IPAex Mincho, MS Mincho, serif' }}>|__{tag.display_name}__</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

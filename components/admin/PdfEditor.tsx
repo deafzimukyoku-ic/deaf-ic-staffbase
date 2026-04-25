@@ -81,24 +81,29 @@ export default function PdfEditor({
   ) {
     const scaledFontSize = placement.font_size * fitScale;
 
-    const textObj = new FabricText(`[${tag.display_name}]`, {
+    /* タグ表示形式: |__○○__
+       | = 差し込み開始マーカー / __○○__ = タグ名（前後アンダースコア）
+       装飾は最小化、実用 100% 重視。 */
+    const textObj = new FabricText(`|__${tag.display_name}__`, {
       fontSize: scaledFontSize,
-      fontFamily: 'Noto Sans JP, sans-serif',
-      fill: '#1a3eb8',
+      fontFamily: 'IPAex Mincho, MS Mincho, serif',
+      fill: '#000000',
       originX: 'center',
       originY: 'center',
     });
 
+    /* 透明背景 + 点線アウトラインで「タグである」だけ識別 */
     const padX = BADGE_PAD_X * fitScale;
     const padY = BADGE_PAD_Y * fitScale;
     const rectObj = new Rect({
       width: (textObj.width ?? 0) + padX * 2,
       height: (textObj.height ?? 0) + padY * 2,
-      rx: 4,
-      ry: 4,
-      fill: 'rgba(26,62,184,0.10)',
-      stroke: 'rgba(26,62,184,0.35)',
+      rx: 0,
+      ry: 0,
+      fill: 'transparent',
+      stroke: 'rgba(26,62,184,0.40)',
       strokeWidth: 1,
+      strokeDashArray: [3, 2],
       originX: 'center',
       originY: 'center',
     });
