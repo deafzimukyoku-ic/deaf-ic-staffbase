@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
         pdf_storage_path: storagePath,
         page_count: pageCount,
         mapping: [],
-        visibility_condition: 'all',
+        /* migration 119: visibility_condition 廃止。タグの required + source_field で自動判定 */
       })
       .select()
       .single();

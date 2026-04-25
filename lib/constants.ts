@@ -16,8 +16,9 @@ export type MappingSourceType = (typeof MAPPING_SOURCE_TYPES)[number];
 export const INPUT_TYPES = ['text', 'textarea', 'date', 'number', 'select'] as const;
 export type InputType = (typeof INPUT_TYPES)[number];
 
-export const VISIBILITY_CONDITIONS = ['all', 'car_commute_only', 'shuttle_driver_only'] as const;
-export type VisibilityCondition = (typeof VISIBILITY_CONDITIONS)[number];
+/* migration 119 で書類の visibility_condition は廃止。
+   タグの required + source_field から自動判定（lib/document-applicability）。
+   旧定数 VISIBILITY_CONDITIONS / VisibilityCondition は削除。 */
 
 export const EMPLOYEE_ROLES = ['employee', 'manager', 'admin'] as const;
 export type EmployeeRole = (typeof EMPLOYEE_ROLES)[number];

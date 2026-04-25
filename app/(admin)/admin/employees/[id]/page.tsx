@@ -161,13 +161,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         if (imgDefs) setImageFieldDefs(imgDefs);
 
         const subMap = new Map((submissions || []).map((s) => [s.document_template_id, s as DocumentSubmission]));
+        /* migration 119 自動判定: lib/document-applicability で対象書類を絞り込み */
+        const { isDocumentApplicable, loadCustomFieldGates } = await import('@/lib/document-applicability');
+        const customGates = await loadCustomFieldGates(supabase, emp.tenant_id);
         const items = ((templates || []) as DocumentTemplate[])
-          .filter((t) => {
-            if (t.visibility_condition === 'all') return true;
-            if (t.visibility_condition === 'car_commute_only') return emp.has_car_commute;
-            if (t.visibility_condition === 'shuttle_driver_only') return emp.is_shuttle_driver;
-            return true;
-          })
+          .filter((t) => isDocumentApplicable(t, emp as unknown as import('@/lib/types').Employee, customGates))
           .map((t) => ({ template: t, submission: subMap.get(t.id) || null }));
         setDocItems(items);
       }

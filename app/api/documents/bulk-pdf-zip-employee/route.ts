@@ -54,24 +54,27 @@ export async function POST(request: NextRequest) {
 
   const bankName = banks?.[0]?.bank_name || '';
 
-  // 社員一覧（visibility_condition適用）
-  let query = supabase
+  // 社員一覧 → migration 119 自動判定で対象社員を絞り込み
+  const { data: rawEmployees } = await supabase
     .from('employees')
     .select('*')
     .eq('tenant_id', template.tenant_id)
     .eq('status', 'active')
-    .neq('role', 'admin');
+    .neq('role', 'admin')
+    .order('employee_number');
 
-  if (template.visibility_condition === 'car_commute_only') {
-    query = query.eq('has_car_commute', true);
-  } else if (template.visibility_condition === 'shuttle_driver_only') {
-    query = query.eq('is_shuttle_driver', true);
+  if (!rawEmployees || rawEmployees.length === 0) {
+    return NextResponse.json({ error: '対象社員がいません' }, { status: 400 });
   }
 
-  const { data: employees } = await query.order('employee_number');
+  const { isDocumentApplicable, loadCustomFieldGates } = await import('@/lib/document-applicability');
+  const customGates = await loadCustomFieldGates(supabase, template.tenant_id);
+  const employees = rawEmployees.filter((e) =>
+    isDocumentApplicable(template as unknown as import('@/lib/types').DocumentTemplate, e as unknown as import('@/lib/types').Employee, customGates),
+  );
 
-  if (!employees || employees.length === 0) {
-    return NextResponse.json({ error: '対象社員がいません' }, { status: 400 });
+  if (employees.length === 0) {
+    return NextResponse.json({ error: '該当する社員がいません（必須タグの該当者なし）' }, { status: 400 });
   }
 
   // タグ・配置取得

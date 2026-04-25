@@ -10,14 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { DocumentUploader } from '@/components/admin/DocumentUploader';
-import { VISIBILITY_CONDITIONS } from '@/lib/constants';
 import { toast } from 'sonner';
 
 export default function NewDocumentPage() {
   const [name, setName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [placeholders, setPlaceholders] = useState<string[]>([]);
-  const [visibility, setVisibility] = useState<string>('all');
+  /* migration 119: visibility_condition 廃止。タグの required+source_field から自動判定 */
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
@@ -78,7 +77,6 @@ export default function NewDocumentPage() {
         name: name.trim(),
         docx_storage_path: path,
         mapping: initialMapping,
-        visibility_condition: visibility,
       })
       .select()
       .single();
@@ -92,12 +90,6 @@ export default function NewDocumentPage() {
     toast.success('テンプレートを登録しました');
     router.push(`/admin/documents/${template.id}/mapping`);
   }
-
-  const conditionLabels: Record<string, string> = {
-    all: '全員に表示',
-    car_commute_only: '自家用車通勤者のみ',
-    shuttle_driver_only: '送迎ドライバーのみ',
-  };
 
   return (
     <div className="max-w-2xl">
@@ -131,17 +123,12 @@ export default function NewDocumentPage() {
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="入社誓約書" />
             </div>
 
-            <div className="space-y-2">
-              <Label>表示条件</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value)}
-              >
-                {VISIBILITY_CONDITIONS.map((c) => (
-                  <option key={c} value={c}>{conditionLabels[c]}</option>
-                ))}
-              </select>
+            <div className="text-[11px] text-diletto-gray-light leading-relaxed bg-diletto-blue/5 border border-diletto-blue/10 rounded-md p-2.5">
+              💡 表示条件は **タグから自動判定** されます。<br />
+              書類のタグに「免許番号」「マイカー車種」など特定社員にしか該当しない項目があれば、
+              該当する社員にだけ書類が表示されます（マイカー通勤者・送迎運転者など）。<br />
+              すべての社員にとって必須でない（任意提出の）書類にしたい場合は、
+              タグの「必須」を外してください。
             </div>
 
             <div className="flex gap-3">

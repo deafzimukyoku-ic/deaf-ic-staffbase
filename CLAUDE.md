@@ -201,7 +201,7 @@ staffbase ベース:
 - `PDF_ASCENT_RATIO=0.76`
 - `MAPPING_SOURCE_TYPES: employee|tenant|form_data|fixed|custom_field`
 - `INPUT_TYPES: text|textarea|date|number|select`
-- `VISIBILITY_CONDITIONS: all|car_commute_only|shuttle_driver_only`
+- ~~`VISIBILITY_CONDITIONS`~~ migration 119 で廃止。書類の必須/任意・対象者は `lib/field-applicability.ts` の `CORE_FIELD_GATES` + `custom_employee_fields.gate_fields` から **タグの required + source_field** に基づき自動判定（`lib/document-applicability.isDocumentApplicable`）
 - `TRAINING_RESULT: pending|passed|failed|resubmit`
 - `ROLES: admin|manager|employee`
 - `PUBLISH_STATUS: draft|ready|published`

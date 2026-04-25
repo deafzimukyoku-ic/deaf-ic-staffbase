@@ -1,7 +1,6 @@
 import type {
   MappingSourceType,
   InputType,
-  VisibilityCondition,
   EmployeeRole,
   EmployeeStatus,
   DocumentStatus,
@@ -374,7 +373,7 @@ export interface DocumentTemplate {
   name: string;
   docx_storage_path: string | null;
   mapping: PlaceholderMapping[];
-  visibility_condition: VisibilityCondition;
+  /* migration 119 で visibility_condition は廃止。タグの required+source_field で自動判定（lib/document-applicability） */
   is_sample: boolean;
   display_order: number;
   // PDF テンプレート用フィールド

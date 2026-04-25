@@ -37,7 +37,7 @@ export default function MyDocumentsPage() {
 
         const { data: me, error: meError } = await supabase
           .from('employees')
-          .select('id, tenant_id, has_car_commute, is_shuttle_driver, license_image_path, commute_route_image_path')
+          .select('*')  /* migration 119 自動判定で employee の各 boolean フラグを参照するため全列取得 */
           .eq('auth_user_id', user.id)
           .single();
 
@@ -76,12 +76,14 @@ export default function MyDocumentsPage() {
           return;
         }
 
+        /* migration 119: visibility_condition 廃止。
+           lib/document-applicability.isDocumentApplicable で自動判定。
+           書類の required タグの source_field が employee に該当するかでフィルタ。 */
+        const { isDocumentApplicable, loadCustomFieldGates } = await import('@/lib/document-applicability');
+        const customGates = await loadCustomFieldGates(supabase, me.tenant_id);
         const filtered = (templates as DocumentTemplate[]).filter((t) => {
           if (t.template_type === 'pdf' && t.data_mode === 'matrix') return false;
-          if (t.visibility_condition === 'all') return true;
-          if (t.visibility_condition === 'car_commute_only') return me.has_car_commute;
-          if (t.visibility_condition === 'shuttle_driver_only') return me.is_shuttle_driver;
-          return true;
+          return isDocumentApplicable(t, me as unknown as import('@/lib/types').Employee, customGates);
         });
 
         const { data: submissions } = await supabase

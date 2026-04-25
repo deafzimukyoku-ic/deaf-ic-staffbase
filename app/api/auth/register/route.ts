@@ -118,7 +118,6 @@ export async function POST(request: NextRequest) {
       page_count: s.page_count,
       docx_storage_path: s.docx_storage_path,
       mapping: s.mapping,
-      visibility_condition: s.visibility_condition,
       is_sample: false,
       display_order: s.display_order,
     }));

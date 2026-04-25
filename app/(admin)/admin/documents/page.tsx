@@ -64,7 +64,6 @@ export default function DocumentsPage() {
       page_count: sample.page_count,
       docx_storage_path: sample.docx_storage_path,
       mapping: sample.mapping,
-      visibility_condition: sample.visibility_condition,
       is_sample: false,
       display_order: templates.length + 1,
     }).select('id').single();
@@ -186,12 +185,6 @@ export default function DocumentsPage() {
     (s) => !templates.some((t) => t.name === s.name)
   );
 
-  const conditionLabel: Record<string, string> = {
-    all: '全員',
-    car_commute_only: '自家用車通勤者のみ',
-    shuttle_driver_only: '送迎ドライバーのみ',
-  };
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -256,9 +249,6 @@ export default function DocumentsPage() {
                 <p className="font-medium">{t.name}</p>
                 <div className="flex gap-2 mt-1">
                   <Badge variant="default" className="text-xs">PDF</Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {conditionLabel[t.visibility_condition] || t.visibility_condition}
-                  </Badge>
                   {t.page_count && (
                     <span className="text-xs text-diletto-gray-light">
                       {t.page_count}ページ
