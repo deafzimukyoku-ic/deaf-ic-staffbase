@@ -82,35 +82,35 @@ export default function PdfEditor({
     const scaledFontSize = placement.font_size * fitScale;
 
     /* タグ表示形式: |__○○__
-       | = 差し込み開始マーカー / __○○__ = タグ名（前後アンダースコア）
-       装飾は最小化、実用 100% 重視。 */
+       | = 差し込み開始マーカー（PDF 生成時の placement.x に正確に一致）
+       __○○__ = タグ名（前後アンダースコア）
+       装飾なし、テキストのみ。点線ボックスは廃止（| の位置と箱左端の混同を防ぐ）。
+       「| が見えてる場所から実際に文字が差し込まれる」という対応関係で迷い無し。 */
     const textObj = new FabricText(`|__${tag.display_name}__`, {
       fontSize: scaledFontSize,
       fontFamily: 'IPAex Mincho, MS Mincho, serif',
-      fill: '#000000',
-      originX: 'center',
-      originY: 'center',
+      fill: '#1a3eb8', /* タグだと一目で分かるよう青で表示。差し込み後の値は黒で出る */
+      originX: 'left',
+      originY: 'top',
     });
 
-    /* 透明背景 + 点線アウトラインで「タグである」だけ識別 */
-    const padX = BADGE_PAD_X * fitScale;
+    /* group は単一テキスト + ヒットエリア用の透明 rect。
+       rect は text と完全に重なるサイズで、ドラッグハンドル用にだけ存在。 */
     const padY = BADGE_PAD_Y * fitScale;
-    const rectObj = new Rect({
-      width: (textObj.width ?? 0) + padX * 2,
+    const hitRect = new Rect({
+      width: (textObj.width ?? 0),
       height: (textObj.height ?? 0) + padY * 2,
-      rx: 0,
-      ry: 0,
       fill: 'transparent',
-      stroke: 'rgba(26,62,184,0.40)',
-      strokeWidth: 1,
-      strokeDashArray: [3, 2],
-      originX: 'center',
-      originY: 'center',
+      stroke: 'transparent',
+      originX: 'left',
+      originY: 'top',
+      left: 0,
+      top: -padY,
     });
 
-    const group = new Group([rectObj, textObj], {
-      left: placement.x * fitScale - padX,
-      top: placement.y * fitScale - padY,
+    const group = new Group([hitRect, textObj], {
+      left: placement.x * fitScale,
+      top: placement.y * fitScale,
       originX: 'left',
       originY: 'top',
       hasControls: false,
