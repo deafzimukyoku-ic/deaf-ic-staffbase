@@ -112,6 +112,13 @@ export function Breadcrumb() {
       if ((acc === '/admin/shifts' || acc === '/mgr/shifts') && pathname !== acc) continue;
       crumbs.push({ href: acc, label: meta.label, icon: meta.icon });
     } else {
+      /* UUID セグメントはルート実体が無いことが多く（[id] の値）、
+         パンくずに「詳細」として出すと 404 リンクになる。
+         例: /admin/documents/<uuid>/editor は /editor がページ実体、
+             <uuid> は中間パラメータでページ無し。
+         UUID 形式 (8-4-4-4-12 hex) は中間として扱い、パンくずに含めない。 */
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg);
+      if (isUuid) continue;
       crumbs.push({ href: acc, label: '詳細', icon: '📎' });
     }
   }

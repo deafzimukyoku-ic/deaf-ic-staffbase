@@ -94,18 +94,19 @@ export default function PdfEditor({
       originY: 'top',
     });
 
-    /* group は単一テキスト + ヒットエリア用の透明 rect。
-       rect は text と完全に重なるサイズで、ドラッグハンドル用にだけ存在。 */
-    const padY = BADGE_PAD_Y * fitScale;
+    /* group は text + ヒットエリア用の透明 rect。
+       rect は text と完全に同じ位置/サイズで、ドラッグハンドル用にだけ存在。
+       ※ オフセットを 0 に揃えることで group.left = placement.x * fitScale が
+         そのまま | の位置になり、ドラッグ後の保存も逆換算が単純（割るだけ）。 */
     const hitRect = new Rect({
       width: (textObj.width ?? 0),
-      height: (textObj.height ?? 0) + padY * 2,
+      height: (textObj.height ?? 0),
       fill: 'transparent',
       stroke: 'transparent',
       originX: 'left',
       originY: 'top',
       left: 0,
-      top: -padY,
+      top: 0,
     });
 
     const group = new Group([hitRect, textObj], {
@@ -291,10 +292,12 @@ export default function PdfEditor({
 
             const updated = placementsRef.current.map((p) => {
               if (p.id !== d.placementId) return p;
+              /* 新仕様: group.left/top をそのまま fitScale で割るだけ。
+                 padX/padY のオフセット補正は不要（addTagToCanvas が group.left = placement.x * fitScale で配置するため）。 */
               return {
                 ...p,
-                x: Math.round(((obj.left ?? 0) + padX) / fitScale),
-                y: Math.round(((obj.top ?? 0) + padY) / fitScale),
+                x: Math.round((obj.left ?? 0) / fitScale),
+                y: Math.round((obj.top ?? 0) / fitScale),
               };
             });
             onPlacementsChange(updated);
@@ -403,11 +406,10 @@ export default function PdfEditor({
         obj.setCoords();
         pc.canvas.renderAll();
 
-        const kPadX = BADGE_PAD_X * pc.fitScale;
-        const kPadY = BADGE_PAD_Y * pc.fitScale;
+        /* 新仕様: padX/padY のオフセット補正は不要（addTagToCanvas で group.left = placement.x * fitScale 配置のため） */
         const updated = placementsRef.current.map((p) =>
           p.id === d.placementId
-            ? { ...p, x: Math.round(((obj.left ?? 0) + kPadX) / pc.fitScale), y: Math.round(((obj.top ?? 0) + kPadY) / pc.fitScale) }
+            ? { ...p, x: Math.round((obj.left ?? 0) / pc.fitScale), y: Math.round((obj.top ?? 0) / pc.fitScale) }
             : p
         );
         onPlacementsChange(updated);
