@@ -1,0 +1,290 @@
+'use client';
+
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { toast } from 'sonner';
+
+interface Facility {
+  id: string;
+  name: string;
+}
+
+interface Position {
+  id: string;
+  name: string;
+}
+
+export default function NewEmployeePage() {
+  const [loading, setLoading] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [form, setForm] = useState({
+    email: '',
+    employee_number: '',
+    last_name: '',
+    first_name: '',
+    last_name_kana: '',
+    first_name_kana: '',
+    join_date: new Date().toISOString().split('T')[0],
+    has_car_commute: false,
+    is_shuttle_driver: false,
+    facility_id: '',
+    position_id: '',
+  });
+
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: me } = await supabase
+        .from('employees')
+        .select('tenant_id')
+        .eq('auth_user_id', user.id)
+        .single();
+      if (me) {
+        setTenantId(me.tenant_id);
+
+        // 施設
+        const { data: facs } = await supabase
+          .from('facilities')
+          .select('id, name')
+          .eq('tenant_id', me.tenant_id)
+          .order('name');
+        setFacilities(facs || []);
+
+        // 役職
+        const { data: pos } = await supabase
+          .from('positions')
+          .select('id, name')
+          .eq('tenant_id', me.tenant_id)
+          .order('display_order');
+        setPositions(pos || []);
+      }
+    }
+    load();
+  }, []);
+
+  function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tenantId) return;
+    setLoading(true);
+
+    const res = await fetch('/api/employees/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: form.email,
+        employee_number: form.employee_number,
+        last_name: form.last_name,
+        first_name: form.first_name,
+        last_name_kana: form.last_name_kana,
+        first_name_kana: form.first_name_kana,
+        join_date: form.join_date,
+        has_car_commute: form.has_car_commute,
+        is_shuttle_driver: form.is_shuttle_driver,
+        facility_id: form.facility_id || null,
+        position_id: form.position_id || null,
+      }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      toast.error('社員の追加に失敗しました', { description: result.detail || result.error });
+      setLoading(false);
+      return;
+    }
+
+    if (result.warning) {
+      toast.warning(result.warning);
+    }
+
+    if (result.resent) {
+      toast.success(result.message || `${form.last_name} ${form.first_name} さんに招待メールを再送信しました`);
+    } else {
+      toast.success(`${form.last_name} ${form.first_name} さんを招待しました`);
+    }
+    router.push('/admin/employees');
+    router.refresh();
+  }
+
+  return (
+    <div className="pb-12">
+      <h1 className="text-2xl font-bold mb-6">社員を追加</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>招待情報</CardTitle>
+          <CardDescription>社員にメールで招待リンクが送信されます</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">メールアドレス *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => update('email', e.target.value)}
+                    required
+                    placeholder="employee@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="number">従業員番号 *</Label>
+                  <Input
+                    id="number"
+                    value={form.employee_number}
+                    onChange={(e) => update('employee_number', e.target.value)}
+                    required
+                    placeholder="EMP-001"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="last_name">姓 *</Label>
+                    <Input
+                      id="last_name"
+                      value={form.last_name}
+                      onChange={(e) => update('last_name', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="first_name">名 *</Label>
+                    <Input
+                      id="first_name"
+                      value={form.first_name}
+                      onChange={(e) => update('first_name', e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="last_name_kana">姓（カナ） *</Label>
+                    <Input
+                      id="last_name_kana"
+                      value={form.last_name_kana}
+                      onChange={(e) => update('last_name_kana', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="first_name_kana">名（カナ） *</Label>
+                    <Input
+                      id="first_name_kana"
+                      value={form.first_name_kana}
+                      onChange={(e) => update('first_name_kana', e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="join_date">入社日 *</Label>
+                  <Input
+                    id="join_date"
+                    type="date"
+                    value={form.join_date}
+                    onChange={(e) => update('join_date', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="facility_id">所属施設</Label>
+                  <select
+                    id="facility_id"
+                    title="所属施設を選択"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/20"
+                    value={form.facility_id}
+                    onChange={(e) => update('facility_id', e.target.value)}
+                  >
+                    <option value="">選択してください</option>
+                    {facilities.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="position_id">役職</Label>
+                  <select
+                    id="position_id"
+                    title="役職を選択"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/20"
+                    value={form.position_id}
+                    onChange={(e) => update('position_id', e.target.value)}
+                  >
+                    <option value="">選択してください</option>
+                    {positions.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+              </div>
+            </div>
+
+            <div className="border-t pt-6">
+              <div className="flex flex-col gap-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.has_car_commute}
+                    onChange={(e) => update('has_car_commute', e.target.checked)}
+                    className="rounded h-4 w-4 accent-diletto-blue"
+                  />
+                  <span className="text-sm">自家用車通勤あり</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.is_shuttle_driver}
+                    onChange={(e) => update('is_shuttle_driver', e.target.checked)}
+                    className="rounded h-4 w-4 accent-diletto-blue"
+                  />
+                  <span className="text-sm">送迎ドライバー</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-32"
+                onClick={() => router.push('/admin/employees')}
+              >
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={loading} className="flex-1 bg-diletto-ink hover:bg-black text-white font-bold">
+                {loading ? '招待中...' : '招待メールを送信'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

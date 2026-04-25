@@ -1,0 +1,116 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { resend, FROM_EMAIL } from '@/lib/resend';
+
+/**
+ * POST: 社員への招待メール再送信
+ * body: { employee_id: string }
+ */
+export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
+  }
+
+  const { data: me } = await supabase
+    .from('employees')
+    .select('role, tenant_id')
+    .eq('auth_user_id', user.id)
+    .single();
+
+  if (!me || (me.role !== 'admin')) {
+    return NextResponse.json({ error: '権限がありません' }, { status: 403 });
+  }
+
+  const { employee_id } = await request.json() as { employee_id: string };
+
+  if (!employee_id) {
+    return NextResponse.json({ error: 'employee_id が必要です' }, { status: 400 });
+  }
+
+  // 対象社員を取得（同一テナントであることを確認）
+  const { data: emp } = await supabase
+    .from('employees')
+    .select('id, email, last_name, first_name, auth_user_id, tenant_id')
+    .eq('id', employee_id)
+    .eq('tenant_id', me.tenant_id)
+    .single();
+
+  if (!emp) {
+    return NextResponse.json({ error: '社員が見つかりません' }, { status: 404 });
+  }
+
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  // Recovery link生成（PKCE方式: /auth/callback 経由でセッション確立）
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:4003';
+  const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+    type: 'recovery',
+    email: emp.email,
+    options: { redirectTo: `${siteUrl}/invite/accept` },
+  });
+
+  if (linkErr || !linkData) {
+    return NextResponse.json(
+      { error: '招待リンクの生成に失敗しました', detail: linkErr?.message },
+      { status: 500 },
+    );
+  }
+
+  const inviteLink = linkData.properties.action_link;
+
+  // テナント名取得
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('company_name')
+    .eq('id', me.tenant_id)
+    .single();
+
+  const company = tenant?.company_name || '';
+  const employeeName = `${emp.last_name} ${emp.first_name}`;
+
+  // メール送信
+  const { error: mailErr } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to: emp.email,
+    subject: `【${company}】staffbase への招待（再送信）`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1a1a2e;">${company}</h2>
+        <p>${employeeName}さん</p>
+        <p>staffbase（職員ステーション）への招待メールを再送信しました。</p>
+        <p>以下のリンクからパスワードを設定してログインしてください。</p>
+        <p style="margin: 24px 0;">
+          <a href="${inviteLink}"
+             style="display: inline-block; background-color: #4169e1; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+            招待を受け入れる
+          </a>
+        </p>
+        <p style="color: #666; font-size: 12px;">このメールに心当たりがない場合は無視してください。</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+        <p style="color: #999; font-size: 11px;">diletto by AI Skill Exchange — staffbase</p>
+      </div>
+    `,
+  });
+
+  if (mailErr) {
+    return NextResponse.json(
+      { error: '招待メールの送信に失敗しました', detail: String(mailErr) },
+      { status: 500 },
+    );
+  }
+
+  // invited_at を更新
+  await supabase
+    .from('employees')
+    .update({ invited_at: new Date().toISOString() })
+    .eq('id', employee_id);
+
+  return NextResponse.json({ success: true });
+}

@@ -1,0 +1,351 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { resend, FROM_EMAIL } from '@/lib/resend';
+
+export async function POST(request: NextRequest) {
+  // 1. 認証チェック
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
+  }
+
+  const { data: me } = await supabase
+    .from('employees')
+    .select('role, tenant_id')
+    .eq('auth_user_id', user.id)
+    .single();
+
+  if (!me || (me.role !== 'admin')) {
+    return NextResponse.json({ error: '権限がありません' }, { status: 403 });
+  }
+
+  // リクエストボディ
+  const body = await request.json();
+  const {
+    email,
+    employee_number,
+    last_name,
+    first_name,
+    last_name_kana,
+    first_name_kana,
+    join_date,
+    has_car_commute,
+    is_shuttle_driver,
+    facility_id,
+    role: requestedRole,
+    manager_facility_ids,
+  } = body as {
+    email: string;
+    employee_number: string;
+    last_name: string;
+    first_name: string;
+    last_name_kana: string;
+    first_name_kana: string;
+    join_date: string;
+    has_car_commute: boolean;
+    is_shuttle_driver: boolean;
+    facility_id: string | null;
+    role?: 'admin' | 'manager' | 'employee';
+    /** 担当施設の追加 (manager_facilities)。manager の場合のみ意味を持つ。 */
+    manager_facility_ids?: string[];
+  };
+  /* 不正値ガード: 未指定/未知の値は employee に正規化 */
+  const normalizedRole: 'admin' | 'manager' | 'employee' =
+    requestedRole === 'admin' || requestedRole === 'manager' ? requestedRole : 'employee';
+
+  if (!email || !employee_number || !last_name || !first_name) {
+    return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 });
+  }
+
+  // 2. Service Role クライアントでAuthユーザー作成
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  // 既存employeeチェック（同じテナント+メールアドレス）
+  const { data: existingEmp } = await adminClient
+    .from('employees')
+    .select('id, auth_user_id')
+    .eq('tenant_id', me.tenant_id)
+    .eq('email', email)
+    .maybeSingle();
+
+  if (existingEmp) {
+    // 既に社員レコードがある → 招待メールだけ再送信
+    return await resendInviteOnly({
+      adminClient,
+      supabase,
+      authUserId: existingEmp.auth_user_id,
+      tenantId: me.tenant_id,
+      email,
+      employeeName: `${last_name} ${first_name}`,
+    });
+  }
+
+  const { data: authUser, error: createUserErr } = await adminClient.auth.admin.createUser({
+    email,
+    email_confirm: true,
+  });
+
+  let authUserId: string;
+
+  if (createUserErr) {
+    if (createUserErr.message?.includes('already been registered')) {
+      // Authユーザーは存在するがemployeeレコードがない場合
+      const { data: existingUsers } = await adminClient.auth.admin.listUsers();
+      const existing = existingUsers?.users?.find((u) => u.email === email);
+      if (!existing) {
+        return NextResponse.json(
+          { error: 'ユーザー作成に失敗しました', detail: createUserErr.message },
+          { status: 500 },
+        );
+      }
+      authUserId = existing.id;
+    } else {
+      return NextResponse.json(
+        { error: 'ユーザー作成に失敗しました', detail: createUserErr.message },
+        { status: 500 },
+      );
+    }
+  } else {
+    authUserId = authUser.user.id;
+  }
+
+  // 3. employeeレコード作成 + 招待メール送信
+  return await createEmployeeAndSendInvite({
+    adminClient,
+    supabase,
+    authUserId,
+    tenantId: me.tenant_id,
+    employeeData: { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, role: normalizedRole, manager_facility_ids: manager_facility_ids ?? [] },
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ServiceRoleClient = ReturnType<typeof createSupabaseClient<any>>;
+
+/* ── 招待メール再送信（employeeレコード既存の場合） ── */
+async function resendInviteOnly({
+  adminClient,
+  supabase,
+  authUserId,
+  tenantId,
+  email,
+  employeeName,
+}: {
+  adminClient: ServiceRoleClient;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  authUserId: string;
+  tenantId: string;
+  email: string;
+  employeeName: string;
+}) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:4003';
+
+  const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+    type: 'recovery',
+    email,
+    options: { redirectTo: `${siteUrl}/invite/accept` },
+  });
+
+  if (linkErr || !linkData) {
+    return NextResponse.json(
+      { error: 'リカバリーリンクの生成に失敗しました', detail: linkErr?.message },
+      { status: 500 },
+    );
+  }
+
+  const inviteLink = linkData.properties.action_link;
+
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('company_name')
+    .eq('id', tenantId)
+    .single();
+
+  const company = tenant?.company_name || '';
+
+  const { error: mailErr } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to: email,
+    subject: `【${company}】staffbase への招待（再送信）`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1a1a2e;">${company}</h2>
+        <p>${employeeName}さん</p>
+        <p>staffbase（職員ステーション）への招待メールを再送信しました。</p>
+        <p>以下のリンクからパスワードを設定してログインしてください。</p>
+        <p style="margin: 24px 0;">
+          <a href="${inviteLink}"
+             style="display: inline-block; background-color: #4169e1; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+            招待を受け入れる
+          </a>
+        </p>
+        <p style="color: #666; font-size: 12px;">このメールに心当たりがない場合は無視してください。</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+        <p style="color: #999; font-size: 11px;">diletto by AI Skill Exchange — staffbase</p>
+      </div>
+    `,
+  });
+
+  if (mailErr) {
+    return NextResponse.json({
+      success: true,
+      warning: 'この社員は既に登録済みですが、招待メールの再送信に失敗しました',
+    });
+  }
+
+  return NextResponse.json({
+    success: true,
+    resent: true,
+    message: 'この社員は既に登録済みのため、招待メールを再送信しました',
+  });
+}
+
+interface CreateParams {
+  adminClient: ServiceRoleClient;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  authUserId: string;
+  tenantId: string;
+  employeeData: {
+    email: string;
+    employee_number: string;
+    last_name: string;
+    first_name: string;
+    last_name_kana: string;
+    first_name_kana: string;
+    join_date: string;
+    has_car_commute: boolean;
+    is_shuttle_driver: boolean;
+    facility_id: string | null;
+    role: 'admin' | 'manager' | 'employee';
+    manager_facility_ids: string[];
+  };
+}
+
+async function createEmployeeAndSendInvite({
+  adminClient,
+  supabase,
+  authUserId,
+  tenantId,
+  employeeData,
+}: CreateParams) {
+  const { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, role, manager_facility_ids } = employeeData;
+
+  // employeeレコード作成（service roleでRLSバイパス）
+  const { data: createdEmp, error: empErr } = await adminClient
+    .from('employees')
+    .insert({
+      tenant_id: tenantId,
+      auth_user_id: authUserId,
+      employee_number,
+      email,
+      role,
+      last_name,
+      first_name,
+      last_name_kana,
+      first_name_kana,
+      birth_date: '2000-01-01',
+      postal_code: '',
+      address: '',
+      phone: '',
+      join_date,
+      has_car_commute,
+      is_shuttle_driver,
+      facility_id: facility_id || null,
+      invited_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (empErr || !createdEmp) {
+    return NextResponse.json(
+      { error: '社員レコードの作成に失敗しました', detail: empErr?.message },
+      { status: 500 },
+    );
+  }
+
+  /* manager の場合、所属以外の担当施設を manager_facilities に bulk insert。
+     所属施設 (facility_id) は重複登録しない。 */
+  if (role === 'manager' && manager_facility_ids.length > 0) {
+    const rows = manager_facility_ids
+      .filter((fid) => fid && fid !== facility_id)
+      .map((fid) => ({ employee_id: createdEmp.id, facility_id: fid }));
+    if (rows.length > 0) {
+      const { error: mfErr } = await adminClient.from('manager_facilities').insert(rows);
+      if (mfErr) {
+        /* 招待自体は成功扱いにし、警告として返す（後から /admin/access-matrix で再設定可能） */
+        console.error('manager_facilities insert failed:', mfErr.message);
+      }
+    }
+  }
+
+  // Recovery link生成（PKCE方式: code付きリダイレクト）
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:4003';
+
+  const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+    type: 'recovery',
+    email,
+    options: {
+      redirectTo: `${siteUrl}/invite/accept`,
+    },
+  });
+
+  if (linkErr || !linkData) {
+    return NextResponse.json(
+      { error: 'リカバリーリンクの生成に失敗しました', detail: linkErr?.message },
+      { status: 500 },
+    );
+  }
+
+  // generateLinkが返すaction_linkを招待メールに使用
+  const inviteLink = linkData.properties.action_link;
+
+  // テナント名を取得
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('company_name')
+    .eq('id', tenantId)
+    .single();
+
+  const company = tenant?.company_name || '';
+  const employeeName = `${last_name} ${first_name}`;
+
+  // Resendで招待メール送信
+  const { error: mailErr } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to: email,
+    subject: `【${company}】staffbase への招待`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1a1a2e;">${company}</h2>
+        <p>${employeeName}さん</p>
+        <p>staffbase（職員ステーション）への招待が届きました。</p>
+        <p>以下のリンクからパスワードを設定してログインしてください。</p>
+        <p style="margin: 24px 0;">
+          <a href="${inviteLink}"
+             style="display: inline-block; background-color: #4169e1; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+            招待を受け入れる
+          </a>
+        </p>
+        <p style="color: #666; font-size: 12px;">このメールに心当たりがない場合は無視してください。</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+        <p style="color: #999; font-size: 11px;">diletto by AI Skill Exchange — staffbase</p>
+      </div>
+    `,
+  });
+
+  if (mailErr) {
+    // メール送信失敗してもemployeeレコードは作成済み
+    return NextResponse.json({
+      success: true,
+      warning: '社員は作成されましたが、招待メールの送信に失敗しました',
+    });
+  }
+
+  return NextResponse.json({ success: true });
+}
