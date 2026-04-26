@@ -630,7 +630,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     <EditableRow label="車種" editing={basicEditing} value={basicEditing ? basicDraft.car_model : employee.car_model} onChange={(v) => updBasic('car_model', String(v))} />
                     <EditableRow label="ナンバー" editing={basicEditing} value={basicEditing ? basicDraft.car_plate_number : employee.car_plate_number} onChange={(v) => updBasic('car_plate_number', String(v))} />
                     <EditableRow label="保険会社" editing={basicEditing} value={basicEditing ? basicDraft.insurance_company : employee.insurance_company} onChange={(v) => updBasic('insurance_company', String(v))} />
-                    <EditableRow label="通勤距離(km)" type="number" editing={basicEditing} value={basicEditing ? basicDraft.commute_distance : employee.commute_distance} onChange={(v) => updBasic('commute_distance', v === '' ? null : Number(v))} />
+                    <EditableRow label="通勤距離(km)" type="number" editing={basicEditing} value={basicEditing ? basicDraft.commute_distance : employee.commute_distance} onChange={(v) => updBasic('commute_distance', String(v) === '' ? null : String(v))} />
                     <EditableRow label="免許番号" editing={basicEditing} value={basicEditing ? basicDraft.license_number : employee.license_number} onChange={(v) => updBasic('license_number', String(v))} />
                     <EditableRow label="免許期限" type="date" editing={basicEditing} value={basicEditing ? basicDraft.license_expiry : employee.license_expiry} onChange={(v) => updBasic('license_expiry', String(v))} />
                   </div>
