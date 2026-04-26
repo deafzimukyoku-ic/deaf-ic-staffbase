@@ -37,6 +37,9 @@ type LastCompletedAt = Partial<Record<CategoryKey, Record<string, string>>>;
 interface Props {
   rows: ProgressRow[];
   totalTemplates: number;
+  /* 社員別の対象書類数。書類の自動判定（ゲート付きタグの AND）で社員ごとに対象数が異なるため。
+     未指定の社員は totalTemplates を分母として fallback。 */
+  docTotalsByEmployee?: Record<string, number>;
   totalCompliance: number;
   totalTrainings: number;
   totalAnnouncements: number;
@@ -71,7 +74,7 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: st
   );
 }
 
-export function ProgressDashboard({ rows, totalTemplates, totalCompliance, totalTrainings, totalAnnouncements, totalManuals, facilities = [], lastCompletedAt = {} }: Props) {
+export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = {}, totalCompliance, totalTrainings, totalAnnouncements, totalManuals, facilities = [], lastCompletedAt = {} }: Props) {
   const active = rows.filter((r) => r.status === 'active');
 
   // モーダル状態
@@ -114,18 +117,26 @@ export function ProgressDashboard({ rows, totalTemplates, totalCompliance, total
     setOpenKey(null);
   }
 
-  // 達成率を計算
-  const calcRate = (key: CategoryKey, total: number) => {
-    if (active.length === 0 || total === 0) return 0;
-    const sum = active.reduce((acc, r) => acc + Math.min(Number(r[key as keyof EmployeeProgress] ?? 0) / total, 1), 0);
-    return Math.round((sum / active.length) * 100);
+  // 達成率を計算（社員ごとの分母を受け取る版。書類は社員ごとに対象数が違う）
+  const calcRate = (key: CategoryKey, totalOf: (r: ProgressRow) => number) => {
+    if (active.length === 0) return 0;
+    let denominator = 0;
+    let numerator = 0;
+    for (const r of active) {
+      const t = totalOf(r);
+      if (t === 0) continue; /* 対象 0 件の社員は分母分子から外す（達成率計算の意味がない） */
+      denominator++;
+      numerator += Math.min(Number(r[key as keyof EmployeeProgress] ?? 0) / t, 1);
+    }
+    if (denominator === 0) return 0;
+    return Math.round((numerator / denominator) * 100);
   };
 
-  const docRate = calcRate('docs_submitted', totalTemplates);
-  const compRate = calcRate('compliance_done', totalCompliance);
-  const trainRate = calcRate('trainings_passed', totalTrainings);
-  const annRate = calcRate('announcements_read', totalAnnouncements);
-  const manualRate = calcRate('manuals_read', totalManuals);
+  const docRate = calcRate('docs_submitted', (r) => docTotalsByEmployee[r.employee_id] ?? totalTemplates);
+  const compRate = calcRate('compliance_done', () => totalCompliance);
+  const trainRate = calcRate('trainings_passed', () => totalTrainings);
+  const annRate = calcRate('announcements_read', () => totalAnnouncements);
+  const manualRate = calcRate('manuals_read', () => totalManuals);
 
   return (
     <div className="space-y-5">
@@ -152,6 +163,7 @@ export function ProgressDashboard({ rows, totalTemplates, totalCompliance, total
           announcements_read: totalAnnouncements,
           manuals_read: totalManuals,
         }}
+        docTotalsByEmployee={docTotalsByEmployee}
         lastCompletedAt={lastCompletedAt}
         selectedIds={selectedIds}
         setSelectedIds={setSelectedIds}
@@ -180,24 +192,24 @@ export function ProgressDashboard({ rows, totalTemplates, totalCompliance, total
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-diletto-gray-light">
-                    <th className="py-2 pr-4">社員名</th>
-                    <th className="py-2 px-4 text-center">書類</th>
-                    <th className="py-2 px-4 text-center">遵守事項</th>
-                    <th className="py-2 px-4 text-center">研修</th>
-                    <th className="py-2 px-4 text-center">お知らせ</th>
-                    <th className="py-2 px-4 text-center">業務マニュアル</th>
+                    <th className="py-2 pr-4 whitespace-nowrap min-w-[7em]">社員名</th>
+                    <th className="py-2 px-4 text-center whitespace-nowrap">書類</th>
+                    <th className="py-2 px-4 text-center whitespace-nowrap">遵守事項</th>
+                    <th className="py-2 px-4 text-center whitespace-nowrap">研修</th>
+                    <th className="py-2 px-4 text-center whitespace-nowrap">お知らせ</th>
+                    <th className="py-2 px-4 text-center whitespace-nowrap">業務マニュアル</th>
                   </tr>
                 </thead>
                 <tbody>
                   {active.map((r) => (
                     <tr key={r.employee_id} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-medium">
+                      <td className="py-2 pr-4 font-medium whitespace-nowrap min-w-[7em]">
                         <Link href={`/admin/employees/${r.employee_id}`} className="hover:text-diletto-blue transition-colors">
                           {r.last_name} {r.first_name}
                         </Link>
                       </td>
                       <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.docs_submitted)} total={totalTemplates} />
+                        <ProgressBadge current={Number(r.docs_submitted)} total={docTotalsByEmployee[r.employee_id] ?? totalTemplates} />
                       </td>
                       <td className="py-2 px-4 text-center">
                         <ProgressBadge current={Number(r.compliance_done)} total={totalCompliance} />
@@ -256,12 +268,14 @@ function RateCard({ label, pct, color, ring, onClick }: { label: string; pct: nu
 }
 
 function ReminderModal({
-  openKey, rows, facilities, totals, lastCompletedAt, selectedIds, setSelectedIds, sending, onClose, onToggle, onSend,
+  openKey, rows, facilities, totals, docTotalsByEmployee, lastCompletedAt, selectedIds, setSelectedIds, sending, onClose, onToggle, onSend,
 }: {
   openKey: CategoryKey;
   rows: ProgressRow[];
   facilities: FacilityLite[];
   totals: Record<CategoryKey, number>;
+  /* 書類だけ社員別の対象数があるので別経路で受ける */
+  docTotalsByEmployee: Record<string, number>;
   lastCompletedAt: LastCompletedAt;
   selectedIds: Set<string>;
   setSelectedIds: (next: Set<string>) => void;
@@ -272,8 +286,13 @@ function ReminderModal({
 }) {
   const meta = CATEGORY_META[openKey];
   const total = totals[openKey];
-  const incomplete = rows.filter((r) => Number(r[openKey]) < total);
-  const completed = rows.filter((r) => Number(r[openKey]) >= total && total > 0);
+  /* 社員ごとの「対象数」を取得するヘルパー。docs_submitted のみ社員別、それ以外は全社員共通 */
+  const totalFor = (r: ProgressRow): number => {
+    if (openKey === 'docs_submitted') return docTotalsByEmployee[r.employee_id] ?? total;
+    return total;
+  };
+  const incomplete = rows.filter((r) => totalFor(r) > 0 && Number(r[openKey]) < totalFor(r));
+  const completed = rows.filter((r) => totalFor(r) > 0 && Number(r[openKey]) >= totalFor(r));
 
   const [search, setSearch] = useState('');
   const [facilityFilter, setFacilityFilter] = useState<string>('all');
@@ -398,7 +417,7 @@ function ReminderModal({
                     <Badge className={viewMode === 'incomplete'
                       ? 'bg-diletto-gold/[0.08] text-diletto-gold text-[10px] shrink-0'
                       : 'bg-diletto-green/10 text-diletto-green text-[10px] shrink-0'}>
-                      {Number(r[openKey])} / {total}
+                      {Number(r[openKey])} / {totalFor(r)}
                     </Badge>
                   </label>
                 );

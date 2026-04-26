@@ -35,7 +35,7 @@ const shiftNav: NavItem[] = [
   { kind: 'link', href: '/mgr/shifts/transport', label: '送迎表', icon: '🚗' },
   { kind: 'link', href: '/mgr/shifts/output/daily', label: '日次出力', icon: '📄' },
   { kind: 'link', href: '/mgr/shifts/output/daily-report', label: '業務日報', icon: '📋' },
-  { kind: 'link', href: '/mgr/shifts/output/weekly-transport', label: '週次送迎', icon: '🗓️' },
+  /* 週次送迎は送迎表ページの出力ボタンに統合（サイドバーからは除外） */
   { kind: 'link', href: '/mgr/requests', label: '休み希望', icon: '✋' },
   { kind: 'section', label: '⚙️ シフト設定' },
   { kind: 'link', href: '/mgr/shifts/facility-settings', label: '事業所設定', icon: '🏢' },
@@ -196,9 +196,10 @@ function SidebarContent({
         </Link>
       </div>
       <ModeLabel mode={mode} />
-      <ScrollArea className="flex-1 py-3">
+      {/* 常時表示スクロールバーで「下にもう項目あるよ」を視覚化（admin と同方針） */}
+      <div className="flex-1 overflow-y-auto py-3 sidebar-scroll">
         <SidebarNav pathname={pathname} mode={mode} onNavigate={onNavigate} />
-      </ScrollArea>
+      </div>
       <div className="border-t border-diletto-gray/10 bg-diletto-beige p-3 space-y-1">
         <p className="text-[10px] text-diletto-gray-light px-1 mb-1">切り替え</p>
         <Link
@@ -383,19 +384,19 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[260px] p-0">
+            <SheetContent side="left" className="w-[260px] p-0" style={{ height: '100dvh' }}>
               <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} />
             </SheetContent>
           </Sheet>
-          <Link href={mode === 'staff' ? '/mgr/dashboard' : '/mgr/shifts/dashboard'} className="flex items-center">
+          <Link href={mode === 'staff' ? '/mgr/dashboard' : '/mgr/shifts/dashboard'} className="flex items-center min-w-0 shrink">
             <Logo size="sm" />
           </Link>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             <FacilityHeaderSelector facilities={facilities} value={facilityId} onChange={setFacilityId} />
-            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">
+            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>
@@ -435,7 +436,8 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
         </main>
       </div>
 
-      <ModeFab mode={mode} onSwitch={switchMode} />
+      {/* モバイル Sheet を開いている間は FAB を隠す（z-50 同士で被るため） */}
+      {!mobileOpen && <ModeFab mode={mode} onSwitch={switchMode} />}
     </div>
   );
 }

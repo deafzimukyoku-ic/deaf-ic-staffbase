@@ -41,6 +41,19 @@ const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   image: '画像',
 };
 
+/* gate_fields ↔ プルダウン値の相互変換。プルダウン値はカンマ区切りの文字列。
+   現状サポートする条件は has_car_commute / is_shuttle_driver の 2 種のみ（CORE_FIELD_GATES と一致）。
+   将来追加する場合は valueToGateFields のホワイトリストも更新すること。 */
+function gateFieldsToValue(gateFields: string[]): string {
+  if (!gateFields || gateFields.length === 0) return 'all';
+  const sorted = [...gateFields].sort().join(',');
+  return sorted || 'all';
+}
+function valueToGateFields(value: string): string[] {
+  if (value === 'all' || !value) return [];
+  return value.split(',').filter((v) => v === 'has_car_commute' || v === 'is_shuttle_driver');
+}
+
 export default function SettingsPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [company, setCompany] = useState({ company_name: '', representative_title: '', representative_name: '', representative_honorific: '様' });
@@ -53,7 +66,9 @@ export default function SettingsPage() {
     { id?: string; name: string; address: string; display_order: number; shift_enabled: boolean; transport_enabled: boolean; daily_report_template: string }[]
   >([]);
   const [positions, setPositions] = useState<(Omit<Position, 'tenant_id' | 'created_at' | 'id'> & { id?: string })[]>([]);
-  const [customFields, setCustomFields] = useState<{ id?: string; field_key: string; label: string; field_type: CustomFieldType; options: string[]; display_order: number; is_active: boolean; section: CustomFieldSection }[]>([]);
+  /* gate_fields: 「この項目を入力するのは誰か」を表す employees の boolean 列名の配列。
+     [] = 全員、['has_car_commute'] = マイカー通勤者のみ、等。書類自動判定で使用。 */
+  const [customFields, setCustomFields] = useState<{ id?: string; field_key: string; label: string; field_type: CustomFieldType; options: string[]; display_order: number; is_active: boolean; section: CustomFieldSection; gate_fields: string[] }[]>([]);
   const [sectionVisibility, setSectionVisibility] = useState<Record<ProfileSectionKey, boolean>>(
     () => Object.fromEntries(PROFILE_SECTION_KEYS.map((k) => [k, true])) as Record<ProfileSectionKey, boolean>
   );
@@ -102,13 +117,15 @@ export default function SettingsPage() {
       const { data: posData } = await supabase.from('positions').select('id, name, display_order').eq('tenant_id', me.tenant_id).order('display_order');
       if (posData) setPositions(posData);
 
-      const { data: cfData } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active, section').eq('tenant_id', me.tenant_id).order('display_order');
+      const { data: cfData } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active, section, gate_fields').eq('tenant_id', me.tenant_id).order('display_order');
       if (cfData) setCustomFields(cfData.map((f: Record<string, unknown>) => ({
         id: f.id as string, field_key: f.field_key as string, label: f.label as string,
         field_type: f.field_type as CustomFieldType, options: (f.options as string[]) || [],
         display_order: f.display_order as number, is_active: f.is_active as boolean,
         section: (f.section as CustomFieldSection) || 'basic',
+        gate_fields: (f.gate_fields as string[]) || [],
       })));
+
 
       // セクション表示設定
       const { data: visData } = await supabase
@@ -223,7 +240,7 @@ export default function SettingsPage() {
         await supabase.from('custom_employee_fields').update({
           label: f.label.trim(), field_key: f.field_key, field_type: f.field_type,
           options: f.options, display_order: f.display_order, is_active: f.is_active,
-          section: f.section,
+          section: f.section, gate_fields: f.gate_fields,
         }).eq('id', f.id!);
       }
     }
@@ -234,7 +251,7 @@ export default function SettingsPage() {
         newCfs.map((f) => ({
           tenant_id: tenantId, field_key: f.field_key, label: f.label.trim(),
           field_type: f.field_type, options: f.options, display_order: f.display_order, is_active: f.is_active,
-          section: f.section,
+          section: f.section, gate_fields: f.gate_fields,
         }))
       );
     }
@@ -280,33 +297,36 @@ export default function SettingsPage() {
     const { data: reloadedPositions } = await supabase.from('positions').select('id, name, display_order').eq('tenant_id', tenantId).order('display_order');
     if (reloadedPositions) setPositions(reloadedPositions);
 
-    const { data: reloadedCfs } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active, section').eq('tenant_id', tenantId).order('display_order');
+    const { data: reloadedCfs } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active, section, gate_fields').eq('tenant_id', tenantId).order('display_order');
     if (reloadedCfs) setCustomFields(reloadedCfs.map((f: Record<string, unknown>) => ({
       id: f.id as string, field_key: f.field_key as string, label: f.label as string,
       field_type: f.field_type as CustomFieldType, options: (f.options as string[]) || [],
       display_order: f.display_order as number, is_active: f.is_active as boolean,
       section: (f.section as CustomFieldSection) || 'basic',
+      gate_fields: (f.gate_fields as string[]) || [],
     })));
+
   }
 
   if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">設定</h1>
-        <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <h1 className="text-2xl font-bold whitespace-nowrap">設定</h1>
+        <Button onClick={handleSave} disabled={saving} className="whitespace-nowrap shrink-0">{saving ? '保存中...' : '保存'}</Button>
       </div>
 
       <Tabs defaultValue="dashboard" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-6 w-full h-11 bg-diletto-beige/30 p-1">
-          <TabsTrigger value="dashboard" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">🏠 ダッシュボード</TabsTrigger>
-          <TabsTrigger value="basic" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">基本情報</TabsTrigger>
-          <TabsTrigger value="organization" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">組織設定</TabsTrigger>
-          <TabsTrigger value="fields" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">項目設定</TabsTrigger>
-          <TabsTrigger value="visibility" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">表示設定</TabsTrigger>
-          <TabsTrigger value="values" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">価値観</TabsTrigger>
-          <TabsTrigger value="documents" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">書類テンプレ</TabsTrigger>
+        {/* モバイルでは横スクロール、lg 以上では均等分割 */}
+        <TabsList className="mb-6 w-full max-w-full h-12 bg-diletto-beige/40 border border-diletto-gray/10 rounded-xl p-1 overflow-x-auto no-scrollbar justify-start lg:justify-stretch gap-0.5">
+          <TabsTrigger value="dashboard" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">🏠 ダッシュボード</TabsTrigger>
+          <TabsTrigger value="basic" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">基本情報</TabsTrigger>
+          <TabsTrigger value="organization" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">組織設定</TabsTrigger>
+          <TabsTrigger value="fields" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">項目設定</TabsTrigger>
+          <TabsTrigger value="visibility" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">表示設定</TabsTrigger>
+          <TabsTrigger value="values" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">価値観</TabsTrigger>
+          <TabsTrigger value="documents" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">書類テンプレ</TabsTrigger>
         </TabsList>
 
         {/* ダッシュボードタブ */}
@@ -526,12 +546,35 @@ export default function SettingsPage() {
                       />
                     </div>
                   )}
+                  {/* 対象者条件: この項目を入力する社員を絞り込む（プロフィール画面の表示制御のみ）。
+                     書類の配布対象は書類テンプレ側で個別設定する（migration 122 document_template_audience）。 */}
+                  <div className="space-y-1 pt-2 border-t border-diletto-gray/10">
+                    <Label className="text-xs flex items-center gap-1.5">
+                      <span>👥 この項目を入力するのは</span>
+                      <span className="text-diletto-gray-light text-[10px] font-normal">（プロフィール画面で表示する対象者を絞ります）</span>
+                    </Label>
+                    <select
+                      title="対象者条件"
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      value={gateFieldsToValue(cf.gate_fields)}
+                      onChange={(e) => {
+                        const next = [...customFields];
+                        next[i] = { ...next[i], gate_fields: valueToGateFields(e.target.value) };
+                        setCustomFields(next);
+                      }}
+                    >
+                      <option value="all">全員（条件なし）</option>
+                      <option value="has_car_commute">マイカー通勤者のみ</option>
+                      <option value="is_shuttle_driver">送迎運転者のみ</option>
+                      <option value="has_car_commute,is_shuttle_driver">マイカー通勤者または送迎運転者</option>
+                    </select>
+                  </div>
                 </div>
               ))}
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => setCustomFields([...customFields, { field_key: '', label: '', field_type: 'text', options: [], display_order: customFields.length, is_active: true, section: 'basic' }])}
+                onClick={() => setCustomFields([...customFields, { field_key: '', label: '', field_type: 'text', options: [], display_order: customFields.length, is_active: true, section: 'basic', gate_fields: [] }])}
               >
                 + カスタム項目を追加
               </Button>
@@ -606,6 +649,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
     </div>
   );

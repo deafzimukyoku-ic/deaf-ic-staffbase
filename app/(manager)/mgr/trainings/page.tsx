@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
+import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
 import { ReorderButtons } from '@/components/admin/ReorderButtons';
@@ -221,8 +222,9 @@ export default function ManagerTrainingsPage() {
   if (!selectedCategory) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">研修管理</h1>
+        <div className="flex items-center justify-between mb-6 gap-3">
+          <h1 className="text-2xl font-bold whitespace-nowrap">研修管理</h1>
+          <CategoryManagerModal type="training" />
         </div>
 
         <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して研修内容を確認・編集してください。新規追加はカテゴリを開いて行います。</p>

@@ -95,16 +95,16 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
           <Link href="/my/dashboard" className="flex items-center min-w-0">
             <Logo size="sm" />
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {(userRole === 'manager' || userRole === 'admin') && (
               <Link
                 href={userRole === 'manager' ? '/mgr/dashboard' : '/admin/dashboard'}
-                className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors"
+                className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0"
               >
                 管理画面
               </Link>
             )}
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>

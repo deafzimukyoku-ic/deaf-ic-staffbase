@@ -24,6 +24,7 @@ import { PersonInline } from '@/components/admin/PersonInline';
 import { ReorderButtons } from '@/components/admin/ReorderButtons';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
+import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
@@ -272,8 +273,9 @@ export default function ManagerCompliancePage() {
   if (!selectedCategory) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">遵守事項</h1>
+        <div className="flex items-center justify-between mb-6 gap-3">
+          <h1 className="text-2xl font-bold whitespace-nowrap">遵守事項</h1>
+          <CategoryManagerModal type="compliance" />
         </div>
 
         <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して内容を確認・編集してください。新規作成はカテゴリを開いて行います。</p>

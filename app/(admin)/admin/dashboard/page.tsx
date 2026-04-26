@@ -5,6 +5,8 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { ProgressDashboard } from '@/components/admin/ProgressDashboard';
+import { isEmployeeInAudience, loadTemplateAudience } from '@/lib/template-audience';
+import type { Employee, DocumentTemplate } from '@/lib/types';
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState<any>(null);
@@ -23,12 +25,14 @@ export default function AdminDashboardPage() {
 
       const [progressRes, templatesRes, complianceRes, trainingsRes, announcementsRes, manualsRes, employeesRes, facilitiesRes, docSubsRes, compAcksRes, trainSubsRes, annReadsRes, manualReadsRes] = await Promise.all([
         supabase.from('employee_progress').select('*').eq('tenant_id', tid),
-        supabase.from('document_templates').select('id').eq('tenant_id', tid),
+        /* mapping も含めて取得 — 社員別の対象書類数を計算するため */
+        supabase.from('document_templates').select('id, mapping').eq('tenant_id', tid),
         supabase.from('compliance_documents').select('id').eq('tenant_id', tid),
         supabase.from('trainings').select('id').eq('tenant_id', tid),
         supabase.from('announcements').select('id').eq('tenant_id', tid),
         supabase.from('manuals').select('id').eq('tenant_id', tid),
-        supabase.from('employees').select('id, last_name, first_name, last_name_kana, first_name_kana, status, facility_id').eq('tenant_id', tid),
+        /* gate 判定に必要な employee 列も取得 */
+        supabase.from('employees').select('id, last_name, first_name, last_name_kana, first_name_kana, status, facility_id, has_car_commute, is_shuttle_driver').eq('tenant_id', tid),
         supabase.from('facilities').select('id, name').eq('tenant_id', tid).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
         supabase.from('document_submissions').select('employee_id, submitted_at').eq('status', 'submitted'),
         supabase.from('compliance_acknowledgments').select('employee_id, acknowledged_at'),
@@ -36,6 +40,20 @@ export default function AdminDashboardPage() {
         supabase.from('announcement_reads').select('employee_id, read_at'),
         supabase.from('manual_reads').select('employee_id, read_at'),
       ]);
+
+      /* 社員別の対象書類数を事前計算（migration 122: 書類テンプレ配布対象ルールベース）。
+         ルール 0 件 = 全員対象、ルール 1 件以上 = いずれかに該当（OR）。 */
+      const allTemplates = (templatesRes.data || []) as Pick<DocumentTemplate, 'id' | 'mapping'>[];
+      const tplIds = allTemplates.map((t) => t.id);
+      const audienceByTemplate = await loadTemplateAudience(supabase, tplIds);
+      const docTotalsByEmployee: Record<string, number> = {};
+      for (const emp of (employeesRes.data || []) as Employee[]) {
+        let count = 0;
+        for (const tpl of allTemplates) {
+          if (isEmployeeInAudience(tpl.id, emp, audienceByTemplate)) count++;
+        }
+        docTotalsByEmployee[emp.id] = count;
+      }
 
       const empMap = new Map((employeesRes.data || []).map((e: any) => [e.id, e]));
       const rows = (progressRes.data || []).map((p: any) => {
@@ -65,6 +83,7 @@ export default function AdminDashboardPage() {
       setData({
         rows,
         totalTemplates: templatesRes.data?.length || 0,
+        docTotalsByEmployee,
         totalCompliance: complianceRes.data?.length || 0,
         totalTrainings: trainingsRes.data?.length || 0,
         totalAnnouncements: announcementsRes.data?.length || 0,

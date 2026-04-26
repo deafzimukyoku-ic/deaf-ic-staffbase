@@ -81,3 +81,28 @@ export function isFieldApplicable(
     return v === true;
   });
 }
+
+/**
+ * 該当フィールドに「ゲート定義」が存在するか。
+ * - true  → 「条件付きフィールド」（特定の人だけが該当）
+ * - false → 「無条件フィールド」（氏名など、全員に該当）
+ *
+ * 書類の自動判定で「対象者を絞り込む手がかりになるタグかどうか」を見るのに使う。
+ */
+export function hasGateDefinition(
+  fieldName: string,
+  customFieldGates?: Map<string, string[]>,
+): boolean {
+  if ((CORE_FIELD_GATES[fieldName]?.length ?? 0) > 0) return true;
+  if ((customFieldGates?.get(fieldName)?.length ?? 0) > 0) return true;
+  return false;
+}
+
+/**
+ * ゲートに登場する「フラグ名」を人間用ラベルに変換するための辞書。
+ * 書類カードに「対象: マイカー通勤者」と表示する用途。
+ */
+export const GATE_FLAG_LABELS: Record<string, string> = {
+  has_car_commute: 'マイカー通勤者',
+  is_shuttle_driver: '送迎運転者',
+};

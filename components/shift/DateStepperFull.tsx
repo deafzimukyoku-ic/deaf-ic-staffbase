@@ -84,8 +84,9 @@ export default function DateStepperFull({ value, onChange }: Props) {
   const lastOfMonth = endOfMonth(dt);
 
   return (
-    <div className="inline-flex items-center gap-1.5 flex-wrap">
-      <div className="inline-flex items-center gap-1">
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {/* ナビゲーション本体: « ‹ [日付] › » を 1 グループにまとめて折り返さない */}
+      <div className="inline-flex items-center gap-1 flex-nowrap">
         <button
           type="button"
           onClick={goPrevMonth}
@@ -122,79 +123,79 @@ export default function DateStepperFull({ value, onChange }: Props) {
         >
           ‹
         </button>
-      </div>
 
-      {/* 中央の日付ボタン + 📅 (ネイティブ date input をオーバーレイ) */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => {
-            if (dateInputRef.current) {
-              const el = dateInputRef.current as HTMLInputElement & { showPicker?: () => void };
-              if (typeof el.showPicker === 'function') {
-                el.showPicker();
-              } else {
+        {/* 中央の日付ボタン + 📅
+            iOS Safari では showPicker() がユーザー操作経由でも未起動になることがあるため、
+            ネイティブ <input type="date"> をボタンの上に opacity:0 で重ねてタップを直接受ける。
+            input が pointer-events を奪うので button の onClick はフォールバック扱い。 */}
+        <div className="relative inline-flex">
+          <button
+            type="button"
+            onClick={() => {
+              const el = dateInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+              if (!el) return;
+              try {
+                if (typeof el.showPicker === 'function') el.showPicker();
+                else el.click();
+              } catch {
                 el.click();
               }
-            }
-          }}
-          className="inline-flex items-center gap-2 font-bold transition-all"
-          style={{
-            color: labelColor,
-            background: 'var(--white, #ffffff)',
-            border: '1.5px solid var(--accent, #4a7fb6)',
-            borderRadius: '8px',
-            padding: '8px 14px',
-            fontSize: '0.95rem',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--accent-pale, #e7eef7)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'var(--white, #ffffff)';
-          }}
-          title={holidayName ? `祝日: ${holidayName}` : 'カレンダーを開く'}
-        >
-          <span>{label}</span>
-          {holidayName && (
-            <span
-              className="text-xs font-semibold"
-              style={{ color: 'var(--red, #d4625a)', opacity: 0.9 }}
-            >
-              {holidayName}
-            </span>
-          )}
-          {isToday && (
-            <span
-              aria-hidden
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: 'var(--accent, #4a7fb6)',
-                boxShadow: '0 0 0 2px var(--accent-pale, #e7eef7)',
-              }}
-            />
-          )}
-          <span style={{ fontSize: '1rem', lineHeight: 1 }}>📅</span>
-        </button>
-        {/* ネイティブ date input（不可視、ボタン経由で起動） */}
-        <input
-          ref={dateInputRef}
-          type="date"
-          value={value}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) onChange(v);
-          }}
-          className="absolute inset-0 opacity-0 pointer-events-none"
-          aria-hidden
-          tabIndex={-1}
-        />
-      </div>
+            }}
+            className="inline-flex items-center gap-1.5 font-bold transition-all whitespace-nowrap"
+            style={{
+              color: labelColor,
+              background: 'var(--white, #ffffff)',
+              border: '1.5px solid var(--accent, #4a7fb6)',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              fontSize: '0.9rem',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--accent-pale, #e7eef7)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--white, #ffffff)';
+            }}
+            title={holidayName ? `祝日: ${holidayName}` : 'カレンダーを開く'}
+          >
+            <span>{label}</span>
+            {holidayName && (
+              <span
+                className="text-xs font-semibold"
+                style={{ color: 'var(--red, #d4625a)', opacity: 0.9 }}
+              >
+                {holidayName}
+              </span>
+            )}
+            {isToday && (
+              <span
+                aria-hidden
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: 'var(--accent, #4a7fb6)',
+                  boxShadow: '0 0 0 2px var(--accent-pale, #e7eef7)',
+                }}
+              />
+            )}
+            <span style={{ fontSize: '1rem', lineHeight: 1 }}>📅</span>
+          </button>
+          {/* オーバーレイ式の native date input。タップを直接受けて native picker を確実に開く */}
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={value}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) onChange(v);
+            }}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            aria-label="日付を選択"
+          />
+        </div>
 
-      <div className="inline-flex items-center gap-1">
         <button
           type="button"
           onClick={goNextDay}
@@ -237,7 +238,7 @@ export default function DateStepperFull({ value, onChange }: Props) {
         <button
           type="button"
           onClick={goToday}
-          className="text-xs font-semibold px-3 py-2 rounded transition-colors"
+          className="text-xs font-semibold px-3 py-2 rounded transition-colors whitespace-nowrap"
           style={{
             background: 'transparent',
             color: 'var(--accent, #4a7fb6)',

@@ -41,7 +41,7 @@ const shiftNav: NavItem[] = [
   { kind: 'link', href: '/admin/shifts/transport', label: '送迎表', icon: '🚗' },
   { kind: 'link', href: '/admin/shifts/output/daily', label: '日次出力', icon: '📄' },
   { kind: 'link', href: '/admin/shifts/output/daily-report', label: '業務日報', icon: '📋' },
-  { kind: 'link', href: '/admin/shifts/output/weekly-transport', label: '週次送迎', icon: '🗓️' },
+  /* 週次送迎は送迎表ページの出力ボタンに統合（サイドバーからは除外） */
   { kind: 'link', href: '/admin/requests', label: '休み希望', icon: '✋' },
   { kind: 'section', label: '⚙️ シフト設定' },
   { kind: 'link', href: '/admin/shifts/facility-settings', label: '事業所設定', icon: '🏢' },
@@ -95,10 +95,7 @@ function SidebarNav({
 }) {
   const baseItems = mode === 'staff' ? staffNav : shiftNav;
   const items = mode === 'shift' && !transportEnabled
-    ? baseItems.filter((it) => it.kind !== 'link' || (
-        it.href !== '/admin/shifts/transport' &&
-        it.href !== '/admin/shifts/output/weekly-transport'
-      ))
+    ? baseItems.filter((it) => it.kind !== 'link' || it.href !== '/admin/shifts/transport')
     : baseItems;
 
   // アコーディオン展開状態（デフォルト: そのアコーディオン配下のURLがアクティブなら展開）
@@ -220,9 +217,12 @@ function SidebarContent({
         </Link>
       </div>
       <ModeLabel mode={mode} />
-      <ScrollArea className="flex-1 py-3">
+      {/* 常時表示スクロールバーで「下にもう項目あるよ」を視覚化。
+         ScrollArea は base-ui のカスタム実装だが thumb が控えめすぎるので native overflow に置換。
+         WebKit 系のスクロールバーをカラーリングして diletto テイストに合わせる。 */}
+      <div className="flex-1 overflow-y-auto py-3 sidebar-scroll">
         <SidebarNav pathname={pathname} mode={mode} onNavigate={onNavigate} transportEnabled={transportEnabled} />
-      </ScrollArea>
+      </div>
     </div>
   );
 }
@@ -378,28 +378,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[260px] p-0">
+            <SheetContent side="left" className="w-[260px] p-0" style={{ height: '100dvh' }}>
               <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} transportEnabled={transportEnabled} />
             </SheetContent>
           </Sheet>
-          <Link href={mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard'} className="flex items-center">
+          <Link href={mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard'} className="flex items-center min-w-0 shrink">
             <Logo size="sm" />
           </Link>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             {mode === 'shift' && facilities.length > 1 && (
               <select
                 value={shiftFacilityId ?? ''}
                 onChange={(e) => setStoredFacilityId(e.target.value)}
-                className="h-8 rounded-md border border-diletto-gray/15 bg-white px-2 text-xs font-medium text-diletto-ink max-w-[120px]"
+                className="h-8 rounded-md border border-diletto-gray/15 bg-white px-2 text-xs font-medium text-diletto-ink max-w-[100px]"
                 aria-label="表示中の事業所"
               >
                 {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
               </select>
             )}
-            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">
+            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>
@@ -449,7 +449,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
 
-      <ModeFab mode={mode} onSwitch={switchMode} />
+      {/* モバイル Sheet を開いている間は FAB を隠す（z-50 同士で被るため） */}
+      {!mobileOpen && <ModeFab mode={mode} onSwitch={switchMode} />}
     </div>
   );
 }

@@ -80,26 +80,26 @@ export default function EmployeesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">社員管理</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold whitespace-nowrap">社員管理</h1>
           <p className="text-sm text-diletto-gray mt-1">
             {loading ? '読み込み中...' : `${filtered.length} / ${employees.length}名`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
           <Link href="/admin/access-matrix">
-            <Button variant="outline" className="gap-1">
+            <Button variant="outline" className="gap-1 whitespace-nowrap">
               <span>🔐</span> アプリ権限
             </Button>
           </Link>
           <Link href="/admin/team-diagnosis">
-            <Button variant="outline" className="gap-1">
+            <Button variant="outline" className="gap-1 whitespace-nowrap">
               <span>🔍</span> チーム診断
             </Button>
           </Link>
           <Link href="/admin/employees/new">
-            <Button>+ 社員を追加</Button>
+            <Button className="whitespace-nowrap">+ 社員を追加</Button>
           </Link>
         </div>
       </div>

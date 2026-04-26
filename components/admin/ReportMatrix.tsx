@@ -101,10 +101,10 @@ export function ReportMatrix() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold">📊 閲覧レポート</h1>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-diletto-gray">期間</label>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap">
+        <h1 className="text-2xl font-bold whitespace-nowrap">📊 閲覧レポート</h1>
+        <div className="flex items-center gap-2 shrink-0">
+          <label className="text-xs text-diletto-gray whitespace-nowrap">期間</label>
           <select
             value={days}
             onChange={(e) => setDays(e.target.value)}
@@ -118,9 +118,14 @@ export function ReportMatrix() {
       </div>
 
       <Tabs value={category} onValueChange={(v) => setCategory(v as Category)}>
-        <TabsList>
+        {/* モバイル: 横スクロール / lg 以上: 等幅。設定画面のタブと統一感 */}
+        <TabsList className="w-full max-w-full h-12 bg-diletto-beige/40 border border-diletto-gray/10 rounded-xl p-1 overflow-x-auto no-scrollbar justify-start lg:justify-stretch gap-0.5">
           {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => (
-            <TabsTrigger key={c} value={c}>
+            <TabsTrigger
+              key={c}
+              value={c}
+              className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all"
+            >
               <span className="mr-1">{CATEGORY_LABELS[c].icon}</span>
               {CATEGORY_LABELS[c].label}
             </TabsTrigger>
@@ -289,14 +294,14 @@ function ReportBody({
 
   return (
     <div className="space-y-4">
-      {/* カテゴリフィルタ + CSV ダウンロード */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-diletto-gray">カテゴリ</label>
+      {/* カテゴリフィルタ + CSV ダウンロード - モバイルでは縦並び */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <label className="text-xs text-diletto-gray whitespace-nowrap shrink-0">カテゴリ</label>
           <select
             value={categoryFilter}
             onChange={(e) => onCategoryFilterChange(e.target.value)}
-            className="h-9 rounded-md border border-diletto-gray/20 bg-white px-3 text-sm"
+            className="h-9 flex-1 min-w-0 rounded-md border border-diletto-gray/20 bg-white px-3 text-sm"
           >
             <option value="all">すべて ({data.items.length})</option>
             {categories.map((cat) => {
@@ -312,7 +317,7 @@ function ReportBody({
             )}
           </select>
         </div>
-        <Button size="sm" variant="outline" onClick={exportCsv} disabled={items.length === 0 || employees.length === 0}>
+        <Button size="sm" variant="outline" className="whitespace-nowrap shrink-0 self-end sm:self-auto" onClick={exportCsv} disabled={items.length === 0 || employees.length === 0}>
           📥 CSV ダウンロード
         </Button>
       </div>

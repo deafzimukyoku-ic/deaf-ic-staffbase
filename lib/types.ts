@@ -417,6 +417,17 @@ export interface DocumentSubmission {
   updated_at: string;
 }
 
+/* migration 122: 書類テンプレの配布対象ルール (1 行 = 1 OR 条件)。
+   行 0 件 = 全員対象（デフォルト）/ 行 1 件以上 = いずれかに該当する社員が対象。
+   詳細は lib/template-audience.ts */
+export type AudienceRuleType = 'flag' | 'facility' | 'role' | 'employee';
+export interface DocumentTemplateAudience {
+  template_id: string;
+  rule_type: AudienceRuleType;
+  rule_value: string;
+  created_at: string;
+}
+
 // --- PDF Tags ---
 export interface PdfTag {
   id: string;

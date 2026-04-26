@@ -76,14 +76,15 @@ export default function MyDocumentsPage() {
           return;
         }
 
-        /* migration 119: visibility_condition 廃止。
-           lib/document-applicability.isDocumentApplicable で自動判定。
-           書類の required タグの source_field が employee に該当するかでフィルタ。 */
-        const { isDocumentApplicable, loadCustomFieldGates } = await import('@/lib/document-applicability');
-        const customGates = await loadCustomFieldGates(supabase, me.tenant_id);
+        /* migration 122: 書類テンプレ自身の配布対象ルールで判定。
+           ルール 0 件 = 全員対象。ルール 1 件以上 = いずれかに該当（OR）。 */
+        const { isEmployeeInAudience, loadTemplateAudience } = await import('@/lib/template-audience');
+        const tplIds = (templates as DocumentTemplate[]).map((t) => t.id);
+        const audienceByTemplate = await loadTemplateAudience(supabase, tplIds);
+
         const filtered = (templates as DocumentTemplate[]).filter((t) => {
           if (t.template_type === 'pdf' && t.data_mode === 'matrix') return false;
-          return isDocumentApplicable(t, me as unknown as import('@/lib/types').Employee, customGates);
+          return isEmployeeInAudience(t.id, me as unknown as import('@/lib/types').Employee, audienceByTemplate);
         });
 
         const { data: submissions } = await supabase
@@ -251,11 +252,11 @@ export default function MyDocumentsPage() {
             return (
               <Card key={template.id} className={isConfirmed ? 'opacity-70' : ''}>
                 <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">📄</span>
-                      <div>
-                        <p className="font-medium text-sm">{template.name}</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <span className="text-lg shrink-0">📄</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm break-words">{template.name}</p>
                         <p className="text-xs text-diletto-gray">
                           {template.template_type === 'pdf' ? 'PDF' : 'DOCX'}
                           {isConfirmed && submission?.submitted_at && (
@@ -265,7 +266,7 @@ export default function MyDocumentsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center flex-wrap gap-2 shrink-0">
                       {isConfirmed ? (
                         <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">確認済</Badge>
                       ) : (

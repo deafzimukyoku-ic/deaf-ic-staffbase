@@ -329,6 +329,114 @@
   </table>
 </div>
 
+<!-- Phase 10 — モバイル UI 修正 + 書類自動判定の AND 化 -->
+<div class="phase">
+  <h2>Phase 10 — モバイル UI 折り返し修正 + 書類自動判定の AND 化 <span class="phase-pct">50%</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>ヘッダー「社員画面 / 管理画面 / ログアウト」の縦折り返し修正</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx, app/(employee)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>whitespace-nowrap + shrink-0</td></tr>
+      <tr><td>「社員管理」h1 の縦折り返し（右の3ボタンに圧迫される）</td><td class="files">app/(admin)/admin/employees/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>flex-col sm:flex-row + flex-wrap</td></tr>
+      <tr><td>社員進捗一覧の社員名カラムが縦書き化</td><td class="files">components/admin/ProgressDashboard.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>whitespace-nowrap min-w-[7em]</td></tr>
+      <tr><td>設定画面 TabsList のモバイル対応（横スクロール）</td><td class="files">app/(admin)/admin/settings/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>overflow-x-auto + flex-none lg:flex-1 + whitespace-nowrap</td></tr>
+      <tr><td>/my/documents の書類タイトル縦書き化</td><td class="files">app/(employee)/my/documents/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>flex-col sm:flex-row + min-w-0 break-words</td></tr>
+      <tr><td>モバイルサイドバー（Sheet）が画面下部まで覆われない</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>style={{ height: '100dvh' }} で h-full 上書き（components/ui は不変）</td></tr>
+      <tr><td>日次出力 DateStepperFull のレイアウト + ネイティブ date input オーバーレイ化</td><td class="files">components/shift/DateStepperFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>« ‹ [日付] › » を flex-nowrap で 1 グループ化、input を opacity-0 オーバーレイで iOS Safari の picker 起動を保証</td></tr>
+      <tr><td><b>書類自動判定のシンプル化（ゲート付きタグ AND 判定 + 対象者バッジ）</b></td><td class="files">lib/document-applicability.ts, lib/field-applicability.ts, app/(admin)/admin/documents/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>required を employee タグ判定から除外（UI 上で立てられないため実質機能していなかった）。新ルール: 「ゲート付きタグの全条件を満たす社員のみ対象」。書類カードに「対象: 全員 / マイカー通勤者のみ / 送迎運転者・マイカー通勤者」等の自動算出バッジを追加</td></tr>
+      <tr class="check"><td colspan="5">【別視点チェック】PC 表示で崩れていないか / 既存の 利用表 / シフト表 / 送迎表 のヘッダー高さに影響がないか / employee/manager/admin 全ロールでサイドバー高さ確認 / 日付ピッカーが iOS Safari + Android Chrome 両方で起動 / TabsList の横スクロールバーが PC で出ていないか</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Phase 11 — 書類テンプレ配布対象機構（migration 122 - リライト版） -->
+<div class="phase">
+  <h2>Phase 11 — 書類テンプレ配布対象（直書き型）<span class="phase-pct">95%</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>(初版) employee_groups + document_template_groups モデル → ユーザー要望で破棄</td><td class="files">-</td><td><span class="status done">廃止</span></td><td class="pct">-</td><td>「グループ」概念がわかりにくいとフィードバックあり、書類テンプレに直接ルールを持たせる方式へ全面置換</td></tr>
+      <tr><td>migration 122_template_audience.sql (document_template_audience + RLS)</td><td class="files">supabase/migrations/122_template_audience.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>1 書類につき 0..N 行、0 行 = 全員対象、rule_type: flag/facility/role/employee の OR</td></tr>
+      <tr><td>判定ヘルパー lib/template-audience.ts (loadTemplateAudience / saveTemplateAudience / isEmployeeInAudience / matchesRule / summarizeAudience / FLAG_OPTIONS)</td><td class="files">lib/template-audience.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>employee_groups.ts は削除済</td></tr>
+      <tr><td>型定義 AudienceRuleType / DocumentTemplateAudience</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>EmployeeGroup 系の型は削除</td></tr>
+      <tr><td>設定画面から「対象グループ」セクション完全削除</td><td class="files">app/(admin)/admin/settings/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「項目設定」はカスタム入力項目のみに戻る。タブ数も元の 7 個に戻す</td></tr>
+      <tr><td>書類カードに「対象: 全員 (15名) / 条件で絞る (7名)」バッジ + AudienceDialog</td><td class="files">app/(admin)/admin/documents/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>モード: 全員 / 条件で絞る ラジオ。条件モード時はフラグ・施設・役職・個別指名のチェックリスト + 対象社員ライブプレビュー</td></tr>
+      <tr><td>/my/documents・/admin/employees/[id]・admin/dashboard・bulk-pdf API を audience ベースに切替</td><td class="files">app/(employee)/my/documents/page.tsx, app/(admin)/admin/employees/[id]/page.tsx, app/(admin)/admin/dashboard/page.tsx, app/api/documents/bulk-pdf-zip-employee/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>employee_groups の参照は全廃</td></tr>
+      <tr><td><b>migration 122_template_audience を Supabase に適用</b></td><td class="files">supabase</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>ユーザー手動: Supabase Studio で SQL 実行 or CLI で push。既存 PDF テンプレは行 0 件 = 全員対象がデフォルト</td></tr>
+      <tr class="check"><td colspan="5">【別視点チェック】migration 未適用状態でも /my/documents が落ちないこと（loadTemplateAudience は data null 時に空 Map を返す）/ 「全員」モード保存時に既存ルール行が DELETE されること / 「個別指名」のみ設定した書類は新人入社時に対象に含まれないこと（仕様）/ mgr ダッシュボードは admin と同じく audience ベース計算には未対応</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Phase 10.5 — 書類自動判定 ロジック改修 計画 (旧) -->
+<div class="phase">
+  <h2>Phase 10.5 — (旧) 書類自動判定 AND 化計画 → Phase 11 対象グループに統合済 <span class="phase-pct">廃止</span></h2>
+  <div style="padding:12px 16px; font-size:13px; line-height:1.7;">
+    <p><b>背景:</b> 現状（<code>lib/document-applicability.ts</code> 43–65行）は「required タグの source_field のうち <b>1 つでも</b> 該当（<code>isFieldApplicable</code> が true）なら書類は対象」という <b>OR 判定</b>。
+    <code>last_name</code> / <code>first_name</code> はゲート未定義 → 常に true → これらが required タグに 1 つでもあれば <b>全社員が対象</b> になってしまう。</p>
+
+    <p><b>採用方針（ユーザー合意済）:</b> 「ゲート付きの必須タグが 1 つでもあれば、その<b>全て</b>に該当する社員のみ対象」とする <b>AND 判定</b>。氏名等のゲート無しタグは判定から除外（無視）する。</p>
+
+    <h3 style="font-size:14px; margin:14px 0 6px;">新ロジック（擬似コード）</h3>
+    <pre style="background:#f3f4f6; padding:10px; border-radius:6px; font-size:12px; overflow-x:auto;">function isDocumentApplicable(template, employee, customFieldGates) {
+  const requiredEmployeeTags = template.mapping
+    .filter(m =&gt; m.required &amp;&amp; m.source_type === 'employee');
+
+  // ゲート定義のあるタグだけ抽出（CORE_FIELD_GATES または customFieldGates にエントリあり）
+  const gatedRequired = requiredEmployeeTags.filter(t =&gt; hasGateDefinition(t.source_field, customFieldGates));
+
+  if (gatedRequired.length === 0) {
+    // ゲート付き必須タグが 0 個 = 全員共通書類（従来どおり全員対象）
+    return true;
+  }
+
+  // AND: ゲート付き必須タグの「全て」に該当する社員のみ対象
+  return gatedRequired.every(t =&gt; isFieldApplicable(employee, t.source_field, customFieldGates));
+}
+
+function hasGateDefinition(fieldName, customFieldGates) {
+  return (CORE_FIELD_GATES[fieldName]?.length ?? 0) &gt; 0
+      || (customFieldGates?.get(fieldName)?.length ?? 0) &gt; 0;
+}</pre>
+
+    <h3 style="font-size:14px; margin:14px 0 6px;">影響を受けるファイル</h3>
+    <table style="font-size:12px;">
+      <thead><tr><th>ファイル</th><th>変更内容</th></tr></thead>
+      <tbody>
+        <tr><td class="files">lib/document-applicability.ts</td><td>判定ロジック差替（OR → AND、ゲート無しタグの除外）</td></tr>
+        <tr><td class="files">lib/field-applicability.ts</td><td>ヘルパー <code>hasGateDefinition()</code> 追加</td></tr>
+        <tr><td class="files">app/(employee)/my/documents/page.tsx</td><td>書類一覧の絞込が新ロジックに連動（呼び出し側変更なし、自動反映）</td></tr>
+        <tr><td class="files">app/(admin)/admin/employees/[id]/page.tsx</td><td>社員詳細の書類タブ表示（同上、自動反映）</td></tr>
+        <tr><td class="files">進捗集計（書類提出率）</td><td>分母（対象書類数）が社員ごとに変動するため、ProgressDashboard 集計ロジックの再確認が必要</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-size:14px; margin:14px 0 6px;">確認すべきエッジケース</h3>
+    <ul style="margin:4px 0 0 16px;">
+      <li>required タグが 0 個の書類 → 全員対象（仕様維持）</li>
+      <li>required タグはあるがすべてゲート無し（氏名のみ等）→ 「全員共通書類」扱いで全員対象（採用方針どおり）</li>
+      <li>ゲート付き必須タグが複数（例: <code>license_number</code> + <code>car_model</code>）→ 全フラグ true の社員のみ対象（AND）</li>
+      <li>同じ source_field を持つ required タグが複数登場 → 重複して判定されるが結果は変わらない</li>
+      <li>カスタムフィールドのゲートが空配列で登録されている場合 → ゲート未定義として扱う（既存ロジック踏襲）</li>
+    </ul>
+
+    <h3 style="font-size:14px; margin:14px 0 6px;">移行リスク</h3>
+    <ul style="margin:4px 0 0 16px;">
+      <li>既に提出済 (<code>document_submissions</code> 行あり) の社員が、新判定で「対象外」になるケース → 提出履歴は残るが進捗カウントから外れる。データ削除はしない</li>
+      <li>逆に新規対象になる社員はいない（AND は OR の部分集合）</li>
+      <li>運用側の影響: 「氏名タグだけで全員対象にしていた書類」は、ゲート付きタグの追加（または「全員対象」明示フラグ追加）が必要になる可能性</li>
+    </ul>
+
+    <h3 style="font-size:14px; margin:14px 0 6px;">未確定事項（実装前にユーザー確認）</h3>
+    <ol style="margin:4px 0 0 16px;">
+      <li>書類テンプレ側に「<b>対象範囲</b>」設定（全員 / 自動判定 / 手動指定）を追加するか？追加しない場合、ゲート無し必須タグだけの書類はすべて「全員対象」になる</li>
+      <li>進捗集計（書類提出率）の分母を「全社員 × 全テンプレ」から「社員ごとの対象書類数」に変更するか？（既に対象書類別の判定はしているが、達成率の意味が変わる）</li>
+      <li>マイグレーション不要（テーブル構造変更なし）。ただし運用周知文書（CLAUDE.md セクション10? あるいは reference-map）の更新が必要</li>
+    </ol>
+
+    <p style="margin-top:14px; padding:10px; background:#fffbeb; border:1px solid #fbd38d; border-radius:6px;"><b>次アクション:</b> 上記 ❶❷ をユーザー確認 → 承認後に <code>lib/document-applicability.ts</code> + <code>lib/field-applicability.ts</code> を修正 → 既存 seed データ（テストユーザー / マネージャー）で「氏名のみ必須の書類が引き続き全員対象になる」ことを <code>npm run dev</code> で目視確認 → progress.html を「完了」に更新</p>
+  </div>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>

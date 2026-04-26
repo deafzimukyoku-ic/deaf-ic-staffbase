@@ -233,6 +233,22 @@
   background: rgba(90, 90, 85, 0.4);
 }
 
+/* サイドバー専用: 常時可視で少し太め。「下に項目あるよ」を視覚化 */
+.sidebar-scroll {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(90, 90, 85, 0.35) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(90, 90, 85, 0.35);
+  border-radius: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(90, 90, 85, 0.55);
+}
+
 /* =====================================================================
    印刷共通スタイル（shift-puzzle Phase 47 を deaf-ic 化）
    - サイドバー・ヘッダー・印刷ボタン等を非表示

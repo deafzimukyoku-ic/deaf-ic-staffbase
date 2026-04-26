@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { MAX_DOCUMENTS_PER_TENANT } from '@/lib/constants';
 import { DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import type { DocumentTemplate } from '@/lib/types';
+import type { DocumentTemplate, Employee, Facility } from '@/lib/types';
+import { loadTemplateAudience, saveTemplateAudience, summarizeAudience, FLAG_OPTIONS, type AudienceRule } from '@/lib/template-audience';
 import {
   DndContext,
   closestCenter,
@@ -43,6 +44,10 @@ export default function DocumentsPage() {
      未配置のタグ（pdf_tags のみあって placements に無い）はカウントしない
      — 「マッピング済み」= 実際に PDF 上に出る数、というユーザー期待に揃える。 */
   const [placementCounts, setPlacementCounts] = useState<Record<string, number>>({});
+  /* 配布対象ルールと対象人数表示用のマスタ */
+  const [audienceByTemplate, setAudienceByTemplate] = useState<Map<string, AudienceRule[]>>(new Map());
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [allFacilities, setAllFacilities] = useState<Facility[]>([]);
   const supabase = createClient();
 
   async function loadTemplates() {
@@ -58,6 +63,14 @@ export default function DocumentsPage() {
     if (!me) return;
     setTenantId(me.tenant_id);
 
+    /* 全社員 + 全施設をプレビュー用に事前ロード */
+    const [empRes, facRes] = await Promise.all([
+      supabase.from('employees').select('*').eq('tenant_id', me.tenant_id).eq('status', 'active'),
+      supabase.from('facilities').select('id, tenant_id, name, address, created_at, display_order').eq('tenant_id', me.tenant_id).order('display_order'),
+    ]);
+    setAllEmployees((empRes.data || []) as Employee[]);
+    setAllFacilities((facRes.data || []) as Facility[]);
+
     const [myTemplates, sampleTemplates] = await Promise.all([
       supabase.from('document_templates').select('*').eq('tenant_id', me.tenant_id).order('display_order'),
       supabase.from('document_templates').select('*').is('tenant_id', null).eq('is_sample', true).order('display_order'),
@@ -67,22 +80,40 @@ export default function DocumentsPage() {
     setTemplates(myList);
     setSamples((sampleTemplates.data as DocumentTemplate[]) || []);
 
-    /* placements 数を 1 クエリでまとめて取って template_id 別に集計。
-       N+1 を避けるため pdf_tag_placements を template_id IN (...) で取得 */
+    /* placements 数 + 配布対象ルールの一括ロード */
     if (myList.length > 0) {
-      const { data: pls } = await supabase
-        .from('pdf_tag_placements')
-        .select('template_id')
-        .in('template_id', myList.map((t) => t.id));
+      const ids = myList.map((t) => t.id);
+      const [plsRes, audience] = await Promise.all([
+        supabase.from('pdf_tag_placements').select('template_id').in('template_id', ids),
+        loadTemplateAudience(supabase, ids),
+      ]);
       const counts: Record<string, number> = {};
-      for (const p of (pls || []) as { template_id: string }[]) {
+      for (const p of (plsRes.data || []) as { template_id: string }[]) {
         counts[p.template_id] = (counts[p.template_id] || 0) + 1;
       }
       setPlacementCounts(counts);
+      setAudienceByTemplate(audience);
     } else {
       setPlacementCounts({});
+      setAudienceByTemplate(new Map());
     }
     setLoading(false);
+  }
+
+  /* 配布対象ルールの保存（モーダル「保存」時） */
+  async function commitAudience(templateId: string, rules: AudienceRule[]) {
+    const { error } = await saveTemplateAudience(supabase, templateId, rules);
+    if (error) {
+      toast.error('配布対象の保存に失敗しました', { description: error.message });
+      return false;
+    }
+    /* ローカルの state も更新 */
+    const next = new Map(audienceByTemplate);
+    if (rules.length === 0) next.delete(templateId);
+    else next.set(templateId, rules);
+    setAudienceByTemplate(next);
+    toast.success('配布対象を更新しました');
+    return true;
   }
 
   useEffect(() => { loadTemplates(); }, []);
@@ -252,17 +283,17 @@ export default function DocumentsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">書類テンプレート</h1>
-          <p className="text-sm text-diletto-gray mt-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold whitespace-nowrap">書類テンプレート</h1>
+          <p className="text-sm text-diletto-gray mt-1 whitespace-nowrap">
             {loading ? '読み込み中...' : `${templates.length} / ${MAX_DOCUMENTS_PER_TENANT} 件`}
           </p>
         </div>
         {templates.length < MAX_DOCUMENTS_PER_TENANT && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
-              <DialogTrigger className="inline-flex shrink-0 items-center justify-center rounded-md border border-diletto-gray/30 bg-white text-diletto-ink shadow-sm hover:border-diletto-ink/60 text-sm font-medium h-10 px-4 transition-all duration-300">
+              <DialogTrigger className="inline-flex shrink-0 items-center justify-center rounded-md border border-diletto-gray/30 bg-white text-diletto-ink shadow-sm hover:border-diletto-ink/60 text-sm font-medium h-10 px-4 whitespace-nowrap transition-all duration-300">
                 📋 カタログから追加
               </DialogTrigger>
               <DialogContent>
@@ -300,7 +331,7 @@ export default function DocumentsPage() {
               </DialogContent>
             </Dialog>
             <Link href="/admin/documents/new-pdf">
-              <Button>📑 PDFアップロード</Button>
+              <Button className="whitespace-nowrap">📑 PDFアップロード</Button>
             </Link>
           </div>
         )}
@@ -309,14 +340,22 @@ export default function DocumentsPage() {
       <div className="space-y-3">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={templates.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-            {templates.map((t) => (
-              <SortableTemplateCard
-                key={t.id}
-                template={t}
-                placementCount={placementCounts[t.id] ?? 0}
-                onDelete={openDeleteDialog}
-              />
-            ))}
+            {templates.map((t) => {
+              const summary = summarizeAudience(t.id, audienceByTemplate, allEmployees);
+              return (
+                <SortableTemplateCard
+                  key={t.id}
+                  template={t}
+                  placementCount={placementCounts[t.id] ?? 0}
+                  audienceSummary={summary}
+                  initialRules={audienceByTemplate.get(t.id) || []}
+                  allEmployees={allEmployees}
+                  allFacilities={allFacilities}
+                  onCommitAudience={(rules) => commitAudience(t.id, rules)}
+                  onDelete={openDeleteDialog}
+                />
+              );
+            })}
           </SortableContext>
         </DndContext>
 
@@ -376,12 +415,23 @@ export default function DocumentsPage() {
 function SortableTemplateCard({
   template: t,
   placementCount,
+  audienceSummary,
+  initialRules,
+  allEmployees,
+  allFacilities,
+  onCommitAudience,
   onDelete,
 }: {
   template: DocumentTemplate;
   placementCount: number;
+  audienceSummary: { kind: 'all' | 'rules'; count: number; label: string };
+  initialRules: AudienceRule[];
+  allEmployees: Employee[];
+  allFacilities: Facility[];
+  onCommitAudience: (rules: AudienceRule[]) => Promise<boolean>;
   onDelete: (t: DocumentTemplate) => void;
 }) {
+  const [audienceOpen, setAudienceOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: t.id,
   });
@@ -394,11 +444,11 @@ function SortableTemplateCard({
   return (
     <div ref={setNodeRef} style={style}>
       <Card>
-        <CardContent className="flex items-center justify-between py-4">
-          <div className="flex items-center gap-3">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             <button
               type="button"
-              className="text-diletto-gray-light hover:text-diletto-ink cursor-grab active:cursor-grabbing touch-none px-1"
+              className="text-diletto-gray-light hover:text-diletto-ink cursor-grab active:cursor-grabbing touch-none px-1 shrink-0 mt-0.5"
               aria-label="並び替え"
               {...attributes}
               {...listeners}
@@ -409,23 +459,48 @@ function SortableTemplateCard({
                 <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
               </svg>
             </button>
-            <div>
-              <p className="font-medium">{t.name}</p>
-              <div className="flex gap-2 mt-1 items-center">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium break-words">{t.name}</p>
+              <div className="flex gap-2 mt-1 items-center flex-wrap">
                 <Badge variant="default" className="text-xs">PDF</Badge>
                 {t.page_count && (
-                  <span className="text-xs text-diletto-gray-light">{t.page_count}ページ</span>
+                  <span className="text-xs text-diletto-gray-light whitespace-nowrap">{t.page_count}ページ</span>
                 )}
                 {/* マッピング件数 — 0 件は薄くして「未配置」と分かるように */}
                 <span
-                  className={`text-xs ${placementCount === 0 ? 'text-diletto-red/70' : 'text-diletto-gray-light'}`}
+                  className={`text-xs whitespace-nowrap ${placementCount === 0 ? 'text-diletto-red/70' : 'text-diletto-gray-light'}`}
                 >
                   {placementCount === 0 ? 'マッピング未設定' : `マッピング ${placementCount} 件`}
                 </span>
+                {/* 配布対象バッジ: 「対象: 全員 (15名)」または「対象: 条件で絞る (7名)」 */}
+                <button
+                  type="button"
+                  onClick={() => setAudienceOpen(true)}
+                  className={`inline-flex items-center gap-1 text-xs whitespace-nowrap rounded-md px-2 py-0.5 border transition-colors ${
+                    audienceSummary.kind === 'rules'
+                      ? 'border-diletto-blue/40 bg-diletto-blue/[0.06] text-diletto-blue hover:bg-diletto-blue/[0.1]'
+                      : 'border-diletto-gray/30 text-diletto-gray hover:bg-diletto-gray/5'
+                  }`}
+                  title="配布対象を編集"
+                >
+                  <span>対象: {audienceSummary.label} ({audienceSummary.count}名)</span>
+                  <span className="text-[10px] opacity-60">✎</span>
+                </button>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <AudienceDialog
+            open={audienceOpen}
+            onOpenChange={setAudienceOpen}
+            templateName={t.name}
+            initialRules={initialRules}
+            allEmployees={allEmployees}
+            allFacilities={allFacilities}
+            onCommit={onCommitAudience}
+          />
+
+          <div className="flex items-center flex-wrap gap-2 shrink-0">
             {t.pdf_storage_path && (
               <>
                 <Link href={`/admin/documents/${t.id}/editor`}>
@@ -470,5 +545,235 @@ function SortableTemplateCard({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/* ==========================================================================
+   配布対象設定ダイアログ
+   - モード: 全員 / 条件で絞る の 2 択ラジオ
+   - 「条件で絞る」時: フラグ・施設・役職・個別指名の 4 系統を選択可（複数チェックは OR）
+   - 保存前に対象社員のプレビューを表示
+   ========================================================================== */
+function AudienceDialog({
+  open, onOpenChange, templateName, initialRules, allEmployees, allFacilities, onCommit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  templateName: string;
+  initialRules: AudienceRule[];
+  allEmployees: Employee[];
+  allFacilities: Facility[];
+  onCommit: (rules: AudienceRule[]) => Promise<boolean>;
+}) {
+  const [mode, setMode] = useState<'all' | 'rules'>(initialRules.length === 0 ? 'all' : 'rules');
+  const [flags, setFlags] = useState<Set<string>>(new Set());
+  const [facilities, setFacilities] = useState<Set<string>>(new Set());
+  const [roles, setRoles] = useState<Set<string>>(new Set());
+  const [employees, setEmployees] = useState<Set<string>>(new Set());
+  const [empSearch, setEmpSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  /* open/initialRules が変わるたびに state を初期化（ダイアログ開閉のたびに最新化） */
+  useEffect(() => {
+    if (!open) return;
+    setMode(initialRules.length === 0 ? 'all' : 'rules');
+    setFlags(new Set(initialRules.filter(r => r.rule_type === 'flag').map(r => r.rule_value)));
+    setFacilities(new Set(initialRules.filter(r => r.rule_type === 'facility').map(r => r.rule_value)));
+    setRoles(new Set(initialRules.filter(r => r.rule_type === 'role').map(r => r.rule_value)));
+    setEmployees(new Set(initialRules.filter(r => r.rule_type === 'employee').map(r => r.rule_value)));
+    setEmpSearch('');
+  }, [open, initialRules]);
+
+  function toggleSet(set: Set<string>, setter: (s: Set<string>) => void, val: string) {
+    const next = new Set(set);
+    if (next.has(val)) next.delete(val);
+    else next.add(val);
+    setter(next);
+  }
+
+  /* 現在の選択状態から AudienceRule[] を構築 */
+  const draftRules: AudienceRule[] = mode === 'all' ? [] : [
+    ...Array.from(flags).map((v): AudienceRule => ({ rule_type: 'flag', rule_value: v })),
+    ...Array.from(facilities).map((v): AudienceRule => ({ rule_type: 'facility', rule_value: v })),
+    ...Array.from(roles).map((v): AudienceRule => ({ rule_type: 'role', rule_value: v })),
+    ...Array.from(employees).map((v): AudienceRule => ({ rule_type: 'employee', rule_value: v })),
+  ];
+
+  /* プレビュー: 現在の選択で対象になる社員を抽出 */
+  const previewMatches = mode === 'all'
+    ? allEmployees
+    : allEmployees.filter((e) => draftRules.some((r) => {
+        if (r.rule_type === 'flag') return (e as unknown as Record<string, unknown>)[r.rule_value] === true;
+        if (r.rule_type === 'facility') return e.facility_id === r.rule_value;
+        if (r.rule_type === 'role') return e.role === r.rule_value;
+        if (r.rule_type === 'employee') return e.id === r.rule_value;
+        return false;
+      }));
+
+  const filteredEmployeesForPicker = allEmployees.filter((e) => {
+    if (!empSearch.trim()) return true;
+    const q = empSearch.trim().toLowerCase();
+    const hay = `${e.last_name}${e.first_name}${e.last_name_kana || ''}${e.first_name_kana || ''}${e.email || ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+
+  async function handleSave() {
+    setSaving(true);
+    const ok = await onCommit(draftRules);
+    setSaving(false);
+    if (ok) onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[92vw] sm:max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>「{templateName}」を提出するのは…</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 overflow-y-auto pr-1">
+          {/* モード選択 */}
+          <div className="space-y-2">
+            <label className="flex items-start gap-3 rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige/30 transition-colors">
+              <input
+                type="radio"
+                className="mt-0.5 h-4 w-4 accent-diletto-blue"
+                checked={mode === 'all'}
+                onChange={() => setMode('all')}
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium">全員 ({allEmployees.length}名)</p>
+                <p className="text-[11px] text-diletto-gray-light mt-0.5">在籍中の社員全員に配布。新人が追加されても自動で対象に含まれます。</p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige/30 transition-colors">
+              <input
+                type="radio"
+                className="mt-0.5 h-4 w-4 accent-diletto-blue"
+                checked={mode === 'rules'}
+                onChange={() => setMode('rules')}
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium">条件で絞る</p>
+                <p className="text-[11px] text-diletto-gray-light mt-0.5">下のチェックリストから条件を選択。複数選択はいずれかに該当（OR）。</p>
+              </div>
+            </label>
+          </div>
+
+          {/* 条件チェックリスト */}
+          {mode === 'rules' && (
+            <div className="space-y-3 pl-2 border-l-2 border-diletto-blue/20 ml-2">
+              {/* フラグ */}
+              <div>
+                <p className="text-xs font-bold text-diletto-gray mb-2">社員フラグ</p>
+                <div className="space-y-1.5">
+                  {FLAG_OPTIONS.map((f) => (
+                    <label key={f.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-diletto-blue"
+                        checked={flags.has(f.value)}
+                        onChange={() => toggleSet(flags, setFlags, f.value)}
+                      />
+                      <span>{f.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 施設 */}
+              {allFacilities.length > 0 && (
+                <div className="pt-2 border-t border-diletto-gray/10">
+                  <p className="text-xs font-bold text-diletto-gray mb-2">特定の事業所</p>
+                  <div className="space-y-1.5">
+                    {allFacilities.map((f) => (
+                      <label key={f.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-diletto-blue"
+                          checked={facilities.has(f.id)}
+                          onChange={() => toggleSet(facilities, setFacilities, f.id)}
+                        />
+                        <span>{f.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 役職 */}
+              <div className="pt-2 border-t border-diletto-gray/10">
+                <p className="text-xs font-bold text-diletto-gray mb-2">特定の役職</p>
+                <div className="space-y-1.5">
+                  {[
+                    { value: 'admin', label: '管理者' },
+                    { value: 'manager', label: 'マネージャー' },
+                    { value: 'employee', label: '一般社員' },
+                  ].map((r) => (
+                    <label key={r.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-diletto-blue"
+                        checked={roles.has(r.value)}
+                        onChange={() => toggleSet(roles, setRoles, r.value)}
+                      />
+                      <span>{r.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 個別指名 */}
+              <div className="pt-2 border-t border-diletto-gray/10">
+                <p className="text-xs font-bold text-diletto-gray mb-2">個別指名 ({employees.size}名選択中)</p>
+                <input
+                  type="text"
+                  placeholder="氏名・カナ・メールで検索"
+                  value={empSearch}
+                  onChange={(e) => setEmpSearch(e.target.value)}
+                  className="w-full h-8 rounded-md border border-diletto-gray/20 bg-white px-2 text-sm mb-2"
+                />
+                <div className="space-y-1 max-h-40 overflow-y-auto rounded-md border border-diletto-gray/10 p-2">
+                  {filteredEmployeesForPicker.length === 0 ? (
+                    <p className="text-xs text-diletto-gray-light py-2 text-center">該当する社員がいません</p>
+                  ) : filteredEmployeesForPicker.map((e) => (
+                    <label key={e.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-diletto-beige/30 px-1 py-0.5 rounded">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-diletto-blue"
+                        checked={employees.has(e.id)}
+                        onChange={() => toggleSet(employees, setEmployees, e.id)}
+                      />
+                      <span>{e.last_name} {e.first_name}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-diletto-gray-light mt-1">
+                  ※ 個別指名は「ピンポイント追加」用。新人が来ても自動では追加されません。
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* プレビュー */}
+          <div className="rounded-md border border-diletto-blue/20 bg-diletto-blue/[0.04] p-3">
+            <p className="text-xs font-bold text-diletto-blue mb-1.5">📋 この設定で {previewMatches.length} 名が対象</p>
+            {previewMatches.length === 0 ? (
+              <p className="text-[11px] text-diletto-gray-light">該当する社員がいません</p>
+            ) : (
+              <p className="text-[11px] text-diletto-gray break-words">
+                {previewMatches.slice(0, 8).map((e) => `${e.last_name} ${e.first_name}`).join(' / ')}
+                {previewMatches.length > 8 && ` ほか ${previewMatches.length - 8} 名`}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>キャンセル</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

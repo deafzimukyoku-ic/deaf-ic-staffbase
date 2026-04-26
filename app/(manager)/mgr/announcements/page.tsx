@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { CategoryBadge, CategorySelect } from '@/components/admin/CategorySelect';
+import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
 import { ReorderButtons } from '@/components/admin/ReorderButtons';
@@ -235,8 +236,9 @@ export default function ManagerAnnouncementsPage() {
     if (!selectedCategory) {
         return (
             <div>
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-2xl font-bold">お知らせ</h1>
+                <div className="flex items-center justify-between mb-6 gap-3">
+                    <h1 className="text-2xl font-bold whitespace-nowrap">お知らせ</h1>
+                    <CategoryManagerModal type="announcement" />
                 </div>
 
                 <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して内容を確認・投稿してください。新規投稿はカテゴリを開いて行います。</p>

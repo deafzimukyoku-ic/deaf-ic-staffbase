@@ -1054,7 +1054,21 @@ export default function TransportFull({ role }: Props) {
               </span>
             )}
           </div>
-          <div className="flex gap-2 print-hide">
+          <div className="flex gap-2 print-hide flex-wrap">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                /* 週次送迎出力ページへ遷移。サイドバーから外して送迎表の出力アクションに統合（2026-04-26）。
+                   role に応じて admin/mgr の URL を切替。 */
+                const href = role === 'admin'
+                  ? '/admin/shifts/output/weekly-transport'
+                  : '/mgr/shifts/output/weekly-transport';
+                window.location.href = href;
+              }}
+              title="週次送迎表（A3 縦・1 週 1 ページ）を出力"
+            >
+              📅 週次送迎を出力
+            </Button>
             <Button
               variant="secondary"
               onClick={() =>

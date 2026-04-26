@@ -76,14 +76,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '対象社員がいません' }, { status: 400 });
   }
 
-  const { isDocumentApplicable, loadCustomFieldGates } = await import('@/lib/document-applicability');
-  const customGates = await loadCustomFieldGates(supabase, template.tenant_id);
+  const { isEmployeeInAudience, loadTemplateAudience } = await import('@/lib/template-audience');
+  const audienceByTemplate = await loadTemplateAudience(supabase, [template_id]);
   const employees = rawEmployees.filter((e) =>
-    isDocumentApplicable(template as unknown as import('@/lib/types').DocumentTemplate, e as unknown as import('@/lib/types').Employee, customGates),
+    isEmployeeInAudience(template_id, e as unknown as import('@/lib/types').Employee, audienceByTemplate),
   );
 
   if (employees.length === 0) {
-    return NextResponse.json({ error: '該当する社員がいません（必須タグの該当者なし）' }, { status: 400 });
+    return NextResponse.json({ error: '該当する社員がいません（書類の配布対象に合致する社員なし）' }, { status: 400 });
   }
 
   // タグ・配置取得

@@ -92,6 +92,12 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [posEditing, setPosEditing] = useState(false);
   const [posDraftId, setPosDraftId] = useState('');
   const [posSaving, setPosSaving] = useState(false);
+  /* 基本情報の編集モード（管理者が ✏ を押して編集 → 保存）。
+     基本情報タブ内の 5 カード（本人情報・振込先口座・緊急連絡先・身元保証人・通勤車両）の
+     表示専用 InfoRow を <input> に切り替える。所属/権限などは別タブの個別 UI 経由なのでここでは扱わない。 */
+  const [basicEditing, setBasicEditing] = useState(false);
+  const [basicDraft, setBasicDraft] = useState<Partial<Employee>>({});
+  const [basicSaving, setBasicSaving] = useState(false);
 
   const router = useRouter();
   const supabase = createClient();
@@ -161,11 +167,13 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         if (imgDefs) setImageFieldDefs(imgDefs);
 
         const subMap = new Map((submissions || []).map((s) => [s.document_template_id, s as DocumentSubmission]));
-        /* migration 119 自動判定: lib/document-applicability で対象書類を絞り込み */
-        const { isDocumentApplicable, loadCustomFieldGates } = await import('@/lib/document-applicability');
-        const customGates = await loadCustomFieldGates(supabase, emp.tenant_id);
+        /* migration 122: 書類テンプレ自身の配布対象ルールで判定 */
+        const { isEmployeeInAudience, loadTemplateAudience } = await import('@/lib/template-audience');
+        const tplIds = ((templates || []) as DocumentTemplate[]).map((t) => t.id);
+        const audienceByTemplate = await loadTemplateAudience(supabase, tplIds);
+
         const items = ((templates || []) as DocumentTemplate[])
-          .filter((t) => isDocumentApplicable(t, emp as unknown as import('@/lib/types').Employee, customGates))
+          .filter((t) => isEmployeeInAudience(t.id, emp as unknown as import('@/lib/types').Employee, audienceByTemplate))
           .map((t) => ({ template: t, submission: subMap.get(t.id) || null }));
         setDocItems(items);
       }
@@ -266,6 +274,62 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     setRetireOpen(false);
     setEmployee({ ...employee, status: 'retired' as const, retirement_date: retireDate, retirement_reason: retireReason });
     setRetireLoading(false);
+  }
+
+  /* 基本情報の編集モード切替 + 保存処理 */
+  function startBasicEdit() {
+    if (!employee) return;
+    /* 編集対象フィールドだけ draft に複製。ここに無いフィールドは update されない */
+    setBasicDraft({
+      last_name: employee.last_name, first_name: employee.first_name,
+      last_name_kana: employee.last_name_kana, first_name_kana: employee.first_name_kana,
+      birth_date: employee.birth_date, gender: employee.gender,
+      postal_code: employee.postal_code, address: employee.address,
+      phone: employee.phone, email: employee.email,
+      join_date: employee.join_date,
+      bank_name: employee.bank_name, bank_branch_name: employee.bank_branch_name,
+      bank_account_type: employee.bank_account_type,
+      bank_account_number: employee.bank_account_number,
+      bank_account_holder: employee.bank_account_holder,
+      emergency1_name: employee.emergency1_name, emergency1_relationship: employee.emergency1_relationship,
+      emergency1_phone: employee.emergency1_phone, emergency1_mobile: employee.emergency1_mobile,
+      emergency2_name: employee.emergency2_name, emergency2_relationship: employee.emergency2_relationship,
+      emergency2_phone: employee.emergency2_phone,
+      guarantor_name: employee.guarantor_name, guarantor_relationship: employee.guarantor_relationship,
+      guarantor_phone: employee.guarantor_phone, guarantor_address: employee.guarantor_address,
+      has_car_commute: employee.has_car_commute, is_shuttle_driver: employee.is_shuttle_driver,
+      car_model: employee.car_model, car_plate_number: employee.car_plate_number,
+      insurance_company: employee.insurance_company, commute_distance: employee.commute_distance,
+      license_number: employee.license_number, license_expiry: employee.license_expiry,
+    });
+    setBasicEditing(true);
+  }
+  function cancelBasicEdit() {
+    setBasicDraft({});
+    setBasicEditing(false);
+  }
+  async function saveBasicEdit() {
+    if (!employee) return;
+    setBasicSaving(true);
+    /* undefined は無視、null と '' は意図された値として送る（クリア許可） */
+    const payload: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(basicDraft)) {
+      if (v === undefined) continue;
+      payload[k] = v === '' ? null : v;
+    }
+    const { error } = await supabase.from('employees').update(payload).eq('id', employee.id);
+    if (error) {
+      toast.error('保存に失敗しました', { description: error.message });
+      setBasicSaving(false);
+      return;
+    }
+    setEmployee({ ...employee, ...payload } as Employee);
+    setBasicEditing(false);
+    setBasicSaving(false);
+    toast.success('基本情報を更新しました');
+  }
+  function updBasic<K extends keyof Employee>(key: K, value: Employee[K]) {
+    setBasicDraft((d) => ({ ...d, [key]: value }));
   }
 
   async function handleSaveFacility() {
@@ -455,34 +519,73 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         </TabsContent>
 
         <TabsContent value="basic" className="mt-6 space-y-6">
+          {/* 編集モード切替バー（管理者専用）。表示中は ✏ 編集、編集中は 保存 / キャンセル */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-xs text-diletto-gray-light">
+              {basicEditing ? '編集中: 各項目を直接書き換えて「保存」を押してください' : '管理者は ✏ から基本情報を編集できます'}
+            </p>
+            {basicEditing ? (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={cancelBasicEdit} disabled={basicSaving}>キャンセル</Button>
+                <Button size="sm" onClick={saveBasicEdit} disabled={basicSaving}>{basicSaving ? '保存中...' : '保存'}</Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={startBasicEdit}>✏ 編集</Button>
+            )}
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader><CardTitle className="text-base font-bold">本人情報</CardTitle></CardHeader>
               <CardContent className="space-y-1.5 text-sm">
-                <InfoRow label="氏名" value={`${employee.last_name} ${employee.first_name}`} />
-                <InfoRow label="フリガナ" value={`${employee.last_name_kana} ${employee.first_name_kana}`} />
-                <InfoRow label="生年月日" value={employee.birth_date} />
-                <InfoRow label="性別" value={employee.gender === 'male' ? '男性' : employee.gender === 'female' ? '女性' : employee.gender === 'other' ? 'その他' : '-'} />
-                <InfoRow label="郵便番号" value={employee.postal_code || '-'} />
-                <InfoRow label="住所" value={employee.address || '-'} />
-                <InfoRow label="電話番号" value={employee.phone || '-'} />
-                <InfoRow label="メール" value={employee.email || '-'} />
+                <EditableRow label="姓" editing={basicEditing} value={basicEditing ? basicDraft.last_name : employee.last_name} onChange={(v) => updBasic('last_name', String(v))} />
+                <EditableRow label="名" editing={basicEditing} value={basicEditing ? basicDraft.first_name : employee.first_name} onChange={(v) => updBasic('first_name', String(v))} />
+                <EditableRow label="姓カナ" editing={basicEditing} value={basicEditing ? basicDraft.last_name_kana : employee.last_name_kana} onChange={(v) => updBasic('last_name_kana', String(v))} />
+                <EditableRow label="名カナ" editing={basicEditing} value={basicEditing ? basicDraft.first_name_kana : employee.first_name_kana} onChange={(v) => updBasic('first_name_kana', String(v))} />
+                <EditableRow label="生年月日" type="date" editing={basicEditing} value={basicEditing ? basicDraft.birth_date : employee.birth_date} onChange={(v) => updBasic('birth_date', String(v))} />
+                <EditableRow
+                  label="性別"
+                  editing={basicEditing}
+                  value={basicEditing ? basicDraft.gender : (employee.gender === 'male' ? '男性' : employee.gender === 'female' ? '女性' : employee.gender === 'other' ? 'その他' : '')}
+                  onChange={(v) => updBasic('gender', String(v) as Employee['gender'])}
+                  options={[
+                    { value: 'male', label: '男性' },
+                    { value: 'female', label: '女性' },
+                    { value: 'other', label: 'その他' },
+                  ]}
+                />
+                <EditableRow label="郵便番号" editing={basicEditing} value={basicEditing ? basicDraft.postal_code : employee.postal_code} onChange={(v) => updBasic('postal_code', String(v))} />
+                <EditableRow label="住所" editing={basicEditing} value={basicEditing ? basicDraft.address : employee.address} onChange={(v) => updBasic('address', String(v))} />
+                <EditableRow label="電話番号" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.phone : employee.phone} onChange={(v) => updBasic('phone', String(v))} />
+                <EditableRow label="メール" type="email" editing={basicEditing} value={basicEditing ? basicDraft.email : employee.email} onChange={(v) => updBasic('email', String(v))} />
                 <Separator className="my-2 opacity-50" />
-                <InfoRow label="入社日" value={employee.join_date} />
-                <InfoRow label="勤続年数" value={employee.years_of_service != null ? `${employee.years_of_service}年` : '-'} />
+                <EditableRow label="入社日" type="date" editing={basicEditing} value={basicEditing ? basicDraft.join_date : employee.join_date} onChange={(v) => updBasic('join_date', String(v))} />
+                {!basicEditing && (
+                  <InfoRow label="勤続年数" value={employee.years_of_service != null ? `${employee.years_of_service}年` : '-'} />
+                )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader><CardTitle className="text-base font-bold">振込先口座</CardTitle></CardHeader>
               <CardContent className="space-y-1.5 text-sm">
-                <InfoRow label="銀行名" value={employee.bank_name || '-'} />
-                <InfoRow label={(employee.bank_name || '').includes('ゆうちょ') ? '記号' : '支店名'} value={employee.bank_branch_name || '-'} />
+                <EditableRow label="銀行名" editing={basicEditing} value={basicEditing ? basicDraft.bank_name : employee.bank_name} onChange={(v) => updBasic('bank_name', String(v))} />
+                <EditableRow label={(employee.bank_name || '').includes('ゆうちょ') ? '記号' : '支店名'} editing={basicEditing} value={basicEditing ? basicDraft.bank_branch_name : employee.bank_branch_name} onChange={(v) => updBasic('bank_branch_name', String(v))} />
                 {!(employee.bank_name || '').includes('ゆうちょ') && (
-                  <InfoRow label="口座種別" value={employee.bank_account_type === 'ordinary' ? '普通' : employee.bank_account_type === 'current' ? '当座' : employee.bank_account_type === 'savings' ? '貯蓄' : '-'} />
+                  <EditableRow
+                    label="口座種別"
+                    editing={basicEditing}
+                    value={basicEditing ? basicDraft.bank_account_type : (employee.bank_account_type === 'ordinary' ? '普通' : employee.bank_account_type === 'current' ? '当座' : employee.bank_account_type === 'savings' ? '貯蓄' : '')}
+                    onChange={(v) => updBasic('bank_account_type', String(v) as Employee['bank_account_type'])}
+                    options={[
+                      { value: 'ordinary', label: '普通' },
+                      { value: 'current', label: '当座' },
+                      { value: 'savings', label: '貯蓄' },
+                    ]}
+                  />
                 )}
-                <InfoRow label={(employee.bank_name || '').includes('ゆうちょ') ? '番号' : '口座番号'} value={employee.bank_account_number || '-'} />
-                <InfoRow label="口座名義" value={employee.bank_account_holder || '-'} />
+                <EditableRow label={(employee.bank_name || '').includes('ゆうちょ') ? '番号' : '口座番号'} editing={basicEditing} value={basicEditing ? basicDraft.bank_account_number : employee.bank_account_number} onChange={(v) => updBasic('bank_account_number', String(v))} />
+                <EditableRow label="口座名義" editing={basicEditing} value={basicEditing ? basicDraft.bank_account_holder : employee.bank_account_holder} onChange={(v) => updBasic('bank_account_holder', String(v))} />
               </CardContent>
             </Card>
 
@@ -491,17 +594,17 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <CardContent className="space-y-4 text-sm">
                 <div>
                   <p className="text-[10px] font-bold text-diletto-gray-light uppercase mb-1">連絡先 1</p>
-                  <InfoRow label="氏名" value={employee.emergency1_name || '-'} />
-                  <InfoRow label="続柄" value={employee.emergency1_relationship || '-'} />
-                  <InfoRow label="電話番号" value={employee.emergency1_phone || '-'} />
-                  <InfoRow label="携帯" value={employee.emergency1_mobile || '-'} />
+                  <EditableRow label="氏名" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_name : employee.emergency1_name} onChange={(v) => updBasic('emergency1_name', String(v))} />
+                  <EditableRow label="続柄" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_relationship : employee.emergency1_relationship} onChange={(v) => updBasic('emergency1_relationship', String(v))} />
+                  <EditableRow label="電話番号" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_phone : employee.emergency1_phone} onChange={(v) => updBasic('emergency1_phone', String(v))} />
+                  <EditableRow label="携帯" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_mobile : employee.emergency1_mobile} onChange={(v) => updBasic('emergency1_mobile', String(v))} />
                 </div>
-                {employee.emergency2_name && (
+                {(basicEditing || employee.emergency2_name) && (
                   <div className="pt-2 border-t border-diletto-gray/5">
                     <p className="text-[10px] font-bold text-diletto-gray-light uppercase mb-1">連絡先 2</p>
-                    <InfoRow label="氏名" value={employee.emergency2_name} />
-                    <InfoRow label="続柄" value={employee.emergency2_relationship || '-'} />
-                    <InfoRow label="電話番号" value={employee.emergency2_phone || '-'} />
+                    <EditableRow label="氏名" editing={basicEditing} value={basicEditing ? basicDraft.emergency2_name : employee.emergency2_name} onChange={(v) => updBasic('emergency2_name', String(v))} />
+                    <EditableRow label="続柄" editing={basicEditing} value={basicEditing ? basicDraft.emergency2_relationship : employee.emergency2_relationship} onChange={(v) => updBasic('emergency2_relationship', String(v))} />
+                    <EditableRow label="電話番号" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.emergency2_phone : employee.emergency2_phone} onChange={(v) => updBasic('emergency2_phone', String(v))} />
                   </div>
                 )}
               </CardContent>
@@ -510,26 +613,26 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <Card>
               <CardHeader><CardTitle className="text-base font-bold">身元保証人</CardTitle></CardHeader>
               <CardContent className="space-y-1.5 text-sm">
-                <InfoRow label="氏名" value={employee.guarantor_name || '-'} />
-                <InfoRow label="続柄" value={employee.guarantor_relationship || '-'} />
-                <InfoRow label="電話番号" value={employee.guarantor_phone || '-'} />
-                <InfoRow label="住所" value={employee.guarantor_address || '-'} />
+                <EditableRow label="氏名" editing={basicEditing} value={basicEditing ? basicDraft.guarantor_name : employee.guarantor_name} onChange={(v) => updBasic('guarantor_name', String(v))} />
+                <EditableRow label="続柄" editing={basicEditing} value={basicEditing ? basicDraft.guarantor_relationship : employee.guarantor_relationship} onChange={(v) => updBasic('guarantor_relationship', String(v))} />
+                <EditableRow label="電話番号" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.guarantor_phone : employee.guarantor_phone} onChange={(v) => updBasic('guarantor_phone', String(v))} />
+                <EditableRow label="住所" editing={basicEditing} value={basicEditing ? basicDraft.guarantor_address : employee.guarantor_address} onChange={(v) => updBasic('guarantor_address', String(v))} />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader><CardTitle className="text-base font-bold">通勤・車両情報</CardTitle></CardHeader>
               <CardContent className="space-y-1.5 text-sm">
-                <InfoRow label="自家用車通勤" value={employee.has_car_commute ? 'あり' : 'なし'} />
-                <InfoRow label="送迎ドライバー" value={employee.is_shuttle_driver ? 'あり' : 'なし'} />
-                {employee.has_car_commute && (
+                <EditableRow label="自家用車通勤" type="checkbox" editing={basicEditing} value={basicEditing ? basicDraft.has_car_commute : employee.has_car_commute} onChange={(v) => updBasic('has_car_commute', !!v)} />
+                <EditableRow label="送迎ドライバー" type="checkbox" editing={basicEditing} value={basicEditing ? basicDraft.is_shuttle_driver : employee.is_shuttle_driver} onChange={(v) => updBasic('is_shuttle_driver', !!v)} />
+                {(basicEditing ? basicDraft.has_car_commute : employee.has_car_commute) && (
                   <div className="pt-2 mt-2 border-t border-diletto-gray/5 space-y-1.5">
-                    <InfoRow label="車種" value={employee.car_model || '-'} />
-                    <InfoRow label="ナンバー" value={employee.car_plate_number || '-'} />
-                    <InfoRow label="保険会社" value={employee.insurance_company || '-'} />
-                    <InfoRow label="通勤距離" value={employee.commute_distance ? `${employee.commute_distance}km` : '-'} />
-                    <InfoRow label="免許番号" value={employee.license_number || '-'} />
-                    <InfoRow label="免許期限" value={employee.license_expiry || '-'} />
+                    <EditableRow label="車種" editing={basicEditing} value={basicEditing ? basicDraft.car_model : employee.car_model} onChange={(v) => updBasic('car_model', String(v))} />
+                    <EditableRow label="ナンバー" editing={basicEditing} value={basicEditing ? basicDraft.car_plate_number : employee.car_plate_number} onChange={(v) => updBasic('car_plate_number', String(v))} />
+                    <EditableRow label="保険会社" editing={basicEditing} value={basicEditing ? basicDraft.insurance_company : employee.insurance_company} onChange={(v) => updBasic('insurance_company', String(v))} />
+                    <EditableRow label="通勤距離(km)" type="number" editing={basicEditing} value={basicEditing ? basicDraft.commute_distance : employee.commute_distance} onChange={(v) => updBasic('commute_distance', v === '' ? null : Number(v))} />
+                    <EditableRow label="免許番号" editing={basicEditing} value={basicEditing ? basicDraft.license_number : employee.license_number} onChange={(v) => updBasic('license_number', String(v))} />
+                    <EditableRow label="免許期限" type="date" editing={basicEditing} value={basicEditing ? basicDraft.license_expiry : employee.license_expiry} onChange={(v) => updBasic('license_expiry', String(v))} />
                   </div>
                 )}
               </CardContent>
@@ -882,6 +985,63 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex items-baseline gap-4 py-1.5 border-b border-diletto-gray/5 last:border-b-0">
       <span className="text-diletto-gray-light w-24 shrink-0 text-xs">{label}</span>
       <span className="text-[#111] text-sm">{value}</span>
+    </div>
+  );
+}
+
+/** 編集モード時は <input>、表示モード時は InfoRow と同じ見た目で値を出す。
+ *  options を渡すと <select> になる。type='checkbox' は boolean トグル。 */
+function EditableRow({
+  label, editing, value, onChange,
+  type = 'text', options,
+}: {
+  label: string;
+  editing: boolean;
+  value: string | number | boolean | null | undefined;
+  onChange: (v: string | boolean) => void;
+  type?: 'text' | 'date' | 'number' | 'email' | 'tel' | 'checkbox';
+  options?: { value: string; label: string }[];
+}) {
+  if (!editing) {
+    let display: React.ReactNode;
+    if (type === 'checkbox') display = value ? 'あり' : 'なし';
+    else display = (value === null || value === undefined || value === '') ? '-' : String(value);
+    return <InfoRow label={label} value={display} />;
+  }
+  return (
+    <div className="flex items-center gap-4 py-1.5 border-b border-diletto-gray/5 last:border-b-0">
+      <span className="text-diletto-gray-light w-24 shrink-0 text-xs">{label}</span>
+      <div className="flex-1 min-w-0">
+        {options ? (
+          <select
+            title={label}
+            value={(value as string) ?? ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-8 w-full rounded-md border border-input bg-white px-2 text-sm"
+          >
+            <option value="">未選択</option>
+            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        ) : type === 'checkbox' ? (
+          <label className="inline-flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              checked={!!value}
+              onChange={(e) => onChange(e.target.checked)}
+              className="h-4 w-4 accent-diletto-blue"
+            />
+            <span>{value ? 'あり' : 'なし'}</span>
+          </label>
+        ) : (
+          <input
+            type={type}
+            value={(value as string | number | null | undefined) ?? ''}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-8 w-full rounded-md border border-input bg-white px-2 text-sm"
+            aria-label={label}
+          />
+        )}
+      </div>
     </div>
   );
 }
