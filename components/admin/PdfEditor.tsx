@@ -504,7 +504,8 @@ export default function PdfEditor({
             <p className="text-sm text-diletto-gray-light">PDFを読み込み中...</p>
           </div>
         )}
-        <div ref={canvasAreaRef} className="flex flex-col items-center py-8" />
+        {/* w-max + min-w-full: 拡大時は中身の幅まで広がり横スクロールが効く／縮小時は親幅で中央寄せ */}
+        <div ref={canvasAreaRef} className="flex flex-col items-center py-8 w-max min-w-full mx-auto" />
       </div>
     </div>
   );

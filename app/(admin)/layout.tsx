@@ -23,11 +23,11 @@ type NavItem = NavLink | NavAccordion | NavSection;
 const staffNav: NavItem[] = [
   { kind: 'link', href: '/admin/dashboard', label: 'ダッシュボード', icon: '📊' },
   { kind: 'link', href: '/admin/employees', label: '社員管理', icon: '👥' },
-  { kind: 'link', href: '/admin/documents', label: '書類テンプレ', icon: '📄' },
   { kind: 'link', href: '/admin/compliance', label: '遵守事項', icon: '✅' },
   { kind: 'link', href: '/admin/trainings', label: '研修', icon: '📚' },
   { kind: 'link', href: '/admin/announcements', label: 'お知らせ', icon: '📢' },
   { kind: 'link', href: '/admin/manuals', label: '業務マニュアル', icon: '📖' },
+  { kind: 'link', href: '/admin/reports', label: '閲覧レポート', icon: '📊' },
   /* チーム診断は /admin/employees の社員一覧画面から起動 */
   { kind: 'link', href: '/admin/access-matrix', label: 'アプリ権限管理', icon: '🔐' },
   { kind: 'link', href: '/admin/settings', label: '設定', icon: '⚙️' },
@@ -40,6 +40,7 @@ const shiftNav: NavItem[] = [
   { kind: 'link', href: '/admin/shifts', label: 'シフト表', icon: '🗓️' },
   { kind: 'link', href: '/admin/shifts/transport', label: '送迎表', icon: '🚗' },
   { kind: 'link', href: '/admin/shifts/output/daily', label: '日次出力', icon: '📄' },
+  { kind: 'link', href: '/admin/shifts/output/daily-report', label: '業務日報', icon: '📋' },
   { kind: 'link', href: '/admin/shifts/output/weekly-transport', label: '週次送迎', icon: '🗓️' },
   { kind: 'link', href: '/admin/requests', label: '休み希望', icon: '✋' },
   { kind: 'section', label: '⚙️ シフト設定' },

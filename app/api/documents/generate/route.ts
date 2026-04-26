@@ -59,6 +59,19 @@ export async function POST(request: NextRequest) {
 
   const bankName = banks?.[0]?.bank_name || '';
 
+  // 所属事業所取得（facility_id があれば）
+  let facilityName = '';
+  let facilityAddress = '';
+  if (employee.facility_id) {
+    const { data: facility } = await supabase
+      .from('facilities')
+      .select('name, address')
+      .eq('id', employee.facility_id)
+      .single();
+    facilityName = facility?.name || '';
+    facilityAddress = facility?.address || '';
+  }
+
   // テンプレファイルをStorageから取得
   const { data: fileData, error: fileErr } = await supabase.storage
     .from('documents')
@@ -80,6 +93,8 @@ export async function POST(request: NextRequest) {
         tenant: tenant as Tenant,
         formData: (submission.form_data || {}) as Record<string, unknown>,
         bankName,
+        facilityName,
+        facilityAddress,
       },
     );
 

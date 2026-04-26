@@ -52,6 +52,19 @@ export async function POST(request: NextRequest) {
 
   const bankName = banks?.[0]?.bank_name || '';
 
+  // 所属事業所（このルートは単一社員固定なので1回だけ引く）
+  let facilityName = '';
+  let facilityAddress = '';
+  if (employee.facility_id) {
+    const { data: facility } = await supabase
+      .from('facilities')
+      .select('name, address')
+      .eq('id', employee.facility_id)
+      .single();
+    facilityName = facility?.name || '';
+    facilityAddress = facility?.address || '';
+  }
+
   // 提出済みの書類を全取得
   const { data: submissions } = await supabase
     .from('document_submissions')
@@ -95,6 +108,8 @@ export async function POST(request: NextRequest) {
         tenant: tenant as Record<string, unknown>,
         formData: (sub.form_data || {}) as Record<string, unknown>,
         bankName,
+        facilityName,
+        facilityAddress,
       });
 
       const pdfBytes = await renderMergedPdf(templatePdfBytes, placementData);

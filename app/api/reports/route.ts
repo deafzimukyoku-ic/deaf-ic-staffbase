@@ -1,0 +1,161 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+
+/**
+ * 閲覧レポート API
+ *
+ * GET /api/reports?category=compliance|training|announcement|manual&days=30|all
+ *
+ * 4種類のコンテンツ（遵守事項 / 研修 / お知らせ / 業務マニュアル）について
+ * 「誰が・どのアイテムを・何回・最後にいつ閲覧したか」を集計して返す。
+ *
+ * 集計元:
+ *   - {category}_view_logs（migration 111、append-only）
+ *   - {category} 本体テーブル（target_type / target_facility_ids でオーディエンスを絞る）
+ *   - employees（active のみ）
+ *
+ * クライアント側で matrix（社員 × アイテム）を組み立ててサマリ表示。
+ */
+
+const CATEGORY_CONFIG = {
+  compliance: { itemsTable: 'compliance_documents', viewsTable: 'compliance_view_logs', titleField: 'title' },
+  training:   { itemsTable: 'trainings',            viewsTable: 'training_view_logs',   titleField: 'title' },
+  announcement: { itemsTable: 'announcements',       viewsTable: 'announcement_view_logs', titleField: 'title' },
+  manual:     { itemsTable: 'manuals',              viewsTable: 'manual_view_logs',     titleField: 'title' },
+} as const;
+
+type Category = keyof typeof CATEGORY_CONFIG;
+
+export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
+
+  const { data: me } = await supabase
+    .from('employees')
+    .select('id, tenant_id, role, facility_id')
+    .eq('auth_user_id', user.id)
+    .single();
+  if (!me) return NextResponse.json({ error: '社員情報が見つかりません' }, { status: 404 });
+  if (me.role !== 'admin' && me.role !== 'manager') {
+    return NextResponse.json({ error: '権限がありません' }, { status: 403 });
+  }
+
+  const category = req.nextUrl.searchParams.get('category') as Category | null;
+  if (!category || !(category in CATEGORY_CONFIG)) {
+    return NextResponse.json({ error: '無効な category です' }, { status: 400 });
+  }
+  const cfg = CATEGORY_CONFIG[category];
+
+  /* days=30|7|all。指定無しは全期間。view_logs 側に viewed_at >= の条件を入れる。 */
+  const daysParam = req.nextUrl.searchParams.get('days');
+  let sinceIso: string | null = null;
+  if (daysParam && daysParam !== 'all') {
+    const days = parseInt(daysParam, 10);
+    if (!isNaN(days) && days > 0) {
+      sinceIso = new Date(Date.now() - days * 86400_000).toISOString();
+    }
+  }
+
+  /* manager は担当事業所の社員のみ。manager_facilities + 自分の facility_id を集める。
+     admin は全社員（tenant 内）。 */
+  let allowedFacilityIds: string[] | null = null;
+  if (me.role === 'manager') {
+    const ids = new Set<string>();
+    if (me.facility_id) ids.add(me.facility_id);
+    const { data: mfs } = await supabase
+      .from('manager_facilities')
+      .select('facility_id')
+      .eq('employee_id', me.id);
+    for (const mf of (mfs || [])) ids.add(mf.facility_id as string);
+    allowedFacilityIds = Array.from(ids);
+    if (allowedFacilityIds.length === 0) {
+      return NextResponse.json({ items: [], employees: [], views: [] });
+    }
+  }
+
+  /* items: アイテム本体。target_type / target_facility_ids / category_id を含める。
+     compliance/training/announcement/manual すべて 036 / 091 で同じ列構成 + 034 で category_id 追加済。
+     並び順は admin/{category} ページと揃える: sort_order ASC（NULL は末尾）→ created_at ASC。 */
+  const itemsSel = `id, ${cfg.titleField}, target_type, target_facility_ids, category_id, sort_order, created_at`;
+  const { data: itemsData, error: itemsErr } = await supabase
+    .from(cfg.itemsTable)
+    .select(itemsSel)
+    .eq('tenant_id', me.tenant_id)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true });
+  if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 });
+
+  /* このカテゴリ種別のカテゴリ一覧（フロントのフィルタドロップダウン用） */
+  const { data: categoriesData } = await supabase
+    .from('categories')
+    .select('id, name, icon, color')
+    .eq('tenant_id', me.tenant_id)
+    .eq('type', category)
+    .order('sort_order', { ascending: true });
+
+  /* employees: active な社員。manager の場合は担当 facility に絞る。
+     対象オーディエンス（target_type='all' / 'facility'）の判定にも使う。 */
+  let empQuery = supabase
+    .from('employees')
+    .select('id, last_name, first_name, facility_id, role, status')
+    .eq('tenant_id', me.tenant_id)
+    .eq('status', 'active');
+  if (allowedFacilityIds) empQuery = empQuery.in('facility_id', allowedFacilityIds);
+  const { data: employeesData, error: empErr } = await empQuery;
+  if (empErr) return NextResponse.json({ error: empErr.message }, { status: 500 });
+
+  /* facility 名解決 */
+  const { data: facilities } = await supabase
+    .from('facilities')
+    .select('id, name')
+    .eq('tenant_id', me.tenant_id);
+  const facMap = new Map((facilities || []).map((f) => [f.id, f.name]));
+
+  /* views: tenant 内の閲覧ログ全部を 1 クエリで取って、クライアント側で集計しても良いが、
+     SQL 側で GROUP BY して count + max(viewed_at) を返した方が転送量削減。
+     Supabase は raw SQL を直接叩けないので、view_logs を全件取って JS で集計する。
+     append-only でもログ数 = 社員数 × アイテム数 × 平均閲覧回数 程度なので現実的。 */
+  let viewsQuery = supabase
+    .from(cfg.viewsTable)
+    .select('employee_id, item_id, viewed_at')
+    .eq('tenant_id', me.tenant_id);
+  if (sinceIso) viewsQuery = viewsQuery.gte('viewed_at', sinceIso);
+  const { data: rawViews, error: viewsErr } = await viewsQuery;
+  if (viewsErr) return NextResponse.json({ error: viewsErr.message }, { status: 500 });
+
+  /* (employee_id, item_id) で集計: count と最終閲覧日時 */
+  const aggMap = new Map<string, { employee_id: string; item_id: string; count: number; last_viewed_at: string }>();
+  for (const v of (rawViews || []) as { employee_id: string; item_id: string; viewed_at: string }[]) {
+    const key = `${v.employee_id}__${v.item_id}`;
+    const cur = aggMap.get(key);
+    if (cur) {
+      cur.count += 1;
+      if (v.viewed_at > cur.last_viewed_at) cur.last_viewed_at = v.viewed_at;
+    } else {
+      aggMap.set(key, { employee_id: v.employee_id, item_id: v.item_id, count: 1, last_viewed_at: v.viewed_at });
+    }
+  }
+  const views = Array.from(aggMap.values());
+
+  return NextResponse.json({
+    items: ((itemsData || []) as unknown as Record<string, unknown>[]).map((it) => ({
+      id: it.id,
+      title: it[cfg.titleField] || '（無題）',
+      target_type: it.target_type,
+      target_facility_ids: it.target_facility_ids,
+      category_id: it.category_id,
+      created_at: it.created_at,
+    })),
+    categories: categoriesData || [],
+    employees: (employeesData || []).map((e) => ({
+      id: e.id,
+      name: `${e.last_name} ${e.first_name}`,
+      facility_id: e.facility_id,
+      facility_name: e.facility_id ? (facMap.get(e.facility_id) || '') : '',
+      role: e.role,
+    })),
+    views,
+  });
+}

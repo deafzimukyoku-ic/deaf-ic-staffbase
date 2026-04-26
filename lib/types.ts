@@ -130,7 +130,8 @@ export interface Employee {
   self_introduction: string | null;
   current_duties: string | null;
   past_duties: string | null;
-  qualifications: string | null;
+  /* migration 114 で text → text[]。施設の qualification_types から選択した資格名の配列。 */
+  qualifications: string[];
   efforts_focused_on: string | null;
   how_others_describe: string | null;
   values_and_motivation: string | null;
@@ -197,6 +198,8 @@ export interface Facility {
   display_order?: number;
   shift_enabled?: boolean;
   transport_enabled?: boolean;
+  /* migration 121: 業務日報の活動内容/連絡事項枠に印字するテンプレート（複数行プレーンテキスト）。 */
+  daily_report_template?: string;
 }
 
 // --- Shift-maker: 児童・送迎エリア ---
@@ -344,6 +347,23 @@ export interface Position {
 // --- Custom Employee Fields ---
 export type CustomFieldType = 'text' | 'date' | 'number' | 'select' | 'image';
 
+/* migration 120 で追加。社員プロフィールのどのタブに表示するか。 */
+export type CustomFieldSection = 'basic' | 'commute' | 'contacts';
+
+export const CUSTOM_FIELD_SECTION_LABELS: Record<CustomFieldSection, string> = {
+  basic: '基本',
+  commute: '通勤・車両',
+  contacts: '連絡先',
+};
+
+/* 社員側でのセクション内カード見出し（「追加項目」の代わり）。
+   配置されたセクションに溶け込む文言にして「カスタム/追加」感を消す。 */
+export const CUSTOM_FIELD_SECTION_TITLES: Record<CustomFieldSection, string> = {
+  basic: 'その他の基本情報',
+  commute: 'その他の通勤情報',
+  contacts: 'その他の連絡先情報',
+};
+
 export interface CustomEmployeeField {
   id: string;
   tenant_id: string;
@@ -353,6 +373,7 @@ export interface CustomEmployeeField {
   options: string[];
   display_order: number;
   is_active: boolean;
+  section: CustomFieldSection;
   created_at: string;
 }
 

@@ -2,12 +2,11 @@
 
 /**
  * PDF エディタ サイドバー
- * カテゴリ別ドロップダウンで社員/カスタム/テナント/固定値フィールドを選択してタグ追加
+ * カテゴリ別チェックボックス一覧で社員/カスタム/テナント/固定値フィールドを複数選択して一括タグ追加
  */
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { createClient } from '@/lib/supabase/client';
 import type { PdfTag, PdfTagPlacement } from '@/lib/types';
 import { FONT_SIZES } from '@/lib/constants';
@@ -25,7 +24,7 @@ interface Props {
   selectedPlacement: PdfTagPlacement | null;
   onFontSizeChange: (placementId: string, fontSize: number) => void;
   onDeletePlacement: (placementId: string) => void;
-  onAddTag: (displayName: string, columnKey?: string) => void;
+  onAddTags: (items: { displayName: string; columnKey?: string }[]) => void;
   onDeleteTag: (tagId: string) => void;
   onPreview?: () => void;
   previewLoading?: boolean;
@@ -39,14 +38,14 @@ export default function PdfEditorToolbar({
   selectedPlacement,
   onFontSizeChange,
   onDeletePlacement,
-  onAddTag,
+  onAddTags,
   onDeleteTag,
   onPreview,
   previewLoading,
 }: Props) {
-  //フィールド選択用
+  //フィールド選択用（複数選択対応）
   const [selectedSource, setSelectedSource] = useState<string>('employee');
-  const [selectedField, setSelectedField] = useState<string>('');
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [customFieldOptions, setCustomFieldOptions] = useState<FieldOption[]>([]);
 
   useEffect(() => {
@@ -62,28 +61,6 @@ export default function PdfEditorToolbar({
     loadCustomFields();
   }, []);
 
-  function handleAddTagEmployee() {
-    if (!selectedField) return;
-
-    const columnKey = `${selectedSource}.${selectedField}`;
-
-    // 既に追加済みか確認
-    if (tags.some((t) => t.column_key === columnKey)) {
-      return;
-    }
-
-    // 日本語ラベルを取得
-    const fieldList = selectedSource === 'employee' ? employeeFields
-      : selectedSource === 'custom_field' ? customFieldOptions
-      : selectedSource === 'tenant' ? tenantFields
-      : fixedFields;
-    const field = fieldList.find((f) => f.value === selectedField);
-    const displayName = field?.label || selectedField;
-
-    onAddTag(displayName, columnKey);
-    setSelectedField('');
-  }
-
   // 現在選択中のソースに応じたフィールドリスト
   const currentFieldList = selectedSource === 'employee' ? employeeFields
     : selectedSource === 'custom_field' ? customFieldOptions
@@ -94,6 +71,33 @@ export default function PdfEditorToolbar({
   const availableFields = currentFieldList.filter(
     (f) => !tags.some((t) => t.column_key === `${selectedSource}.${f.value}`)
   );
+
+  function toggleField(value: string, checked: boolean) {
+    setSelectedFields((prev) => checked ? [...prev, value] : prev.filter((v) => v !== value));
+  }
+
+  function selectAllAvailable() {
+    setSelectedFields(availableFields.map((f) => f.value));
+  }
+
+  function clearSelection() {
+    setSelectedFields([]);
+  }
+
+  function handleAddSelected() {
+    if (selectedFields.length === 0) return;
+
+    const items = selectedFields.map((fieldValue) => {
+      const field = currentFieldList.find((f) => f.value === fieldValue);
+      return {
+        displayName: field?.label || fieldValue,
+        columnKey: `${selectedSource}.${fieldValue}`,
+      };
+    });
+
+    onAddTags(items);
+    setSelectedFields([]);
+  }
 
   return (
     <div className="w-64 border-l border-diletto-gray/10 bg-white flex flex-col h-full overflow-hidden">
@@ -141,17 +145,17 @@ export default function PdfEditorToolbar({
           })}
         </div>
 
-        {/* タグ追加UI — フィールド選択（全モード共通） */}
+        {/* タグ追加UI — チェックボックス複数選択で一括追加 */}
           <div className="space-y-2 pt-2 border-t border-diletto-gray/10">
             <label className="block text-[10px] font-bold text-diletto-gray uppercase tracking-wider">
-              フィールド追加
+              フィールド追加（複数選択可）
             </label>
-            {/* ソース種別選択 */}
+            {/* ソース種別選択 — 切替時に選択状態をリセット */}
             <select
               value={selectedSource}
               onChange={(e) => {
                 setSelectedSource(e.target.value);
-                setSelectedField('');
+                setSelectedFields([]);
               }}
               className="flex h-8 w-full rounded-md border border-diletto-gray/20 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-diletto-blue/40"
             >
@@ -160,32 +164,68 @@ export default function PdfEditorToolbar({
               ))}
             </select>
 
-            {/* フィールド選択 */}
-            <select
-              value={selectedField}
-              onChange={(e) => setSelectedField(e.target.value)}
-              className="flex h-8 w-full rounded-md border border-diletto-gray/20 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-diletto-blue/40"
-            >
-              <option value="">フィールドを選択...</option>
-              {availableFields.map((f) => (
-                <option key={f.value} value={f.value}>{f.label}</option>
-              ))}
-            </select>
+            {/* 全選択 / 解除 */}
+            {availableFields.length > 0 && (
+              <div className="flex items-center justify-between text-[10px] text-diletto-gray">
+                <span>
+                  {selectedFields.length > 0 ? `${selectedFields.length} 件選択中` : `${availableFields.length} 件`}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllAvailable}
+                    className="text-diletto-blue hover:text-diletto-ink underline"
+                  >
+                    すべて選択
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    disabled={selectedFields.length === 0}
+                    className="text-diletto-gray hover:text-diletto-ink underline disabled:opacity-30 disabled:no-underline"
+                  >
+                    解除
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* チェックボックス一覧 */}
+            <div className="border border-diletto-gray/20 rounded-md max-h-64 overflow-y-auto bg-white">
+              {availableFields.length === 0 ? (
+                <p className="px-2 py-3 text-[10px] text-diletto-gray-light text-center">
+                  {currentFieldList.length === 0
+                    ? 'フィールドがありません'
+                    : 'このカテゴリのフィールドは全て追加済みです'}
+                </p>
+              ) : (
+                availableFields.map((f) => (
+                  <label
+                    key={f.value}
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-diletto-bg border-b border-diletto-gray/5 last:border-b-0"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.includes(f.value)}
+                      onChange={(e) => toggleField(f.value, e.target.checked)}
+                      className="h-3.5 w-3.5 rounded accent-diletto-blue shrink-0"
+                    />
+                    <span className="truncate">{f.label}</span>
+                  </label>
+                ))
+              )}
+            </div>
 
             <Button
               size="sm"
-              onClick={handleAddTagEmployee}
-              disabled={!selectedField}
+              onClick={handleAddSelected}
+              disabled={selectedFields.length === 0}
               className="w-full h-8 text-xs"
             >
-              + タグを追加
+              {selectedFields.length === 0
+                ? '+ タグを追加'
+                : `+ 選択した ${selectedFields.length} 件を追加`}
             </Button>
-
-            {availableFields.length === 0 && currentFieldList.length > 0 && (
-              <p className="text-[10px] text-diletto-gray-light">
-                このカテゴリのフィールドは全て追加済みです
-              </p>
-            )}
           </div>
 
       </div>

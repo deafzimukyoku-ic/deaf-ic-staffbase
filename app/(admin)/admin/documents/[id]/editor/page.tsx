@@ -92,13 +92,16 @@ export default function EditorPage() {
     setDirty(true);
   }
 
-  async function handleAddTag(displayName: string, columnKey?: string) {
+  async function handleAddTags(items: { displayName: string; columnKey?: string }[]) {
+    if (items.length === 0) return;
     const body: Record<string, unknown> = {
       template_id: templateId,
-      display_names: [displayName],
+      display_names: items.map((i) => i.displayName),
     };
-    if (columnKey) {
-      body.column_keys = [columnKey];
+    /* 全アイテムが columnKey 持ち（社員モード）か、全部無し（matrix モード）のどちらかを想定。
+       UI 側で揃えて呼ぶので途中で混在しない前提。 */
+    if (items[0].columnKey) {
+      body.column_keys = items.map((i) => i.columnKey ?? '');
     }
     const res = await fetch('/api/documents/pdf-tags', {
       method: 'POST',
@@ -111,7 +114,11 @@ export default function EditorPage() {
       return;
     }
     setTags(json.tags);
-    toast.success(`タグ「${displayName}」を追加しました`);
+    if (items.length === 1) {
+      toast.success(`タグ「${items[0].displayName}」を追加しました`);
+    } else {
+      toast.success(`${items.length} 件のタグを追加しました`);
+    }
   }
 
   async function handleDeleteTag(tagId: string) {
@@ -165,19 +172,12 @@ export default function EditorPage() {
     }
     setPreviewLoading(true);
     try {
-      // テナントの最初の社員を取得してプレビュー
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: me } = await supabase.from('employees').select('tenant_id').eq('auth_user_id', user.id).single();
-      if (!me) return;
-      const { data: employees } = await supabase.from('employees').select('id').eq('tenant_id', me.tenant_id).limit(1);
-      const empId = employees?.[0]?.id;
-      if (!empId) { toast.error('プレビュー用の社員データがありません'); return; }
-
+      /* プレビューはダミーデータで生成。実社員データに依存しないので、
+         先方環境にまだ社員が1人もいなくても全タグの見栄えを確認できる。 */
       const res = await fetch('/api/documents/generate-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_id: empId, template_id: templateId }),
+        body: JSON.stringify({ template_id: templateId, preview: true }),
       });
       if (!res.ok) { toast.error('プレビュー生成に失敗しました'); return; }
       const blob = await res.blob();
@@ -253,7 +253,7 @@ export default function EditorPage() {
             selectedPlacement={selectedPlacement}
             onFontSizeChange={handleFontSizeChange}
             onDeletePlacement={handleDeletePlacement}
-            onAddTag={handleAddTag}
+            onAddTags={handleAddTags}
             onDeleteTag={handleDeleteTag}
             onPreview={handlePreview}
             previewLoading={previewLoading}

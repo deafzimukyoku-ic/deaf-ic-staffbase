@@ -628,9 +628,13 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     className="outline-none"
                     style={inputStyle}
                   >
-                    {Object.entries(GRADE_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
+                    {/* junior_high (中学旧) は中1/中2/中3 への分割前の旧データ用。
+                       新規入力では選ばせない。既存データに残っていても表示は GRADE_LABELS で行える。 */}
+                    {Object.entries(GRADE_LABELS)
+                      .filter(([k]) => k !== 'junior_high')
+                      .map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
                   </select>
                 </div>
               </div>

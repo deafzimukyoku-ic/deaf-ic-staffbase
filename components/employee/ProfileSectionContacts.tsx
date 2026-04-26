@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PostalCodeField } from './PostalCodeField';
-import type { Employee } from '@/lib/types';
+import type { Employee, CustomEmployeeField } from '@/lib/types';
+import { CustomFieldsCard } from './CustomFieldsCard';
 
 type ContactFields = Pick<Employee,
   'emergency1_name' | 'emergency1_relationship' | 'emergency1_phone' |
@@ -12,15 +13,17 @@ type ContactFields = Pick<Employee,
   'emergency2_name' | 'emergency2_relationship' | 'emergency2_phone' |
   'emergency2_mobile' | 'emergency2_postal_code' | 'emergency2_address' |
   'guarantor_name' | 'guarantor_birth_date' | 'guarantor_postal_code' |
-  'guarantor_address' | 'guarantor_phone' | 'guarantor_relationship'
+  'guarantor_address' | 'guarantor_phone' | 'guarantor_relationship' | 'custom_fields'
 >;
 
 interface Props {
   data: ContactFields;
   onChange: (data: ContactFields) => void;
+  employeeId?: string;
+  customFieldDefs?: CustomEmployeeField[];
 }
 
-export function ProfileSectionContacts({ data, onChange }: Props) {
+export function ProfileSectionContacts({ data, onChange, employeeId, customFieldDefs = [] }: Props) {
   function update<K extends keyof ContactFields>(key: K, value: ContactFields[K]) {
     onChange({ ...data, [key]: value });
   }
@@ -109,6 +112,15 @@ export function ProfileSectionContacts({ data, onChange }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* カスタム項目（section='contacts' のもののみ。見出しは「その他の連絡先情報」） */}
+      <CustomFieldsCard
+        section="contacts"
+        defs={customFieldDefs}
+        values={(data.custom_fields as Record<string, string>) || {}}
+        onChange={(next) => update('custom_fields', next as ContactFields['custom_fields'])}
+        employeeId={employeeId}
+      />
     </div>
   );
 }

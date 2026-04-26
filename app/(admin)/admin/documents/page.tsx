@@ -13,6 +13,21 @@ import { MAX_DOCUMENTS_PER_TENANT } from '@/lib/constants';
 import { DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import type { DocumentTemplate } from '@/lib/types';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 export default function DocumentsPage() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -24,6 +39,10 @@ export default function DocumentsPage() {
   const [deleteTarget, setDeleteTarget] = useState<DocumentTemplate | null>(null);
   const [deleteSubCount, setDeleteSubCount] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  /* template_id → 配置済みタグ数。エディタで PDF 上に配置済み（pdf_tag_placements）の数を出す。
+     未配置のタグ（pdf_tags のみあって placements に無い）はカウントしない
+     — 「マッピング済み」= 実際に PDF 上に出る数、というユーザー期待に揃える。 */
+  const [placementCounts, setPlacementCounts] = useState<Record<string, number>>({});
   const supabase = createClient();
 
   async function loadTemplates() {
@@ -44,8 +63,25 @@ export default function DocumentsPage() {
       supabase.from('document_templates').select('*').is('tenant_id', null).eq('is_sample', true).order('display_order'),
     ]);
 
-    setTemplates((myTemplates.data as DocumentTemplate[]) || []);
+    const myList = (myTemplates.data as DocumentTemplate[]) || [];
+    setTemplates(myList);
     setSamples((sampleTemplates.data as DocumentTemplate[]) || []);
+
+    /* placements 数を 1 クエリでまとめて取って template_id 別に集計。
+       N+1 を避けるため pdf_tag_placements を template_id IN (...) で取得 */
+    if (myList.length > 0) {
+      const { data: pls } = await supabase
+        .from('pdf_tag_placements')
+        .select('template_id')
+        .in('template_id', myList.map((t) => t.id));
+      const counts: Record<string, number> = {};
+      for (const p of (pls || []) as { template_id: string }[]) {
+        counts[p.template_id] = (counts[p.template_id] || 0) + 1;
+      }
+      setPlacementCounts(counts);
+    } else {
+      setPlacementCounts({});
+    }
     setLoading(false);
   }
 
@@ -185,6 +221,35 @@ export default function DocumentsPage() {
     (s) => !templates.some((t) => t.name === s.name)
   );
 
+  /* ドラッグ並び替え。display_order を 0..N-1 で振り直して並列 UPDATE。
+     失敗時は loadTemplates() でサーバ状態に巻き戻す。
+     社員側 (/my/documents) も .order('display_order') で取得しているので即反映される。 */
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = templates.findIndex((t) => t.id === active.id);
+    const newIndex = templates.findIndex((t) => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const reordered = arrayMove(templates, oldIndex, newIndex);
+    setTemplates(reordered); // 楽観更新
+
+    const results = await Promise.all(
+      reordered.map((t, idx) =>
+        supabase.from('document_templates').update({ display_order: idx }).eq('id', t.id)
+      )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      toast.error('並び替えの保存に失敗しました', { description: failed.error.message });
+      await loadTemplates();
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -242,65 +307,18 @@ export default function DocumentsPage() {
       </div>
 
       <div className="space-y-3">
-        {templates.map((t) => (
-          <Card key={t.id}>
-            <CardContent className="flex items-center justify-between py-4">
-              <div>
-                <p className="font-medium">{t.name}</p>
-                <div className="flex gap-2 mt-1">
-                  <Badge variant="default" className="text-xs">PDF</Badge>
-                  {t.page_count && (
-                    <span className="text-xs text-diletto-gray-light">
-                      {t.page_count}ページ
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {t.pdf_storage_path && (
-                  <>
-                    <Link href={`/admin/documents/${t.id}/editor`}>
-                      <Button variant="outline" size="sm">エディタ</Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        const res = await fetch('/api/documents/bulk-pdf-zip-employee', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ template_id: t.id }),
-                        });
-                        if (!res.ok) {
-                          const json = await res.json();
-                          toast.error(json.error || '一括出力に失敗しました');
-                          return;
-                        }
-                        const blob = await res.blob();
-                        const fileName = res.headers.get('X-Filename') || 'output.zip';
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(blob);
-                        a.download = fileName;
-                        a.click();
-                        URL.revokeObjectURL(a.href);
-                      }}
-                    >
-                      一括PDF出力
-                    </Button>
-                  </>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-diletto-red border-diletto-red/30 hover:bg-diletto-red/5"
-                  onClick={() => openDeleteDialog(t)}
-                >
-                  削除
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={templates.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+            {templates.map((t) => (
+              <SortableTemplateCard
+                key={t.id}
+                template={t}
+                placementCount={placementCounts[t.id] ?? 0}
+                onDelete={openDeleteDialog}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
 
         {!loading && templates.length === 0 && (
           <Card>
@@ -348,6 +366,109 @@ export default function DocumentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ドラッグ可能なテンプレートカード。
+   左端にドラッグハンドル（⋮⋮）を出し、ハンドル領域だけドラッグ反応するようにする
+   （カード本体のクリックで誤ってドラッグが始まらないように listeners をハンドル限定）。 */
+function SortableTemplateCard({
+  template: t,
+  placementCount,
+  onDelete,
+}: {
+  template: DocumentTemplate;
+  placementCount: number;
+  onDelete: (t: DocumentTemplate) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: t.id,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Card>
+        <CardContent className="flex items-center justify-between py-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="text-diletto-gray-light hover:text-diletto-ink cursor-grab active:cursor-grabbing touch-none px-1"
+              aria-label="並び替え"
+              {...attributes}
+              {...listeners}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+              </svg>
+            </button>
+            <div>
+              <p className="font-medium">{t.name}</p>
+              <div className="flex gap-2 mt-1 items-center">
+                <Badge variant="default" className="text-xs">PDF</Badge>
+                {t.page_count && (
+                  <span className="text-xs text-diletto-gray-light">{t.page_count}ページ</span>
+                )}
+                {/* マッピング件数 — 0 件は薄くして「未配置」と分かるように */}
+                <span
+                  className={`text-xs ${placementCount === 0 ? 'text-diletto-red/70' : 'text-diletto-gray-light'}`}
+                >
+                  {placementCount === 0 ? 'マッピング未設定' : `マッピング ${placementCount} 件`}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {t.pdf_storage_path && (
+              <>
+                <Link href={`/admin/documents/${t.id}/editor`}>
+                  <Button variant="outline" size="sm">エディタ</Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const res = await fetch('/api/documents/bulk-pdf-zip-employee', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ template_id: t.id }),
+                    });
+                    if (!res.ok) {
+                      const json = await res.json();
+                      toast.error(json.error || '一括出力に失敗しました');
+                      return;
+                    }
+                    const blob = await res.blob();
+                    const fileName = res.headers.get('X-Filename') || 'output.zip';
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = fileName;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                  }}
+                >
+                  一括PDF出力
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-diletto-red border-diletto-red/30 hover:bg-diletto-red/5"
+              onClick={() => onDelete(t)}
+            >
+              削除
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

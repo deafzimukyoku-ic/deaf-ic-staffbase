@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { toast } from 'sonner';
-import type { Employee, Facility, CustomEmployeeField } from '@/lib/types';
+import type { Employee, Facility, CustomEmployeeField, QualificationType } from '@/lib/types';
 import { PostalCodeField } from './PostalCodeField';
+import { CustomFieldsCard } from './CustomFieldsCard';
 
 type BasicFields = Pick<Employee,
   'last_name' | 'first_name' | 'last_name_kana' | 'first_name_kana' |
@@ -25,14 +23,17 @@ interface Props {
   onChange: (data: BasicFields) => void;
   employeeId?: string;
   showExtended?: boolean;
+  /* 親 (profile/page.tsx) で section='basic' でフィルタしたカスタム項目定義を受け取る。 */
+  customFieldDefs?: CustomEmployeeField[];
 }
 
-export function ProfileSection1Basic({ data, onChange, employeeId, showExtended = true }: Props) {
+export function ProfileSection1Basic({ data, onChange, employeeId, showExtended = true, customFieldDefs = [] }: Props) {
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [positions, setPositions] = useState<{ id: string; name: string }[]>([]);
-  const [customFieldDefs, setCustomFieldDefs] = useState<CustomEmployeeField[]>([]);
   const [tenantBanks, setTenantBanks] = useState<string[]>([]);
-  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  /* 所属施設の qualification_types。シフト設定で施設管理者が定義した資格マスタ。
+     県/市で法令が違うので施設ごとに別セット（migration では facility_shift_settings.qualification_types）。 */
+  const [qualificationTypes, setQualificationTypes] = useState<QualificationType[]>([]);
   const supabase = createClient();
 
   const isYucho = (data.bank_name || '').includes('ゆうちょ');
@@ -45,19 +46,34 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
       if (!me) return;
       const tid = me.tenant_id;
 
-      const [facs, poss, cfs, banks] = await Promise.all([
+      const [facs, poss, banks] = await Promise.all([
         supabase.from('facilities').select('*').eq('tenant_id', tid).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
         supabase.from('positions').select('id, name').eq('tenant_id', tid).order('display_order'),
-        supabase.from('custom_employee_fields').select('*').eq('tenant_id', tid).eq('is_active', true).order('display_order'),
         supabase.from('tenant_payroll_banks').select('bank_name').eq('tenant_id', tid).order('display_order'),
       ]);
       if (facs.data) setFacilities(facs.data as Facility[]);
       if (poss.data) setPositions(poss.data);
-      if (cfs.data) setCustomFieldDefs(cfs.data as CustomEmployeeField[]);
       if (banks.data) setTenantBanks(banks.data.map((b: { bank_name: string }) => b.bank_name));
     }
     loadMasters();
   }, [supabase]);
+
+  /* 所属施設が変わった時に qualification_types を取り直す */
+  useEffect(() => {
+    if (!data.facility_id) {
+      setQualificationTypes([]);
+      return;
+    }
+    (async () => {
+      const { data: settings } = await supabase
+        .from('facility_shift_settings')
+        .select('qualification_types')
+        .eq('facility_id', data.facility_id)
+        .maybeSingle();
+      const qts = settings?.qualification_types as QualificationType[] | null;
+      setQualificationTypes(Array.isArray(qts) ? qts : []);
+    })();
+  }, [data.facility_id, supabase]);
 
   function update<K extends keyof BasicFields>(key: K, value: BasicFields[K]) {
     onChange({ ...data, [key]: value });
@@ -67,49 +83,6 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
   function updateCustom(key: string, value: string | null) {
     const next = { ...customValues, [key]: value || '' };
     update('custom_fields', next as BasicFields['custom_fields']);
-  }
-
-  async function handleCustomImageUpload(fieldKey: string, file: File) {
-    const maxSizeMb = 10;
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('JPG、PNG、WebP、HEIC形式のみ対応しています');
-      return;
-    }
-    if (file.size > maxSizeMb * 1024 * 1024) {
-      toast.error(`ファイルサイズは${maxSizeMb}MB以下にしてください`);
-      return;
-    }
-
-    setUploadingField(fieldKey);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.error('認証が必要です'); return; }
-      const { data: me } = await supabase.from('employees').select('id, tenant_id').eq('auth_user_id', user.id).single();
-      if (!me) { toast.error('社員情報が見つかりません'); return; }
-
-      const targetId = employeeId || me.id;
-      const ext = file.name.split('.').pop() || 'jpg';
-      const storagePath = `${me.tenant_id}/${targetId}/${fieldKey}_${Date.now()}.${ext}`;
-
-      // Supabase Storageに直接アップロード
-      const { error: uploadErr } = await supabase.storage
-        .from('employee-images')
-        .upload(storagePath, file, { contentType: file.type, upsert: true });
-      if (uploadErr) { toast.error(`アップロードに失敗しました: ${uploadErr.message}`); return; }
-
-      // APIでDB更新のみ
-      const res = await fetch('/api/employees/upload-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field_key: fieldKey, storage_path: storagePath, employee_id: employeeId }),
-      });
-      const json = await res.json();
-      if (!res.ok) { toast.error(json.error); return; }
-      updateCustom(fieldKey, json.path);
-      toast.success('画像をアップロードしました');
-    } catch { toast.error('アップロードに失敗しました'); }
-    finally { setUploadingField(null); }
   }
 
   const selectClass = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm";
@@ -194,9 +167,40 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
             <Field label="業務内容" value={data.job_type || ''} onChange={(v) => update('job_type', v || null)} />
             <Field label="個人番号（マイナンバー）" value={data.my_number || ''} onChange={(v) => update('my_number', v || null)} />
             <Field label="最終就職先" value={data.previous_employer || ''} onChange={(v) => update('previous_employer', v || null)} />
+            {/* 保有資格: 所属施設の qualification_types から選択（チップ式トグル）。
+                施設未設定 or 資格マスタ未定義の場合は案内文を出して選択不可。
+                DB は text[]、選んだ資格名の配列で保存される。 */}
             <div className="space-y-2">
               <Label>保有資格</Label>
-              <Textarea value={data.qualifications || ''} onChange={(e) => update('qualifications', e.target.value || null)} placeholder="保有資格をご記入ください" rows={2} />
+              {!data.facility_id ? (
+                <p className="text-xs text-diletto-gray-light px-1">所属施設を選択すると、施設で定義された資格から選べます。</p>
+              ) : qualificationTypes.length === 0 ? (
+                <p className="text-xs text-diletto-gray-light px-1">所属施設の資格マスタが未設定です。管理者にシフト設定からの登録を依頼してください。</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {qualificationTypes.map((q) => {
+                    const selected = (data.qualifications ?? []).includes(q.name);
+                    return (
+                      <button
+                        type="button"
+                        key={q.name}
+                        onClick={() => {
+                          const cur = data.qualifications ?? [];
+                          const next = selected ? cur.filter((n) => n !== q.name) : [...cur, q.name];
+                          update('qualifications', next);
+                        }}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all border ${
+                          selected
+                            ? 'bg-diletto-blue text-white border-diletto-blue'
+                            : 'bg-white text-diletto-ink border-diletto-gray/20 hover:border-diletto-blue/40'
+                        }`}
+                      >
+                        {q.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </>}
         </CardContent>
@@ -242,82 +246,15 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
         </Card>
       </>}
 
-      {/* カスタム項目 */}
-      {customFieldDefs.length > 0 && showExtended && (
-        <Card>
-          <CardHeader><CardTitle>追加項目</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {customFieldDefs.map((cf) => {
-              const val = customValues[cf.field_key] || '';
-              if (cf.field_type === 'image') {
-                const imageUrl = val
-                  ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/employee-images/${val}`
-                  : null;
-                return (
-                  <div key={cf.field_key} className="space-y-2">
-                    <Label>{cf.label}</Label>
-                    {imageUrl ? (
-                      <div className="space-y-2">
-                        <img src={imageUrl} alt={cf.label} className="max-h-48 rounded-md border object-contain" />
-                        <div className="flex gap-2">
-                          <Button type="button" size="sm" variant="outline" onClick={() => {
-                            const input = document.createElement('input');
-                            input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-                            input.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleCustomImageUpload(cf.field_key, f); };
-                            input.click();
-                          }}>変更</Button>
-                          <Button type="button" size="sm" variant="ghost" className="text-diletto-red" onClick={() => updateCustom(cf.field_key, null)}>削除</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={uploadingField === cf.field_key}
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-                          input.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleCustomImageUpload(cf.field_key, f); };
-                          input.click();
-                        }}
-                        className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-diletto-gray/20 hover:border-diletto-blue/40 transition-colors text-sm text-diletto-gray cursor-pointer"
-                      >
-                        {uploadingField === cf.field_key ? 'アップロード中...' : 'クリックして画像を選択'}
-                      </button>
-                    )}
-                  </div>
-                );
-              }
-              if (cf.field_type === 'select') {
-                return (
-                  <div key={cf.field_key} className="space-y-2">
-                    <Label>{cf.label}</Label>
-                    <select className={selectClass} value={val} onChange={(e) => updateCustom(cf.field_key, e.target.value || null)}>
-                      <option value="">未選択</option>
-                      {cf.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  </div>
-                );
-              }
-              if (cf.field_type === 'date') {
-                return (
-                  <div key={cf.field_key} className="space-y-2">
-                    <Label>{cf.label}</Label>
-                    <Input type="date" value={val} onChange={(e) => updateCustom(cf.field_key, e.target.value || null)} />
-                  </div>
-                );
-              }
-              if (cf.field_type === 'number') {
-                return (
-                  <div key={cf.field_key} className="space-y-2">
-                    <Label>{cf.label}</Label>
-                    <Input type="number" value={val} onChange={(e) => updateCustom(cf.field_key, e.target.value || null)} />
-                  </div>
-                );
-              }
-              return <Field key={cf.field_key} label={cf.label} value={val} onChange={(v) => updateCustom(cf.field_key, v || null)} />;
-            })}
-          </CardContent>
-        </Card>
+      {/* カスタム項目（section='basic' のもののみ。見出しは「その他の基本情報」） */}
+      {showExtended && (
+        <CustomFieldsCard
+          section="basic"
+          defs={customFieldDefs}
+          values={customValues}
+          onChange={(next) => update('custom_fields', next as BasicFields['custom_fields'])}
+          employeeId={employeeId}
+        />
       )}
     </div>
   );
@@ -332,41 +269,3 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
   );
 }
 
-function ImageUpload({ label, path, fieldKey, uploading, onUpload, onClear }: {
-  label: string; path: string | null; fieldKey: string; uploading: boolean;
-  onUpload: (fieldKey: string, file: File) => void; onClear: () => void;
-}) {
-  const imageUrl = path ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/employee-images/${path}` : null;
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {imageUrl ? (
-        <div className="space-y-2">
-          <img src={imageUrl} alt={label} className="max-h-48 rounded-md border object-contain" />
-          <div className="flex gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-              input.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) onUpload(fieldKey, f); };
-              input.click();
-            }}>変更</Button>
-            <Button type="button" size="sm" variant="ghost" className="text-diletto-red" onClick={onClear}>削除</Button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button" disabled={uploading}
-          onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
-            input.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) onUpload(fieldKey, f); };
-            input.click();
-          }}
-          className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-diletto-gray/20 hover:border-diletto-blue/40 transition-colors text-sm text-diletto-gray cursor-pointer"
-        >
-          {uploading ? 'アップロード中...' : 'クリックして画像を選択'}
-        </button>
-      )}
-    </div>
-  );
-}

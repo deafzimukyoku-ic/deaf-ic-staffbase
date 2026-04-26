@@ -5,25 +5,17 @@
 
 import type { PdfTag, PdfTagPlacement } from '@/lib/types';
 import type { PlacementData } from './generate-pdf';
-
-// 日付カラム（YYYY-MM-DD → 年月日表示に変換する対象）
-const DATE_FIELDS = new Set([
-  'birth_date', 'join_date', 'license_expiry', 'insurance_expiry',
-  'vehicle_inspection_expiry', 'retirement_date', 'guarantor_birth_date',
-]);
-
-/** "1992-05-01" → "1992年5月1日" */
-function formatDateJP(value: string): string {
-  const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (!match) return value;
-  return `${match[1]}年${Number(match[2])}月${Number(match[3])}日`;
-}
+import { formatEmployeeFieldValue, stripEmojiForPdf } from '@/lib/employee-value-format';
 
 export interface PdfFillContext {
   employee: Record<string, unknown>;
   tenant: Record<string, unknown>;
   formData: Record<string, unknown>;
   bankName?: string;
+  /* employees.facility_id を facilities テーブルから引いた値。
+     PDF タグ employee.facility_name / employee.facility_address で使う。 */
+  facilityName?: string;
+  facilityAddress?: string;
 }
 
 /**
@@ -42,16 +34,20 @@ function resolvePdfTagValue(
 
   switch (sourceType) {
     case 'employee': {
+      /* facility_name / facility_address は employees に列が無い仮想フィールド。
+         API 側で facilities から引いた値を ctx.facilityName / ctx.facilityAddress に詰めている。 */
+      /* facility_name は先頭絵文字を除去（IPAex 明朝に絵文字グリフが無く tofu 化するため） */
+      if (sourceField === 'facility_name') return stripEmojiForPdf(ctx.facilityName || '');
+      if (sourceField === 'facility_address') return ctx.facilityAddress || '';
+
       // フィールド結合対応 ("last_name+first_name" → "佐藤杏南")
       if (sourceField.includes('+')) {
         return sourceField
           .split('+')
-          .map((f) => String(ctx.employee[f.trim()] ?? ''))
+          .map((f) => formatEmployeeFieldValue(f.trim(), ctx.employee[f.trim()]))
           .join('');
       }
-      const val = String(ctx.employee[sourceField] ?? '');
-      if (DATE_FIELDS.has(sourceField) && val) return formatDateJP(val);
-      return val;
+      return formatEmployeeFieldValue(sourceField, ctx.employee[sourceField]);
     }
     case 'tenant': {
       if (sourceField === 'bank_name') return ctx.bankName || '';

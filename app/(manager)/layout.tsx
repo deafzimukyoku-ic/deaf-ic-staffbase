@@ -25,6 +25,7 @@ const staffNav: NavItem[] = [
   { kind: 'link', href: '/mgr/trainings', label: '研修', icon: '📚' },
   { kind: 'link', href: '/mgr/announcements', label: 'お知らせ', icon: '📢' },
   { kind: 'link', href: '/mgr/manuals', label: '業務マニュアル', icon: '📖' },
+  { kind: 'link', href: '/mgr/reports', label: '閲覧レポート', icon: '📊' },
 ];
 
 const shiftNav: NavItem[] = [
@@ -33,6 +34,7 @@ const shiftNav: NavItem[] = [
   { kind: 'link', href: '/mgr/shifts', label: 'シフト表', icon: '🗓️' },
   { kind: 'link', href: '/mgr/shifts/transport', label: '送迎表', icon: '🚗' },
   { kind: 'link', href: '/mgr/shifts/output/daily', label: '日次出力', icon: '📄' },
+  { kind: 'link', href: '/mgr/shifts/output/daily-report', label: '業務日報', icon: '📋' },
   { kind: 'link', href: '/mgr/shifts/output/weekly-transport', label: '週次送迎', icon: '🗓️' },
   { kind: 'link', href: '/mgr/requests', label: '休み希望', icon: '✋' },
   { kind: 'section', label: '⚙️ シフト設定' },

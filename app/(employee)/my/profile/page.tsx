@@ -10,7 +10,7 @@ import { ProfileSection1Basic } from '@/components/employee/ProfileSection1Basic
 import { ProfileSectionCommute } from '@/components/employee/ProfileSectionCommute';
 import { ProfileSectionContacts } from '@/components/employee/ProfileSectionContacts';
 import { toast } from 'sonner';
-import type { Employee } from '@/lib/types';
+import type { Employee, CustomEmployeeField } from '@/lib/types';
 
 const TABS = [
   { value: 'basic', label: '基本', icon: '👤' },
@@ -23,6 +23,9 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  /* カスタム項目はここで一回だけロードして section でフィルタした配列を各タブに渡す。
+     旧実装は ProfileSection1Basic 内で fetch していたが、3 タブに分散すると 3 回 fetch になるので親側に集約。 */
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomEmployeeField[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
@@ -36,7 +39,16 @@ export default function ProfilePage() {
         .eq('auth_user_id', user.id)
         .single();
 
-      if (data) setEmployee(data as Employee);
+      if (data) {
+        setEmployee(data as Employee);
+        const { data: cfs } = await supabase
+          .from('custom_employee_fields')
+          .select('*')
+          .eq('tenant_id', data.tenant_id)
+          .eq('is_active', true)
+          .order('display_order');
+        if (cfs) setCustomFieldDefs(cfs as CustomEmployeeField[]);
+      }
       setLoading(false);
     }
     load();
@@ -103,6 +115,7 @@ export default function ProfilePage() {
               bank_account_holder: employee.bank_account_holder,
             }}
             employeeId={employee.id}
+            customFieldDefs={customFieldDefs.filter((f) => f.section === 'basic')}
             onChange={updateSection}
           />
         </TabsContent>
@@ -128,8 +141,10 @@ export default function ProfilePage() {
               route_section1_route: employee.route_section1_route, route_section1_transport: employee.route_section1_transport, route_section1_cost: employee.route_section1_cost,
               route_section2_route: employee.route_section2_route, route_section2_transport: employee.route_section2_transport, route_section2_cost: employee.route_section2_cost,
               commute_route_detail: employee.commute_route_detail,
+              custom_fields: employee.custom_fields,
             }}
             employeeId={employee.id}
+            customFieldDefs={customFieldDefs.filter((f) => f.section === 'commute')}
             onChange={updateSection}
           />
         </TabsContent>
@@ -146,7 +161,10 @@ export default function ProfilePage() {
               guarantor_name: employee.guarantor_name, guarantor_birth_date: employee.guarantor_birth_date,
               guarantor_postal_code: employee.guarantor_postal_code, guarantor_address: employee.guarantor_address,
               guarantor_phone: employee.guarantor_phone, guarantor_relationship: employee.guarantor_relationship,
+              custom_fields: employee.custom_fields,
             }}
+            employeeId={employee.id}
+            customFieldDefs={customFieldDefs.filter((f) => f.section === 'contacts')}
             onChange={updateSection}
           />
         </TabsContent>

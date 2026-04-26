@@ -73,7 +73,7 @@ export function SubordinateDetail({ employee: e }: Props) {
             <TextBlock label="自己紹介" value={e.self_introduction} />
             <TextBlock label="現在の業務" value={e.current_duties} />
             <TextBlock label="過去の業務" value={e.past_duties} />
-            <TextBlock label="資格" value={e.qualifications} />
+            <TextBlock label="資格" value={Array.isArray(e.qualifications) && e.qualifications.length > 0 ? e.qualifications.join('、') : null} />
             <TextBlock label="力を入れていること" value={e.efforts_focused_on} />
             <TextBlock label="周囲からの評価" value={e.how_others_describe} />
             <TextBlock label="価値観・モチベーション" value={e.values_and_motivation} />

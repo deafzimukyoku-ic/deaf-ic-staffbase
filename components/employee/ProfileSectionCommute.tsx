@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import type { Employee } from '@/lib/types';
+import type { Employee, CustomEmployeeField } from '@/lib/types';
+import { CustomFieldsCard } from './CustomFieldsCard';
 
 const MAX_IMAGE_SIZE_MB = 10;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
@@ -38,16 +39,17 @@ type CommuteFields = Pick<Employee,
   'commute_method' | 'commute_time_minutes' |
   'route_section1_route' | 'route_section1_transport' | 'route_section1_cost' |
   'route_section2_route' | 'route_section2_transport' | 'route_section2_cost' |
-  'commute_route_detail'
+  'commute_route_detail' | 'custom_fields'
 >;
 
 interface Props {
   data: CommuteFields;
   onChange: (data: CommuteFields) => void;
   employeeId?: string;
+  customFieldDefs?: CustomEmployeeField[];
 }
 
-export function ProfileSectionCommute({ data, onChange, employeeId }: Props) {
+export function ProfileSectionCommute({ data, onChange, employeeId, customFieldDefs = [] }: Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const supabase = createClient();
 
@@ -322,6 +324,15 @@ export function ProfileSectionCommute({ data, onChange, employeeId }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* カスタム項目（section='commute' のもののみ。見出しは「その他の通勤情報」） */}
+      <CustomFieldsCard
+        section="commute"
+        defs={customFieldDefs}
+        values={(data.custom_fields as Record<string, string>) || {}}
+        onChange={(next) => update('custom_fields', next as CommuteFields['custom_fields'])}
+        employeeId={employeeId}
+      />
     </div>
   );
 }

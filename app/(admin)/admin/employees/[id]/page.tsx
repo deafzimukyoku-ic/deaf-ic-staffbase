@@ -568,7 +568,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <div className="grid gap-8 sm:grid-cols-3">
                 <div>
                   <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">保有資格</Label>
-                  <p className="text-sm font-medium pl-1">{employee.qualifications || '-'}</p>
+                  <p className="text-sm font-medium pl-1">
+                    {Array.isArray(employee.qualifications) && employee.qualifications.length > 0
+                      ? employee.qualifications.join('、')
+                      : '-'}
+                  </p>
                 </div>
                 <div>
                   <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">最終学歴・前職</Label>

@@ -54,6 +54,15 @@ export async function POST(request: NextRequest) {
 
   const bankName = banks?.[0]?.bank_name || '';
 
+  // facility lookup（tenant 配下を一括取得して id→{name,address} の Map に）
+  const { data: facilitiesData } = await supabase
+    .from('facilities')
+    .select('id, name, address')
+    .eq('tenant_id', template.tenant_id);
+  const facilityMap = new Map(
+    (facilitiesData || []).map((f) => [f.id, { name: f.name || '', address: f.address || '' }])
+  );
+
   // 社員一覧 → migration 119 自動判定で対象社員を絞り込み
   const { data: rawEmployees } = await supabase
     .from('employees')
@@ -113,11 +122,14 @@ export async function POST(request: NextRequest) {
   for (const emp of employees as Employee[]) {
     const formData = formDataMap.get(emp.id) || {};
 
+    const fac = emp.facility_id ? facilityMap.get(emp.facility_id) : undefined;
     const placementData = buildPlacementData(tags, placements, {
       employee: emp as unknown as Record<string, unknown>,
       tenant: tenant as Record<string, unknown>,
       formData,
       bankName,
+      facilityName: fac?.name || '',
+      facilityAddress: fac?.address || '',
     });
 
     const pdfBytes = await renderMergedPdf(templatePdfBytes, placementData);

@@ -13,8 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MAX_PAYROLL_BANKS_PER_TENANT, PROFILE_SECTION_KEYS, PROFILE_SECTION_LABELS } from '@/lib/constants';
 import type { ProfileSectionKey } from '@/lib/constants';
 import { toast } from 'sonner';
-import type { CustomFieldType, CategoryType, Position } from '@/lib/types';
-import { CategoryManager } from '@/components/admin/CategoryManager';
+import type { CustomFieldType, Position, CustomFieldSection } from '@/lib/types';
+import { CUSTOM_FIELD_SECTION_LABELS } from '@/lib/types';
 import {
   DndContext,
   PointerSensor,
@@ -47,16 +47,16 @@ export default function SettingsPage() {
   const [values, setValues] = useState({ company_philosophy: '', action_guidelines: '', core_values: '', valued_behaviors: '', avoided_behaviors: '', ideal_culture: '' });
   const [banks, setBanks] = useState<{ bank_name: string; is_default: boolean }[]>([]);
   /* migration 116: facilities に display_order / shift_enabled / transport_enabled を追加。
+     migration 121: daily_report_template を追加。
      UI でドラッグ&ドロップ並び替え + 2 トグルを編集可能に。 */
   const [facilities, setFacilities] = useState<
-    { id?: string; name: string; address: string; display_order: number; shift_enabled: boolean; transport_enabled: boolean }[]
+    { id?: string; name: string; address: string; display_order: number; shift_enabled: boolean; transport_enabled: boolean; daily_report_template: string }[]
   >([]);
   const [positions, setPositions] = useState<(Omit<Position, 'tenant_id' | 'created_at' | 'id'> & { id?: string })[]>([]);
-  const [customFields, setCustomFields] = useState<{ id?: string; field_key: string; label: string; field_type: CustomFieldType; options: string[]; display_order: number; is_active: boolean }[]>([]);
+  const [customFields, setCustomFields] = useState<{ id?: string; field_key: string; label: string; field_type: CustomFieldType; options: string[]; display_order: number; is_active: boolean; section: CustomFieldSection }[]>([]);
   const [sectionVisibility, setSectionVisibility] = useState<Record<ProfileSectionKey, boolean>>(
     () => Object.fromEntries(PROFILE_SECTION_KEYS.map((k) => [k, true])) as Record<ProfileSectionKey, boolean>
   );
-  const [categoryTab, setCategoryTab] = useState<CategoryType>('compliance');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -81,7 +81,7 @@ export default function SettingsPage() {
 
       const { data: facilityData } = await supabase
         .from('facilities')
-        .select('id, name, address, display_order, shift_enabled, transport_enabled')
+        .select('id, name, address, display_order, shift_enabled, transport_enabled, daily_report_template')
         .eq('tenant_id', me.tenant_id)
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: true });
@@ -94,6 +94,7 @@ export default function SettingsPage() {
             display_order: (f.display_order as number | null) ?? 0,
             shift_enabled: (f.shift_enabled as boolean | null) ?? true,
             transport_enabled: (f.transport_enabled as boolean | null) ?? true,
+            daily_report_template: (f.daily_report_template as string | null) ?? '',
           })),
         );
       }
@@ -101,11 +102,12 @@ export default function SettingsPage() {
       const { data: posData } = await supabase.from('positions').select('id, name, display_order').eq('tenant_id', me.tenant_id).order('display_order');
       if (posData) setPositions(posData);
 
-      const { data: cfData } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active').eq('tenant_id', me.tenant_id).order('display_order');
+      const { data: cfData } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active, section').eq('tenant_id', me.tenant_id).order('display_order');
       if (cfData) setCustomFields(cfData.map((f: Record<string, unknown>) => ({
         id: f.id as string, field_key: f.field_key as string, label: f.label as string,
         field_type: f.field_type as CustomFieldType, options: (f.options as string[]) || [],
         display_order: f.display_order as number, is_active: f.is_active as boolean,
+        section: (f.section as CustomFieldSection) || 'basic',
       })));
 
       // セクション表示設定
@@ -158,6 +160,7 @@ export default function SettingsPage() {
           display_order: i,
           shift_enabled: f.shift_enabled,
           transport_enabled: f.transport_enabled,
+          daily_report_template: f.daily_report_template,
         })
         .eq('id', f.id);
     }
@@ -174,6 +177,7 @@ export default function SettingsPage() {
           display_order: idx,
           shift_enabled: f.shift_enabled,
           transport_enabled: f.transport_enabled,
+          daily_report_template: f.daily_report_template,
         })),
       );
     }
@@ -219,6 +223,7 @@ export default function SettingsPage() {
         await supabase.from('custom_employee_fields').update({
           label: f.label.trim(), field_key: f.field_key, field_type: f.field_type,
           options: f.options, display_order: f.display_order, is_active: f.is_active,
+          section: f.section,
         }).eq('id', f.id!);
       }
     }
@@ -229,6 +234,7 @@ export default function SettingsPage() {
         newCfs.map((f) => ({
           tenant_id: tenantId, field_key: f.field_key, label: f.label.trim(),
           field_type: f.field_type, options: f.options, display_order: f.display_order, is_active: f.is_active,
+          section: f.section,
         }))
       );
     }
@@ -253,7 +259,7 @@ export default function SettingsPage() {
     // リロード（新規作成分のIDを取得）
     const { data: reloadedFacilities } = await supabase
       .from('facilities')
-      .select('id, name, address, display_order, shift_enabled, transport_enabled')
+      .select('id, name, address, display_order, shift_enabled, transport_enabled, daily_report_template')
       .eq('tenant_id', tenantId)
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: true });
@@ -266,6 +272,7 @@ export default function SettingsPage() {
           display_order: (f.display_order as number | null) ?? 0,
           shift_enabled: (f.shift_enabled as boolean | null) ?? true,
           transport_enabled: (f.transport_enabled as boolean | null) ?? true,
+          daily_report_template: (f.daily_report_template as string | null) ?? '',
         })),
       );
     }
@@ -273,11 +280,12 @@ export default function SettingsPage() {
     const { data: reloadedPositions } = await supabase.from('positions').select('id, name, display_order').eq('tenant_id', tenantId).order('display_order');
     if (reloadedPositions) setPositions(reloadedPositions);
 
-    const { data: reloadedCfs } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active').eq('tenant_id', tenantId).order('display_order');
+    const { data: reloadedCfs } = await supabase.from('custom_employee_fields').select('id, field_key, label, field_type, options, display_order, is_active, section').eq('tenant_id', tenantId).order('display_order');
     if (reloadedCfs) setCustomFields(reloadedCfs.map((f: Record<string, unknown>) => ({
       id: f.id as string, field_key: f.field_key as string, label: f.label as string,
       field_type: f.field_type as CustomFieldType, options: (f.options as string[]) || [],
       display_order: f.display_order as number, is_active: f.is_active as boolean,
+      section: (f.section as CustomFieldSection) || 'basic',
     })));
   }
 
@@ -298,7 +306,7 @@ export default function SettingsPage() {
           <TabsTrigger value="fields" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">項目設定</TabsTrigger>
           <TabsTrigger value="visibility" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">表示設定</TabsTrigger>
           <TabsTrigger value="values" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">価値観</TabsTrigger>
-          <TabsTrigger value="categories" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">カテゴリ</TabsTrigger>
+          <TabsTrigger value="documents" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">書類テンプレ</TabsTrigger>
         </TabsList>
 
         {/* ダッシュボードタブ */}
@@ -335,10 +343,10 @@ export default function SettingsPage() {
               onClick={() => setActiveTab('values')}
             />
             <NavCard
-              title="カテゴリ管理"
-              icon="📁"
-              description="遵守事項、研修、お知らせの分類設定"
-              onClick={() => setActiveTab('categories')}
+              title="書類テンプレ"
+              icon="📄"
+              description="PDF テンプレート登録・タグ配置・並び替え"
+              href="/admin/documents"
             />
           </div>
         </TabsContent>
@@ -396,12 +404,45 @@ export default function SettingsPage() {
                 onClick={() =>
                   setFacilities([
                     ...facilities,
-                    { name: '', address: '', display_order: facilities.length, shift_enabled: true, transport_enabled: true },
+                    { name: '', address: '', display_order: facilities.length, shift_enabled: true, transport_enabled: true, daily_report_template: '' },
                   ])
                 }
               >
                 + 施設を追加
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* 業務日報の活動内容/連絡事項テンプレート編集（migration 121）。
+              施設ごとに自由文（複数行）を保存。業務日報出力時に末尾枠へ印字。 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">業務日報の活動内容／連絡事項</CardTitle>
+              <p className="text-xs text-diletto-gray mt-1">
+                各施設の業務日報下部に印字するテンプレートを設定できます。改行はそのまま反映されます。
+                例:「AM<br/>□朝礼<br/><br/>【連絡事項】<br/>朝礼に記載」
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {facilities.length === 0 ? (
+                <p className="text-xs text-diletto-gray-light">先に施設を登録してください。</p>
+              ) : (
+                facilities.map((f, i) => (
+                  <div key={f.id || `dr_new_${i}`} className="space-y-1">
+                    <Label className="text-xs font-bold">{f.name || '（施設名未入力）'}</Label>
+                    <Textarea
+                      rows={4}
+                      placeholder="AM&#10;□朝礼&#10;&#10;【連絡事項】&#10;朝礼に記載"
+                      value={f.daily_report_template}
+                      onChange={(e) => {
+                        const next = [...facilities];
+                        next[i] = { ...next[i], daily_report_template: e.target.value };
+                        setFacilities(next);
+                      }}
+                    />
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -428,7 +469,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               {customFields.map((cf, i) => (
                 <div key={cf.id || `new-cf-${i}`} className="rounded-md border border-diletto-gray/15 p-3 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-end">
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
                     <div className="space-y-1">
                       <Label className="text-xs">項目名</Label>
                       <Input
@@ -442,6 +483,19 @@ export default function SettingsPage() {
                           setCustomFields(next);
                         }}
                       />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">表示タブ</Label>
+                      <select
+                        title="表示タブを選択"
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                        value={cf.section}
+                        onChange={(e) => { const next = [...customFields]; next[i] = { ...next[i], section: e.target.value as CustomFieldSection }; setCustomFields(next); }}
+                      >
+                        {(Object.entries(CUSTOM_FIELD_SECTION_LABELS) as [CustomFieldSection, string][]).map(([val, lbl]) => (
+                          <option key={val} value={val}>{lbl}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">入力タイプ</Label>
@@ -477,7 +531,7 @@ export default function SettingsPage() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => setCustomFields([...customFields, { field_key: '', label: '', field_type: 'text', options: [], display_order: customFields.length, is_active: true }])}
+                onClick={() => setCustomFields([...customFields, { field_key: '', label: '', field_type: 'text', options: [], display_order: customFields.length, is_active: true, section: 'basic' }])}
               >
                 + カスタム項目を追加
               </Button>
@@ -524,38 +578,31 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* カテゴリタブ */}
-        <TabsContent value="categories" className="space-y-4">
+        {/* 書類テンプレタブ — /admin/documents へのリンクカード（ページ自体は別画面で管理） */}
+        <TabsContent value="documents" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">カテゴリ管理</CardTitle>
+              <CardTitle className="text-base">書類テンプレート</CardTitle>
               <p className="text-xs text-diletto-gray-light mt-1">
-                遵守事項・研修・お知らせ・業務マニュアルに分類を設定します。名前・色・アイコン（絵文字）を自由に設定できます。
+                社員に提出させる書類（PDF）のテンプレート登録・タグ配置・並び替えを行います。
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2 p-1 bg-diletto-beige/30 rounded-lg border border-diletto-gray/5">
-                {([
-                  { key: 'compliance' as CategoryType, label: '遵守事項', icon: '✅', color: 'bg-red-50 text-red-700 border-red-200' },
-                  { key: 'training' as CategoryType, label: '研修', icon: '📚', color: 'bg-green-50 text-green-700 border-green-200' },
-                  { key: 'announcement' as CategoryType, label: 'お知らせ', icon: '📢', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-                  { key: 'manual' as CategoryType, label: '業務マニュアル', icon: '📖', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-                ]).map(tab => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setCategoryTab(tab.key)}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md border transition-all ${categoryTab === tab.key
-                      ? `${tab.color} border-current shadow-sm scale-105`
-                      : 'bg-white border-diletto-gray/10 text-diletto-gray-light hover:border-diletto-gray/30 hover:text-diletto-ink'
-                      }`}
-                  >
-                    <span className="text-lg">{tab.icon}</span>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <CategoryManager key={categoryTab} type={categoryTab} />
+            <CardContent>
+              <a
+                href="/admin/documents"
+                className="block rounded-md border border-diletto-gray/15 hover:border-diletto-blue/40 hover:bg-diletto-blue/[0.03] p-4 transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-diletto-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                    📄
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-diletto-ink text-sm">書類テンプレート管理を開く</h3>
+                    <p className="text-xs text-diletto-gray mt-0.5">PDF アップロード／タグ配置／並び替え／一括 PDF 出力</p>
+                  </div>
+                  <span className="text-diletto-gray-light group-hover:text-diletto-blue group-hover:translate-x-1 transition-all">→</span>
+                </div>
+              </a>
             </CardContent>
           </Card>
         </TabsContent>
@@ -564,18 +611,57 @@ export default function SettingsPage() {
   );
 }
 
-function NavCard({ title, icon, description, onClick }: { title: string; icon: string; description: string; onClick: () => void }) {
+/* href 指定なら別ページ遷移（→アイコン付き）、onClick 指定なら同ページ内タブ切替。
+   目的別のナビゲーションが視覚的に区別できるように。 */
+function NavCard({
+  title,
+  icon,
+  description,
+  onClick,
+  href,
+}: {
+  title: string;
+  icon: string;
+  description: string;
+  onClick?: () => void;
+  href?: string;
+}) {
+  const inner = (
+    <CardContent className="p-5 flex items-center gap-4">
+      <div className="h-12 w-12 rounded-2xl bg-diletto-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-bold text-diletto-ink text-sm flex items-center gap-1.5">
+          {title}
+          {href && (
+            <span className="text-[10px] font-normal text-diletto-blue/70 bg-diletto-blue/10 rounded px-1.5 py-0.5">
+              別ページ
+            </span>
+          )}
+        </h3>
+        <p className="text-[10px] text-diletto-gray truncate">{description}</p>
+      </div>
+      {href && (
+        <span className="text-diletto-gray-light group-hover:text-diletto-blue group-hover:translate-x-1 transition-all">
+          →
+        </span>
+      )}
+    </CardContent>
+  );
+
+  const cls = 'cursor-pointer hover:border-diletto-blue/50 hover:shadow-md transition-all group overflow-hidden border-diletto-gray/10 block';
+
+  if (href) {
+    return (
+      <a href={href} className="contents">
+        <Card className={cls}>{inner}</Card>
+      </a>
+    );
+  }
   return (
-    <Card onClick={onClick} className="cursor-pointer hover:border-diletto-blue/50 hover:shadow-md transition-all group overflow-hidden border-diletto-gray/10">
-      <CardContent className="p-5 flex items-center gap-4">
-        <div className="h-12 w-12 rounded-2xl bg-diletto-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-diletto-ink text-sm">{title}</h3>
-          <p className="text-[10px] text-diletto-gray truncate">{description}</p>
-        </div>
-      </CardContent>
+    <Card onClick={onClick} className={cls}>
+      {inner}
     </Card>
   );
 }
@@ -588,6 +674,7 @@ type FacilityRow = {
   display_order: number;
   shift_enabled: boolean;
   transport_enabled: boolean;
+  daily_report_template: string;
 };
 
 function FacilitySortableList({

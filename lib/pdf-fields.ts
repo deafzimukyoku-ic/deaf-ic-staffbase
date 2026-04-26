@@ -23,8 +23,13 @@ export const employeeFields: FieldOption[] = [
   { value: 'postal_code', label: '郵便番号' },
   { value: 'address', label: '住所' },
   { value: 'phone', label: '電話番号' },
+  /* facility_name / facility_address は仮想フィールド。
+     employees.facility_id を resolver 側で facilities テーブルへ join して値を返す。 */
+  { value: 'facility_name', label: '所属（事業所名）' },
+  { value: 'facility_address', label: '所属住所' },
   { value: 'position', label: '役職' },
   { value: 'join_date', label: '入社日' },
+  { value: 'years_of_service', label: '勤続年数' },
   { value: 'employee_number', label: '従業員NO' },
   { value: 'email', label: 'メールアドレス' },
   { value: 'work_location', label: '勤務地' },
@@ -32,6 +37,14 @@ export const employeeFields: FieldOption[] = [
   { value: 'my_number', label: '個人番号（マイナンバー）' },
   { value: 'previous_employer', label: '最終就職先' },
   { value: 'qualifications', label: '資格' },
+  // 振込先口座
+  /* tenant.bank_name は会社情報の社員選択銀行を返す既存タグ。
+     こちらは employees テーブル直の口座情報（プロフィール基本タブの「振込先口座」カード）。 */
+  { value: 'bank_name', label: '振込先銀行' },
+  { value: 'bank_branch_name', label: '支店名（ゆうちょは記号）' },
+  { value: 'bank_account_type', label: '口座種別' },
+  { value: 'bank_account_number', label: '口座番号（ゆうちょは番号）' },
+  { value: 'bank_account_holder', label: '口座名義' },
   // マイカー通勤
   { value: 'car_model', label: '車種' },
   { value: 'car_plate_number', label: '車両ナンバー' },
@@ -44,6 +57,16 @@ export const employeeFields: FieldOption[] = [
   { value: 'vehicle_inspection_expiry', label: '車検有効期限' },
   { value: 'parking_location', label: '駐車場所' },
   { value: 'commute_distance', label: '通勤距離' },
+  // 公共交通機関通勤
+  { value: 'commute_method', label: '通勤手段' },
+  { value: 'commute_time_minutes', label: '通勤時間（分）' },
+  { value: 'route_section1_route', label: '通勤区間1 乗車区間' },
+  { value: 'route_section1_transport', label: '通勤区間1 利用機関' },
+  { value: 'route_section1_cost', label: '通勤区間1 金額' },
+  { value: 'route_section2_route', label: '通勤区間2 乗車区間' },
+  { value: 'route_section2_transport', label: '通勤区間2 利用機関' },
+  { value: 'route_section2_cost', label: '通勤区間2 金額' },
+  { value: 'commute_route_detail', label: '通勤経路（詳細）' },
   // 運転関連
   { value: 'driving_experience', label: '運転経歴' },
   { value: 'accident_history', label: '事故・違反歴' },

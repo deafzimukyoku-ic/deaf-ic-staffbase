@@ -2,12 +2,15 @@ import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
 import type { PlaceholderMapping } from '@/lib/types';
 import type { Employee, Tenant } from '@/lib/types';
+import { formatEmployeeFieldValue, stripEmojiForPdf } from '@/lib/employee-value-format';
 
 interface FillContext {
   employee: Employee;
   tenant: Tenant;
   formData: Record<string, unknown>;
   bankName?: string;
+  facilityName?: string;
+  facilityAddress?: string;
 }
 
 /**
@@ -24,14 +27,21 @@ function resolveValues(
 
     switch (m.source_type) {
       case 'employee': {
-        if (m.source_field.includes('+')) {
+        const empRec = ctx.employee as unknown as Record<string, unknown>;
+        /* facility_name / facility_address は仮想フィールド（ctx 経由） */
+        if (m.source_field === 'facility_name') {
+          /* 書類用は絵文字 prefix を除去（PDF 側と挙動を揃える） */
+          value = stripEmojiForPdf(ctx.facilityName || '');
+        } else if (m.source_field === 'facility_address') {
+          value = ctx.facilityAddress || '';
+        } else if (m.source_field.includes('+')) {
           // 結合フィールド（例: last_name+first_name）
           const parts = m.source_field.split('+');
           value = parts
-            .map((f) => (ctx.employee as unknown as Record<string, unknown>)[f.trim()] ?? '')
+            .map((f) => formatEmployeeFieldValue(f.trim(), empRec[f.trim()]))
             .join('');
         } else {
-          value = String((ctx.employee as unknown as Record<string, unknown>)[m.source_field] ?? '');
+          value = formatEmployeeFieldValue(m.source_field, empRec[m.source_field]);
         }
         break;
       }
