@@ -29,7 +29,11 @@ export type ScheduleCellData = {
   note: string | null;
   entry_id?: string | null;
   attendance_status?: AttendanceStatus;
+  /** Phase 64: キャンセル待ちの順番 (1〜10)。waitlist 以外は null。 */
+  waitlist_order?: number | null;
 };
+
+const WAITLIST_MARKS = '①②③④⑤⑥⑦⑧⑨⑩';
 
 interface Props {
   year: number;
@@ -77,14 +81,24 @@ export default function ScheduleGridFull({
   });
 
   const dailyCounts = new Map<string, number>();
+  /* Phase 64: 日別キャンセル待ち件数（同日内重複可、cell 単位カウント） */
+  const dailyWaitlistCounts = new Map<string, number>();
   dates.forEach((d) => {
     let count = 0;
+    let waitlistCount = 0;
     children.forEach((child) => {
       const cell = cellMap.get(`${child.id}_${d.dateStr}`);
-      if (cell && (cell.pickup_time || cell.dropoff_time)) count++;
+      if (!cell) return;
+      if (cell.attendance_status === 'waitlist') {
+        waitlistCount++;
+        return;
+      }
+      if (cell.pickup_time || cell.dropoff_time) count++;
     });
     dailyCounts.set(d.dateStr, count);
+    dailyWaitlistCounts.set(d.dateStr, waitlistCount);
   });
+  const hasAnyWaitlist = Array.from(dailyWaitlistCounts.values()).some((n) => n > 0);
 
   const today = todayStr();
   const todayInMonth = dates.some((d) => d.dateStr === today);
@@ -186,10 +200,12 @@ export default function ScheduleGridFull({
                 const hasEntry = !!cell && (cell.entry_id ?? null) !== null;
                 const isAbsent = cell?.attendance_status === 'absent';
                 const isLeave = cell?.attendance_status === 'leave';
-                const isOff = isLeave || (hasEntry && !hasTimes && !isAbsent);
+                const isWaitlist = cell?.attendance_status === 'waitlist';
+                const isOff = isLeave || (hasEntry && !hasTimes && !isAbsent && !isWaitlist);
 
                 let bg = getCellBg(d.dow);
                 if (isAbsent) bg = 'var(--red-pale)';
+                else if (isWaitlist) bg = 'rgba(0,0,0,0.06)';
                 else if (isOff) bg = 'rgba(0,0,0,0.04)';
 
                 const isTodayCol = d.dateStr === today;
@@ -206,7 +222,7 @@ export default function ScheduleGridFull({
                     }}
                     onClick={() => onCellClick(child.id, d.dateStr)}
                     title={
-                      isAbsent ? '欠席' : isOff ? 'お休み' : hasTimes ? '出席' : '未入力（クリックで編集）'
+                      isAbsent ? '欠席' : isWaitlist ? 'キャンセル待ち' : isOff ? 'お休み' : hasTimes ? '出席' : '未入力（クリックで編集）'
                     }
                   >
                     {cell?.note ? (
@@ -215,6 +231,25 @@ export default function ScheduleGridFull({
                       </span>
                     ) : isAbsent ? (
                       <span className="text-xs font-bold" style={{ color: 'var(--red)' }}>欠席</span>
+                    ) : isWaitlist ? (
+                      <div
+                        className="flex flex-col gap-0 leading-tight"
+                        style={{ fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        <span className="text-xs font-bold" style={{ color: 'var(--ink-2)' }}>
+                          キャ待{cell?.waitlist_order ? ` ${WAITLIST_MARKS.charAt(cell.waitlist_order - 1)}` : ''}
+                        </span>
+                        {cell?.pickup_time && (
+                          <span style={{ color: 'var(--ink-3)', fontSize: '0.68rem' }}>
+                            {formatHM(cell.pickup_time)}
+                          </span>
+                        )}
+                        {cell?.dropoff_time && (
+                          <span style={{ color: 'var(--ink-3)', fontSize: '0.68rem' }}>
+                            {formatHM(cell.dropoff_time)}
+                          </span>
+                        )}
+                      </div>
                     ) : isOff ? (
                       <span className="text-xs font-bold" style={{ color: 'var(--ink-3)' }}>お休み</span>
                     ) : hasTimes ? (
@@ -285,6 +320,44 @@ export default function ScheduleGridFull({
               );
             })}
           </tr>
+
+          {/* Phase 64: 月内に1件でも waitlist があれば、利用数行の下にキャンセル待ち件数行 */}
+          {hasAnyWaitlist && (
+            <tr>
+              <td
+                className="schedule-grid-sticky-corner sticky left-0 bottom-0 z-50 px-4 py-2 font-bold whitespace-nowrap"
+                style={{
+                  borderTop: '1px dashed var(--rule-strong)',
+                  borderRight: '2px solid var(--rule-strong)',
+                  color: 'var(--ink-2)',
+                  fontSize: '0.78rem',
+                  background: 'var(--bg)',
+                }}
+              >
+                キャンセル待ち
+              </td>
+              {dates.map((d) => {
+                const wcount = dailyWaitlistCounts.get(d.dateStr) || 0;
+                const isTodayCol = d.dateStr === today;
+                return (
+                  <td
+                    key={d.dateStr}
+                    className="sticky bottom-0 z-40 px-1 py-2 text-center font-bold"
+                    style={{
+                      borderTop: '1px dashed var(--rule-strong)',
+                      borderRight: isTodayCol ? '2px solid var(--accent)' : '1px solid var(--rule)',
+                      borderLeft: isTodayCol ? '2px solid var(--accent)' : undefined,
+                      color: wcount > 0 ? 'var(--ink-2)' : 'var(--ink-3)',
+                      fontSize: '0.78rem',
+                      background: isTodayCol ? 'var(--accent-pale)' : getStickyBg(d.dow),
+                    }}
+                  >
+                    {wcount > 0 ? wcount : ''}
+                  </td>
+                );
+              })}
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

@@ -105,6 +105,30 @@ export type TransportColumnKey = (typeof DEFAULT_TRANSPORT_COLUMN_ORDER)[number]
 export const PUBLISH_STATUSES = ['draft', 'ready', 'published'] as const;
 export type PublishStatusConst = (typeof PUBLISH_STATUSES)[number];
 
+// --- Phase 66: 利用料金表 / 児童料金属性 (migration 126〜128) ---
+/** おやつ消耗品代（円/日、固定）。出席日数 × この値で算出 */
+export const SNACK_FEE_PER_DAY = 50;
+/* 公文代は児童ごとの kumon_monthly_fee（円、null=計上しない）に統一。固定値定数は廃止。 */
+/** 利用者上限負担額の階層（migration 126 children.copay_tier の許容値）*/
+export const COPAY_TIERS = ['zero', '4600', '37200', 'freeform'] as const;
+export type CopayTierConst = (typeof COPAY_TIERS)[number];
+/** 上限階層の数値表現（freeform は別途 freeform_amount を参照）*/
+export const COPAY_TIER_AMOUNT: Record<Exclude<CopayTierConst, 'freeform'>, number> = {
+  zero: 0,
+  '4600': 4600,
+  '37200': 37200,
+};
+export const COPAY_TIER_LABELS: Record<CopayTierConst, string> = {
+  zero: '0 円',
+  '4600': '¥4,600',
+  '37200': '¥37,200',
+  freeform: '自由入力',
+};
+/** 名古屋市は preschool（未就学・未指定年齢）も無償化対象。市町村文字列の正規表現的な完全一致判定に使用 */
+export const NAGOYA_FREE_PRESCHOOL_MUNICIPALITY = '名古屋市';
+/** 無償化対象の grade_type 集合（年少/年中/年長は全市区町村で対象）*/
+export const FREE_GRADES_NATIONWIDE = ['nursery_3', 'nursery_4', 'nursery_5'] as const;
+
 // 送迎方向
 export const TRANSPORT_DIRECTIONS = ['pickup', 'dropoff'] as const;
 export type TransportDirection = (typeof TRANSPORT_DIRECTIONS)[number];

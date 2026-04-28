@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { generateShiftAssignments, type ShiftWarning } from '@/lib/logic/generateShift';
+import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
 import type {
   ShiftAssignmentType,
   ShiftAssignmentRow,
@@ -83,6 +84,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   const [coreStartTime, setCoreStartTime] = useState<string | null>(null);
   const [coreEndTime, setCoreEndTime] = useState<string | null>(null);
   const [minQualifiedStaff, setMinQualifiedStaff] = useState<number>(2);
+  /* migration 125: シフトのみモードの事業所は利用表が存在しない前提でシフト生成可能にする */
+  const [shiftOnlyMode, setShiftOnlyMode] = useState(false);
 
   // 月全体の publish_status を集約。「全行 published」なら published、「全行 ready」なら ready、
   // 「全行 draft」なら draft、混在なら mixed。
@@ -90,6 +93,13 @@ export default function ShiftFull({ role }: ShiftFullProps) {
 
   const [editingCell, setEditingCell] = useState<{ staffId: string; date: string } | null>(null);
   const [editType, setEditType] = useState<ShiftAssignmentType>('normal');
+  /* Phase 66+: 分割シフト（午前・午後など 2 コマ）。本家 shift-puzzle Phase 65 から移植。
+     deaf-ic は publish_status を含めて (employee_id, date) を 1 日まるごと置換する canonical 保存を採用。 */
+  const [isSplit, setIsSplit] = useState(false);
+  const [split2StartH, setSplit2StartH] = useState('14');
+  const [split2StartM, setSplit2StartM] = useState('00');
+  const [split2EndH, setSplit2EndH] = useState('18');
+  const [split2EndM, setSplit2EndM] = useState('00');
   const [startH, setStartH] = useState('09');
   const [startM, setStartM] = useState('00');
   const [endH, setEndH] = useState('17');
@@ -103,8 +113,22 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   const tenantId = staff[0]?.tenant_id ?? '';
 
   const childrenCountByDate = useMemo(() => {
+    /* Phase 64: 必要職員数の算定から waitlist / absent / leave を除外 */
     const m = new Map<string, number>();
     for (const e of scheduleEntries) {
+      if (e.attendance_status === 'absent') continue;
+      if (e.attendance_status === 'leave') continue;
+      if (e.attendance_status === 'waitlist') continue;
+      m.set(e.date, (m.get(e.date) ?? 0) + 1);
+    }
+    return m;
+  }, [scheduleEntries]);
+
+  /* Phase 64: 日別キャンセル待ち件数（バッジ表示用） */
+  const childrenWaitlistCountByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of scheduleEntries) {
+      if (e.attendance_status !== 'waitlist') continue;
       m.set(e.date, (m.get(e.date) ?? 0) + 1);
     }
     return m;
@@ -126,7 +150,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       const { data: emps, error: eErr } = await supabase
         .from('employees')
         .select(
-          'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
+          'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
         )
         .eq('facility_id', facilityId)
         .eq('status', 'active')
@@ -150,6 +174,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         pickup_transport_areas: e.pickup_transport_areas ?? [],
         dropoff_transport_areas: e.dropoff_transport_areas ?? [],
         qualifications: e.qualifications ?? [],
+        /* migration 129: シフト用資格は shift_qualifications。未マイグレ環境では qualifications にフォールバック。 */
+        shift_qualifications: e.shift_qualifications ?? e.qualifications ?? [],
         is_qualified: !!e.is_qualified,
         is_driver: !!e.is_driver,
         is_attendant: !!e.is_attendant,
@@ -188,6 +214,14 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       setCoreStartTime((fss?.core_start_time as string | null) ?? null);
       setCoreEndTime((fss?.core_end_time as string | null) ?? null);
       setMinQualifiedStaff((fss?.min_qualified_staff as number | null) ?? 2);
+
+      // facility.shift_only_mode（migration 125）: 利用表なしでシフト生成を許可
+      const { data: facRow } = await supabase
+        .from('facilities')
+        .select('shift_only_mode')
+        .eq('id', facilityId)
+        .maybeSingle();
+      setShiftOnlyMode((facRow?.shift_only_mode as boolean | null) === true);
 
       setStaff(staffRows);
       setScheduleEntries((entries ?? []) as ScheduleEntryRow[]);
@@ -298,30 +332,63 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       alert('公開済みシフトは編集できません。「公開取消」で ready に戻してから編集してください。');
       return;
     }
-    const cell = cells.find((c) => c.staff_id === staffId && c.date === date);
     const s = staff.find((x) => x.id === staffId);
-    if (cell) {
-      setEditType(cell.assignment_type);
-      if (cell.start_time) {
-        const [h, m] = cell.start_time.split(':');
-        setStartH(h);
-        setStartM(m);
-      } else {
-        setStartH(s?.default_start_time?.split(':')[0] ?? '09');
-        setStartM(s?.default_start_time?.split(':')[1] ?? '00');
-      }
-      if (cell.end_time) {
-        const [h, m] = cell.end_time.split(':');
-        setEndH(h);
-        setEndM(m);
-      } else {
-        setEndH(s?.default_end_time?.split(':')[0] ?? '17');
-        setEndM(s?.default_end_time?.split(':')[1] ?? '00');
-      }
+
+    /* Phase 66+: 既存の全セグメントを segment_order 順で取得。
+       normal が 2 つ以上あれば分割シフトとして復元、1 つなら単発、0 ならデフォルト値で開始。
+       off/public_holiday/paid_leave 行は分割対象外なので 2 コマ目候補から除外。 */
+    const allSegs = cells
+      .filter((c) => c.staff_id === staffId && c.date === date)
+      .sort((a, b) => (a.segment_order ?? 0) - (b.segment_order ?? 0));
+    const normalSegs = allSegs.filter((c) => c.assignment_type === 'normal');
+    const primaryCell =
+      allSegs.find((c) => c.assignment_type !== 'off') ?? allSegs[0];
+
+    if (primaryCell) {
+      setEditType(primaryCell.assignment_type);
+      setEditNote(primaryCell.note ?? '');
     } else {
       setEditType('normal');
+      setEditNote('');
     }
-    setEditNote(cell?.note ?? '');
+
+    /* 1 コマ目（または単発時の勤務時間）*/
+    const seg1 = normalSegs[0] ?? (primaryCell?.assignment_type === 'normal' ? primaryCell : null);
+    if (seg1?.start_time) {
+      const [h, m] = seg1.start_time.split(':');
+      setStartH(h);
+      setStartM(m);
+    } else {
+      setStartH(s?.default_start_time?.split(':')[0] ?? '09');
+      setStartM(s?.default_start_time?.split(':')[1] ?? '00');
+    }
+    if (seg1?.end_time) {
+      const [h, m] = seg1.end_time.split(':');
+      setEndH(h);
+      setEndM(m);
+    } else {
+      setEndH(s?.default_end_time?.split(':')[0] ?? '17');
+      setEndM(s?.default_end_time?.split(':')[1] ?? '00');
+    }
+
+    /* 2 コマ目: 既存に 2 件以上 normal があれば復元、無ければデフォルト値 */
+    const seg2 = normalSegs[1];
+    if (seg2?.start_time && seg2?.end_time) {
+      const [h1, m1] = seg2.start_time.split(':');
+      const [h2, m2] = seg2.end_time.split(':');
+      setSplit2StartH(h1);
+      setSplit2StartM(m1);
+      setSplit2EndH(h2);
+      setSplit2EndM(m2);
+      setIsSplit(true);
+    } else {
+      setSplit2StartH('14');
+      setSplit2StartM('00');
+      setSplit2EndH('18');
+      setSplit2EndM('00');
+      setIsSplit(false);
+    }
+
     setEditingCell({ staffId, date });
   };
 
@@ -329,32 +396,55 @@ export default function ShiftFull({ role }: ShiftFullProps) {
     if (!editingCell || !facilityId || !tenantId) return;
     // 現状の publish_status を維持（draft/ready で編集可、published は handleCellClick で弾く）
     const currentPublish: PublishStatus = monthStatus === 'ready' ? 'ready' : 'draft';
+    const noteForSave =
+      (editType === 'normal' || editType === 'public_holiday' || editType === 'off') &&
+      editNote.trim()
+        ? editNote.trim()
+        : null;
 
-    const { error: upErr } = await supabase.from('shift_assignments').upsert(
-      [
-        {
-          tenant_id: tenantId,
-          facility_id: facilityId,
-          employee_id: editingCell.staffId,
-          date: editingCell.date,
-          assignment_type: editType,
-          start_time: editType === 'normal' ? `${startH}:${startM}` : null,
-          end_time: editType === 'normal' ? `${endH}:${endM}` : null,
-          is_confirmed: monthStatus === 'ready' || monthStatus === 'published',
-          publish_status: currentPublish,
-          segment_order: 0,
-          note:
-            (editType === 'normal' || editType === 'public_holiday' || editType === 'off') &&
-            editNote.trim()
-              ? editNote.trim()
-              : null,
-        },
-      ],
-      { onConflict: 'tenant_id,facility_id,employee_id,date,segment_order' }
-    );
+    /* Phase 66+: 1 日まるごと置換で保存。segment_order の採番はサーバ側（ヘルパー）で 0..N。 */
+    let segments: ShiftSegmentInput[];
+    if (editType === 'normal') {
+      const seg1 = {
+        start: `${startH.padStart(2, '0')}:${startM.padStart(2, '0')}`,
+        end: `${endH.padStart(2, '0')}:${endM.padStart(2, '0')}`,
+      };
+      if (isSplit) {
+        const seg2 = {
+          start: `${split2StartH.padStart(2, '0')}:${split2StartM.padStart(2, '0')}`,
+          end: `${split2EndH.padStart(2, '0')}:${split2EndM.padStart(2, '0')}`,
+        };
+        /* 開始時刻が早い方を 1 コマ目に。表示順を時系列で揃える。
+           メモは時系列の 1 コマ目に紐付ける（表示時の primary 行と一致させる）。 */
+        const [first, second] = seg1.start <= seg2.start ? [seg1, seg2] : [seg2, seg1];
+        segments = [
+          { start_time: first.start, end_time: first.end, assignment_type: 'normal', note: noteForSave },
+          { start_time: second.start, end_time: second.end, assignment_type: 'normal', note: null },
+        ];
+      } else {
+        segments = [
+          { start_time: seg1.start, end_time: seg1.end, assignment_type: 'normal', note: noteForSave },
+        ];
+      }
+    } else {
+      /* normal 以外（公休 / 有給 / 休み）は時刻なしの 1 行のみ */
+      segments = [
+        { start_time: null, end_time: null, assignment_type: editType, note: noteForSave },
+      ];
+    }
 
-    if (upErr) {
-      alert('保存失敗: ' + upErr.message);
+    const result = await replaceShiftDay({
+      supabase,
+      tenantId,
+      facilityId,
+      employeeId: editingCell.staffId,
+      date: editingCell.date,
+      segments,
+      isConfirmed: monthStatus === 'ready' || monthStatus === 'published',
+      publishStatus: currentPublish,
+    });
+    if (!result.ok) {
+      alert(result.error);
       return;
     }
     setEditingCell(null);
@@ -481,7 +571,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
             <Button
               variant="primary"
               onClick={handleGenerate}
-              disabled={staff.length === 0 || scheduleEntries.length === 0}
+              disabled={staff.length === 0 || (!shiftOnlyMode && scheduleEntries.length === 0)}
             >
               シフト生成
             </Button>
@@ -595,6 +685,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                 warnings={warnings}
                 onCellClick={handleCellClick}
                 childrenCountByDate={childrenCountByDate}
+                childrenWaitlistCountByDate={childrenWaitlistCountByDate}
                 coreStartTime={coreStartTime}
                 coreEndTime={coreEndTime}
                 minQualifiedStaff={minQualifiedStaff}
@@ -632,12 +723,19 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                       </span>{' '}
                       登録職員: <b>{staff.length}名</b>
                     </div>
-                    <div>
-                      <span style={{ color: scheduleEntries.length > 0 ? 'var(--green)' : 'var(--red)' }}>
-                        {scheduleEntries.length > 0 ? '✓' : '×'}
-                      </span>{' '}
-                      利用予定: <b>{scheduleEntries.length}件</b>
-                    </div>
+                    {!shiftOnlyMode && (
+                      <div>
+                        <span style={{ color: scheduleEntries.length > 0 ? 'var(--green)' : 'var(--red)' }}>
+                          {scheduleEntries.length > 0 ? '✓' : '×'}
+                        </span>{' '}
+                        利用予定: <b>{scheduleEntries.length}件</b>
+                      </div>
+                    )}
+                    {shiftOnlyMode && (
+                      <div style={{ color: 'var(--ink-3)' }}>
+                        ※ シフトのみモード: 利用予定の登録は不要です
+                      </div>
+                    )}
                     <div>
                       <span style={{ color: 'var(--ink-3)' }}>○</span> 休み希望:{' '}
                       <b>{shiftRequests.length}件</b>{' '}
@@ -648,7 +746,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                   <Button
                     variant="primary"
                     onClick={handleGenerate}
-                    disabled={staff.length === 0 || scheduleEntries.length === 0}
+                    disabled={staff.length === 0 || (!shiftOnlyMode && scheduleEntries.length === 0)}
                   >
                     シフト生成
                   </Button>
@@ -660,9 +758,14 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                     <li>※ 休み希望は未提出でも生成できます。</li>
                     <li>※ 後から再生成すれば最新の休み希望が反映されます。</li>
                     <li>※ 生成後もセルをクリックして個別調整できます。</li>
-                    {(staff.length === 0 || scheduleEntries.length === 0) && (
+                    {shiftOnlyMode && (
+                      <li>※ シフトのみモード: 利用予定がなくても各日 最低 3 名で生成されます。</li>
+                    )}
+                    {(staff.length === 0 || (!shiftOnlyMode && scheduleEntries.length === 0)) && (
                       <li style={{ color: 'var(--red)', fontWeight: 600, marginTop: 6 }}>
-                        ⚠ 職員と利用予定が両方登録されている必要があります。
+                        {shiftOnlyMode
+                          ? '⚠ 職員が登録されている必要があります。'
+                          : '⚠ 職員と利用予定が両方登録されている必要があります。'}
                       </li>
                     )}
                   </ul>
@@ -739,9 +842,22 @@ export default function ShiftFull({ role }: ShiftFullProps) {
 
             {editType === 'normal' && (
               <div className="flex flex-col gap-4 mt-2 p-4 rounded-lg" style={{ background: 'var(--bg)' }}>
+                {/* Phase 66+: 分割シフトトグル（午前・午後など 2 コマに分割） */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isSplit}
+                    onChange={(e) => setIsSplit(e.target.checked)}
+                    className="w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-sm font-semibold" style={{ color: 'var(--ink-2)' }}>
+                    分割シフト（午前・午後など 2 コマに分けて勤務）
+                  </span>
+                </label>
+
                 <div>
                   <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--ink-2)' }}>
-                    勤務時間
+                    {isSplit ? '1 コマ目' : '勤務時間'}
                   </label>
                   <div className="flex items-center gap-2">
                     <input
@@ -773,6 +889,43 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                     />
                   </div>
                 </div>
+
+                {isSplit && (
+                  <div>
+                    <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--ink-2)' }}>
+                      2 コマ目
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={split2StartH}
+                        onChange={(e) => setSplit2StartH(e.target.value.slice(0, 2))}
+                        className="w-12 text-center font-bold text-lg bg-transparent border-b-2 border-[var(--accent)] outline-none"
+                      />
+                      <span className="font-bold">:</span>
+                      <input
+                        type="text"
+                        value={split2StartM}
+                        onChange={(e) => setSplit2StartM(e.target.value.slice(0, 2))}
+                        className="w-12 text-center font-bold text-lg bg-transparent border-b-2 border-[var(--accent)] outline-none"
+                      />
+                      <span className="mx-2 text-gray-400">〜</span>
+                      <input
+                        type="text"
+                        value={split2EndH}
+                        onChange={(e) => setSplit2EndH(e.target.value.slice(0, 2))}
+                        className="w-12 text-center font-bold text-lg bg-transparent border-b-2 border-[var(--accent)] outline-none"
+                      />
+                      <span className="font-bold">:</span>
+                      <input
+                        type="text"
+                        value={split2EndM}
+                        onChange={(e) => setSplit2EndM(e.target.value.slice(0, 2))}
+                        className="w-12 text-center font-bold text-lg bg-transparent border-b-2 border-[var(--accent)] outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { EMPLOYEE_ROLES } from '@/lib/constants';
 import { AIDiagnosisPanel } from '@/components/admin/AIDiagnosisPanel';
 import { EmployeeImagesCard } from '@/components/employee/EmployeeImagesCard';
+import QualificationsInput from '@/components/employee/QualificationsInput';
 import type { Employee, DocumentTemplate, DocumentSubmission, Facility } from '@/lib/types';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -98,6 +99,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [basicEditing, setBasicEditing] = useState(false);
   const [basicDraft, setBasicDraft] = useState<Partial<Employee>>({});
   const [basicSaving, setBasicSaving] = useState(false);
+  /* migration 129: 保有資格（個人の自由入力）を admin/manager からも編集可能にする。 */
+  const [qualEditing, setQualEditing] = useState(false);
+  const [qualDraft, setQualDraft] = useState<string[]>([]);
+  const [qualSaving, setQualSaving] = useState(false);
 
   const router = useRouter();
   const supabase = createClient();
@@ -308,10 +313,29 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     setBasicDraft({});
     setBasicEditing(false);
   }
+  /* employees テーブルで NOT NULL 制約のあるカラム。空文字を null 化すると DB エラーになるので、保存前にバリデーション。 */
+  const REQUIRED_BASIC_KEYS: ReadonlyArray<keyof Employee> = [
+    'last_name', 'first_name', 'last_name_kana', 'first_name_kana',
+  ];
+  const REQUIRED_BASIC_LABELS: Record<string, string> = {
+    last_name: '姓', first_name: '名', last_name_kana: '姓カナ', first_name_kana: '名カナ',
+  };
+
   async function saveBasicEdit() {
     if (!employee) return;
+    /* 必須カラムが空文字 / 空白のみで送られてきた場合は DB の NOT NULL 制約に引っかかる前にブロック。
+       basicDraft に未編集なら DB の既存値が使われるので undefined はスキップで OK。 */
+    for (const key of REQUIRED_BASIC_KEYS) {
+      const v = basicDraft[key];
+      if (v === undefined) continue;
+      if (typeof v !== 'string' || v.trim() === '') {
+        toast.error('保存に失敗しました', { description: `${REQUIRED_BASIC_LABELS[key as string]}は必須項目です` });
+        return;
+      }
+    }
     setBasicSaving(true);
-    /* undefined は無視、null と '' は意図された値として送る（クリア許可） */
+    /* undefined は無視、null と '' は意図された値として送る（クリア許可）。
+       ただし上のバリデーションで NOT NULL 列の '' は弾いている。 */
     const payload: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(basicDraft)) {
       if (v === undefined) continue;
@@ -330,6 +354,34 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   }
   function updBasic<K extends keyof Employee>(key: K, value: Employee[K]) {
     setBasicDraft((d) => ({ ...d, [key]: value }));
+  }
+
+  /* migration 129: 保有資格（個人自由入力）を admin/manager から編集 */
+  function startQualEdit() {
+    if (!employee) return;
+    setQualDraft(Array.isArray(employee.qualifications) ? [...employee.qualifications] : []);
+    setQualEditing(true);
+  }
+  function cancelQualEdit() {
+    setQualDraft([]);
+    setQualEditing(false);
+  }
+  async function saveQualifications() {
+    if (!employee) return;
+    setQualSaving(true);
+    const { error } = await supabase
+      .from('employees')
+      .update({ qualifications: qualDraft })
+      .eq('id', employee.id);
+    if (error) {
+      toast.error('保存に失敗しました', { description: error.message });
+      setQualSaving(false);
+      return;
+    }
+    setEmployee({ ...employee, qualifications: qualDraft });
+    setQualEditing(false);
+    setQualSaving(false);
+    toast.success('保有資格を更新しました');
   }
 
   async function handleSaveFacility() {
@@ -670,12 +722,52 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
               <div className="grid gap-8 sm:grid-cols-3">
                 <div>
-                  <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">保有資格</Label>
-                  <p className="text-sm font-medium pl-1">
-                    {Array.isArray(employee.qualifications) && employee.qualifications.length > 0
-                      ? employee.qualifications.join('、')
-                      : '-'}
-                  </p>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs text-diletto-gray-light font-bold block">保有資格</Label>
+                    {!qualEditing ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={startQualEdit}
+                        className="text-xs h-6 px-2"
+                        title="保有資格を編集"
+                      >
+                        ✏ 編集
+                      </Button>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={cancelQualEdit}
+                          disabled={qualSaving}
+                          className="text-xs h-6 px-2"
+                        >
+                          キャンセル
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={saveQualifications}
+                          disabled={qualSaving}
+                          className="text-xs h-6 px-2"
+                        >
+                          {qualSaving ? '保存中…' : '保存'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {qualEditing ? (
+                    <QualificationsInput value={qualDraft} onChange={setQualDraft} />
+                  ) : (
+                    <p className="text-sm font-medium pl-1">
+                      {Array.isArray(employee.qualifications) && employee.qualifications.length > 0
+                        ? employee.qualifications.join('、')
+                        : '-'}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">最終学歴・前職</Label>

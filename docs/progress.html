@@ -437,6 +437,69 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </div>
 </div>
 
+<!-- Phase 64: キャンセル待ち + 社員名前保存修正 -->
+<div class="phase">
+  <h2>Phase 64: キャンセル待ち (waitlist) + 社員名保存エラー修正 <span class="phase-pct">完了 100%（migration 適用 + 動作確認待ち）</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>社員 名前/カナ NOT NULL バリデーション</td><td class="files">app/(admin)/admin/employees/[id]/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>REQUIRED_BASIC_KEYS で空文字 / 空白を保存前にブロック。error-log 記録済</td></tr>
+      <tr><td>migration 124 attendance_waitlist</td><td class="files">supabase/migrations/124_attendance_waitlist.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>CHECK に waitlist 追加 + waitlist_order 列 + 範囲CHECK + RPC 第3引数化（leave 対応も同時に修正）。<b>本番 Supabase へのユーザー手動適用が必要</b></td></tr>
+      <tr><td>型定義</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>AttendanceStatus に waitlist / ScheduleEntryRow に waitlist_order: number | null</td></tr>
+      <tr><td>利用予定 UI</td><td class="files">components/shift/ScheduleFull.tsx, ScheduleGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>4ボタン化 + 5×2 順番ピッカー + セル「キャ待①」 + 利用数行下にキャンセル待ち行 + RPC 第3引数経由</td></tr>
+      <tr><td>送迎 UI</td><td class="files">components/shift/TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>waitlist 集約バー + 「利用に変える」確認モーダル + 「⏳ 待 N」バッジ + generate 入力から除外</td></tr>
+      <tr><td>シフト UI + 生成</td><td class="files">components/shift/ShiftFull.tsx, ShiftGridFull.tsx, lib/logic/generateShift.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>必要職員数算出から waitlist 除外 + 「待 N」バッジ + childrenWaitlistCountByDate 追加</td></tr>
+      <tr><td>日次出力 + 週次送迎 + 業務日報</td><td class="files">components/shift/DailyOutputFull.tsx, WeeklyTransportFull.tsx, DailyReportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>休憩 → キャンセル待ちセクションへ置換 + 集計から除外 + 業務日報に「待」セル文字追加</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">①兄弟同番号 OK（uniq 制約なし）②RPC は drop してから 3 引数で再定義（既存呼び出しは default NULL でそのまま動く）③admin/manager は ScheduleFull/TransportFull/ShiftFull を共有しているので両方一発反映 ④employee 側 my/shifts は publish 済みシフトのみ表示で waitlist の影響を受けない ⑤利用予定の集計行は dashed border でレイアウト崩れなし ⑥name 保存はトーストでフロント側ブロックなので DB ラウンドトリップしない</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Phase 65: 事業所「シフトのみモード」 -->
+<div class="phase">
+  <h2>Phase 65: 事業所「シフトのみモード」 <span class="phase-pct">完了 100%（migration 適用 + 動作確認待ち）</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>migration 125: facilities.shift_only_mode</td><td class="files">supabase/migrations/125_facility_shift_only_mode.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>boolean default false。本番 Supabase へのユーザー手動適用が必要。</td></tr>
+      <tr><td>Facility 型に shift_only_mode 追加</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>?: boolean（false / 未指定でフル機能）</td></tr>
+      <tr><td>admin layout サイドバーフィルタ</td><td class="files">app/(admin)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shiftOnlyMode=true で 4 項目（ダッシュボード / シフト表 / 休み希望 / 職員管理）に絞る</td></tr>
+      <tr><td>manager layout サイドバーフィルタ</td><td class="files">app/(manager)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>同上 + transport_enabled も同時にフィルタ対応（従来 admin のみだった）</td></tr>
+      <tr><td>設定画面に「シフトのみ」トグル追加</td><td class="files">app/(admin)/admin/settings/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>FacilityRowItem に 3 つ目のトグル。シフト / 送迎 / シフトのみ</td></tr>
+      <tr><td>CLAUDE.md 改定</td><td class="files">CLAUDE.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「送迎機能の ON/OFF 切替は実装しない」を撤回し、3 種フラグの設計を明示</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">①shift_only_mode=true でも事業所セレクタは残る（事業所切り替えてフル機能事業所に戻れる）②URL 直叩きで隠れたページに飛ぶことはできるが、サイドバー導線がないので誤遷移は起きにくい ③shiftFacilityId 切替で即座に sidebar が再フィルタされる（useMemo 依存に facilities, shiftFacilityId 入れた）④manager の facility 選択でも transport_enabled / shift_only_mode が反映されるよう FacilityLite を拡張</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Phase 66: イベント設定 + 利用料金表 -->
+<div class="phase">
+  <h2>Phase 66: イベント設定 + 利用料金表（5月分から運用） <span class="phase-pct">完了 100%（migration 126〜128 適用済 + 動作確認済）</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-A: 児童属性追加（料金関連）</td></tr>
+      <tr><td>migration 126</td><td class="files">supabase/migrations/126_children_billing_fields.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>municipality / copay_tier / copay_freeform_amount / daily_unit_cost / kumon_enabled 列追加</td></tr>
+      <tr><td>ChildRow 型拡張 + constants</td><td class="files">lib/types.ts, lib/constants.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>SNACK_FEE_PER_DAY=50, KUMON_MONTHLY_FEE=2000, COPAY_TIERS, NAGOYA</td></tr>
+      <tr><td>児童管理 UI に料金フィールド追加</td><td class="files">app/(admin)/admin/children, app/(manager)/mgr/children</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>市町村 / 公文 ON/OFF / 上限負担額（select+freeform）/ 1日単価（手入力）</td></tr>
+
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-B: イベント設定</td></tr>
+      <tr><td>migration 127</td><td class="files">supabase/migrations/127_events.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>events table（name, date, price, facility_id）+ RLS</td></tr>
+      <tr><td>イベント設定ページ</td><td class="files">app/(admin)/admin/shifts/events, app/(manager)/mgr/shifts/events</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>CRUD / 月切替 / facility 別</td></tr>
+
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-C: 利用料金表 出力</td></tr>
+      <tr><td>migration 128</td><td class="files">supabase/migrations/128_billing.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>billing_summaries + billing_event_participations テーブル + RLS</td></tr>
+      <tr><td>料金計算ロジック</td><td class="files">lib/logic/computeBilling.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>無償化判定 / copay 計算 / イベント参加集計（純関数）</td></tr>
+      <tr><td>利用料金表ページ + A4 横印刷</td><td class="files">app/(admin)/admin/shifts/output/billing, components/shift/BillingFull.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>月選択 → 自動計算 → 手動イベントチェック → 保存 → 印刷。manager mirror 含む</td></tr>
+
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-D: サイドバー アコーディオン化</td></tr>
+      <tr><td>シフト設定アコーディオン</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>事業所設定 / 職員管理 / 児童管理 / イベント設定 を「⚙️ シフト設定」アコーディオン内へ集約</td></tr>
+
+      <tr class="check"><td>別視点確認</td><td colspan="4">①「公文」=教材印刷代の社内呼称（Kumon ではない、誤解防止）②無償化は (年少/年中/年長) OR (preschool かつ 市町村='名古屋市')③利用負担額は 1日単価が無ければ上限額そのもの、あれば min(日数×単価, 上限)④イベント参加判定は手動チェック前提（present 自動セットは「初期値」のみ）⑤A4 横、列は PDF 完全準拠（市町村・氏名・出席日数・利用負担額・おやつ消耗品代・公文代・各イベント・請求額・受取日）⑥保存=billing_summaries 永続化、再印刷時は同じ数字が出る⑦manager 側も同等動作⑧月途中での児童属性変更は次回 fetch で反映、保存済み summary は不変</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>

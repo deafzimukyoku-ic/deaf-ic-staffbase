@@ -16,6 +16,7 @@ import {
 import { ja } from 'date-fns/locale';
 import { todayStr } from '@/lib/date/isToday';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
+import DatePopover, { type DayState as PopoverDayState } from '@/components/shift/DatePopover';
 
 /**
  * 日付ステッパ（shift-puzzle DateStepper の deaf-ic 移植）
@@ -23,12 +24,10 @@ import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
  *
  * 差分:
  * - useCurrentStaff / isDateOutOfRange への依存を削除（deaf-ic は employee 側 RLS）
- * - DatePopover の代わりにネイティブ <input type="date"> を使用（カレンダー UI 簡素化）
- *
- * dayStates は将来カレンダーポップアップを追加する際の API 互換のため残置。
+ * - 日付ボタンクリックで自前カレンダー (DatePopover) を表示（編集中/保存済/未割当ドット付き）
  */
 
-export type DayState = { locked?: boolean; unassigned?: boolean; editing?: boolean };
+export type DayState = PopoverDayState;
 
 type Props = {
   value: string; // YYYY-MM-DD
@@ -44,7 +43,7 @@ function toStr(d: Date): string {
   return format(d, 'yyyy-MM-dd');
 }
 
-export default function DateStepperFull({ value, onChange }: Props) {
+export default function DateStepperFull({ value, onChange, dayStates }: Props) {
   const today = todayStr();
   const dt = /^\d{4}-\d{2}-\d{2}$/.test(value) ? toDate(value) : new Date();
   const label = format(dt, 'yyyy年M月d日（E）', { locale: ja });
@@ -55,7 +54,8 @@ export default function DateStepperFull({ value, onChange }: Props) {
   const labelColor =
     holiday || dow === 0 ? 'var(--red, #d4625a)' : dow === 6 ? 'var(--accent, #4a7fb6)' : 'var(--ink, #1f2937)';
 
-  const dateInputRef = useRef<HTMLInputElement | null>(null);
+  const dateButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const goPrevDay = () => onChange(toStr(subDays(dt, 1)));
   const goNextDay = () => onChange(toStr(addDays(dt, 1)));
@@ -124,23 +124,12 @@ export default function DateStepperFull({ value, onChange }: Props) {
           ‹
         </button>
 
-        {/* 中央の日付ボタン + 📅
-            iOS Safari では showPicker() がユーザー操作経由でも未起動になることがあるため、
-            ネイティブ <input type="date"> をボタンの上に opacity:0 で重ねてタップを直接受ける。
-            input が pointer-events を奪うので button の onClick はフォールバック扱い。 */}
+        {/* 中央の日付ボタン + 📅。クリックでカスタムカレンダー (DatePopover) を表示。 */}
         <div className="relative inline-flex">
           <button
+            ref={dateButtonRef}
             type="button"
-            onClick={() => {
-              const el = dateInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
-              if (!el) return;
-              try {
-                if (typeof el.showPicker === 'function') el.showPicker();
-                else el.click();
-              } catch {
-                el.click();
-              }
-            }}
+            onClick={() => setPopoverOpen((v) => !v)}
             className="inline-flex items-center gap-1.5 font-bold transition-all whitespace-nowrap"
             style={{
               color: labelColor,
@@ -157,6 +146,8 @@ export default function DateStepperFull({ value, onChange }: Props) {
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'var(--white, #ffffff)';
             }}
+            aria-expanded={popoverOpen}
+            aria-haspopup="dialog"
             title={holidayName ? `祝日: ${holidayName}` : 'カレンダーを開く'}
           >
             <span>{label}</span>
@@ -182,17 +173,16 @@ export default function DateStepperFull({ value, onChange }: Props) {
             )}
             <span style={{ fontSize: '1rem', lineHeight: 1 }}>📅</span>
           </button>
-          {/* オーバーレイ式の native date input。タップを直接受けて native picker を確実に開く */}
-          <input
-            ref={dateInputRef}
-            type="date"
+          <DatePopover
+            open={popoverOpen}
             value={value}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) onChange(v);
+            onChange={(v) => {
+              onChange(v);
+              setPopoverOpen(false);
             }}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            aria-label="日付を選択"
+            onClose={() => setPopoverOpen(false)}
+            dayStates={dayStates}
+            anchorRef={dateButtonRef}
           />
         </div>
 

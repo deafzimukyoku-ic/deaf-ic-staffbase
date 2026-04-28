@@ -525,3 +525,89 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 ### 旧データ互換（重要）
 - **compliance**: 既存の `content`（プレーンテキスト）しか持たないドキュメントを編集する際、`openEdit` で `content_blocks` が空なら `[{type:'text', value: content}]` として seed。保存時に `content_blocks` に取り込まれる。
   - 適用箇所: `app/(admin)/admin/compliance/page.tsx` `openEdit()`, `app/(manager)/mgr/compliance/page.tsx` `openEdit()`
+
+---
+
+## 14. AttendanceStatus / waitlist_order 参照（Phase 64 / migration 124）
+
+| ファイル | 参照内容 |
+|---|---|
+| supabase/migrations/100_shift_core.sql | `schedule_entries.attendance_status` 元定義 |
+| supabase/migrations/102_shift_rpcs.sql | `update_schedule_entry_attendance(uuid, text)` 旧 2 引数版（migration 124 で drop & 再定義） |
+| supabase/migrations/105_schedule_entries_methods.sql | CHECK に 'leave' 追加 |
+| **supabase/migrations/124_attendance_waitlist.sql** | **CHECK に 'waitlist' 追加 / `waitlist_order smallint` 列追加（範囲 1-10、status='waitlist' 以外で NULL 強制）/ RPC を `(uuid, text, smallint default null)` で再定義** |
+| lib/types.ts | `AttendanceStatus` union に 'waitlist' / `ScheduleEntryRow.waitlist_order: number \| null` |
+| components/shift/ScheduleFull.tsx | RPC 呼び出しに `p_waitlist_order` 追加、4 ボタン + 5×2 順番ピッカー + 注意書き、`waitlist_order` state 管理、carry-over（waitlist→他→waitlist で番号復元） |
+| components/shift/ScheduleGridFull.tsx | セル「キャ待 ①」表示、利用数行の下にキャンセル待ち件数行、`hasAnyWaitlist` で行を出し分け |
+| components/shift/TransportFull.tsx | 通常テーブルから waitlist 除外、`currentDayWaitlist` memo + 集約バー + 「利用に変える」確認モーダル、ヘッダ「⏳ 待 N人」バッジ、generate 入力から除外、staff area marks ループから除外 |
+| components/shift/ShiftFull.tsx | `childrenCountByDate` から waitlist 除外、新規 `childrenWaitlistCountByDate` |
+| components/shift/ShiftGridFull.tsx | 日付ヘッダに「待 N」バッジ |
+| lib/logic/generateShift.ts | `dailyChildCount` 集計から waitlist 除外（必要職員数の過剰見積もり防止） |
+| components/shift/DailyOutputFull.tsx | `slots` 構築から waitlist 除外、`activeChildCount` から除外、`waitlistChildren` memo + 右カラム「キャンセル待ち」セクション（旧「休憩」セクション置換）、ヘッダに「キャンセル待ち N 名」併記 |
+| components/shift/WeeklyTransportFull.tsx | フィルタに waitlist 除外を追加 |
+| components/shift/DailyReportFull.tsx | `attendanceLabel` の case に 'waitlist' → '待' 追加 |
+
+### 設計判断
+- **uniq 制約なし**: 兄弟で同日 ① が 2 人ありえるため、`(date, waitlist_order)` の uniq は付けない
+- **CHECK 2 つ**: `waitlist_order between 1 and 10` と `waitlist_order != NULL → status = 'waitlist'`
+- **RPC 後方互換**: 第 3 引数 `p_waitlist_order smallint default null` で既存 2 引数呼び出しはそのまま動く
+- **status 変更時のみ audit log 記録**: 順番だけの変更で `attendance_audit_logs` を膨らませない
+- **employee 側の影響**: `(employee)/my/shifts` は publish 済みシフトのみ閲覧で利用予定 (`schedule_entries`) を直接参照しないため waitlist の影響を受けない
+
+---
+
+## 14b. facilities フィーチャーフラグ（shift_enabled / transport_enabled / shift_only_mode）
+
+| ファイル | 参照内容 |
+|---|---|
+| supabase/migrations/116_facility_core_time_and_meta.sql | `facilities.shift_enabled` / `transport_enabled` 列追加 |
+| **supabase/migrations/125_facility_shift_only_mode.sql** | **`facilities.shift_only_mode boolean default false` 列追加。シフトのみモード判定用** |
+| lib/types.ts | `Facility.shift_only_mode?: boolean` |
+| app/(admin)/layout.tsx | facility SELECT に `shift_only_mode` 追加 / `shiftOnlyMode` useMemo / `SidebarNav` で 4 項目フィルタ（ダッシュボード / シフト表 / 休み希望 / 職員管理） |
+| app/(manager)/layout.tsx | `FacilityLite` に `transport_enabled` / `shift_only_mode` 追加 / 同様の useMemo + SidebarNav フィルタ |
+| app/(admin)/admin/settings/page.tsx | facility CRUD に `shift_only_mode` 追加 / `FacilityRowItem` に「シフトのみ」トグル追加 |
+
+### sidebar フィルタ仕様
+- `shift_only_mode=true`: シフト系の 4 項目のみ表示。利用表 / 送迎表 / 日次出力 / 業務日報 / 事業所設定 / 児童管理 を sidebar から除外
+- `shift_only_mode=false` かつ `transport_enabled=false`: 送迎表のみ除外（migration 116 動作）
+- 両方 false / true: フル sidebar
+- フラグは事業所単位で独立。事業所セレクタで切り替えると即座に sidebar 再フィルタ
+
+---
+
+## 14c. 利用料金表 / イベント / 児童料金属性（Phase 66, migration 126〜128）
+
+| ファイル | 参照内容 |
+|---|---|
+| **supabase/migrations/126_children_billing_fields.sql** | children に `municipality / copay_tier / copay_freeform_amount / kumon_monthly_fee` 列追加 |
+| **supabase/migrations/127_events.sql** | `events` テーブル新規（name, date, price, facility_id）+ RLS |
+| **supabase/migrations/128_billing.sql** | `billing_summaries` + `billing_event_participations` 新規 + RLS |
+| lib/types.ts | `CopayTier` / `EventRow` 追加、`ChildRow` 拡張 |
+| lib/constants.ts | `SNACK_FEE_PER_DAY=50` / `COPAY_TIERS` / `COPAY_TIER_AMOUNT` / `COPAY_TIER_LABELS` / `NAGOYA_FREE_PRESCHOOL_MUNICIPALITY` / `FREE_GRADES_NATIONWIDE` |
+| lib/logic/computeBilling.ts | `isFreeOfCharge` / `resolveCopayCap` / `computeDefaultCopayAmount` / `computeBillingRow`（純関数） |
+| components/shift/ChildrenSettingsFull.tsx | 児童編集モーダルに料金属性 UI、児童一覧テーブルに「上限 / 公文」列追加（事業所列削除）|
+| components/shift/EventSettingsFull.tsx | イベント設定 ページ（CRUD + 月切替）|
+| components/shift/BillingFull.tsx | 利用料金表 ページ（月選択 / 自動計算 / 手動オーバーライド / 保存 / A4 横印刷）|
+| app/(admin)/admin/shifts/events/, app/(manager)/mgr/shifts/events/ | EventSettingsFull のページラッパ |
+| app/(admin)/admin/shifts/output/billing/, app/(manager)/mgr/shifts/output/billing/ | BillingFull のページラッパ |
+| app/(admin)/layout.tsx, app/(manager)/layout.tsx | サイドバーに「💰 利用料金表」追加 / 「⚙️ シフト設定」をアコーディオン化 |
+| app/(admin)/admin/shifts/dashboard/page.tsx, app/(manager)/mgr/shifts/dashboard/page.tsx | ダッシュボードカードを 11 枚に拡張（業務日報・利用料金表・事業所設定・職員管理・児童管理・イベント設定 を追加、旧「設定」削除） |
+
+### 設計判断
+- **1日単価カラムは持たない**: 受給者証ベースの精緻な利用負担額計算はデイロボに任せ、月次料金表ページで手動オーバーライド。child 属性として持たない
+- **公文代は児童ごとの自由入力**: `kumon_monthly_fee integer null`。施設・児童で金額が違うため固定定数化しない（null = 計上しない）
+- **無償化判定**: 全国 = `nursery_3/4/5`、名古屋市のみ追加で `preschool` も対象（市町村文字列の完全一致）
+- **イベント参加判定**: 月締め時に手動チェック前提。schedule_entries の `attendance_status='present'` から自動推測はしない（present 以外でも イベントには参加した、という運用例があるため）
+- **月次集計の永続化**: `billing_summaries` に snapshot 保存。再印刷時に同じ数字が出る（月内に児童属性が変わっても紙の数字は守られる）
+- **shift_only_mode との関係**: シフトのみ事業所はそもそも利用料金表を使わない（児童不在）。サイドバーから 利用料金表 / 児童管理 / イベント設定 はフィルタで除外
+
+---
+
+## 15. employees 必須カラム（保存時クライアント側バリデーション）
+
+| ファイル | 参照内容 |
+|---|---|
+| supabase/migrations/010_rls.sql | employees の RLS（admin/super_admin は UPDATE 可） |
+| **app/(admin)/admin/employees/[id]/page.tsx** | **`REQUIRED_BASIC_KEYS` で `last_name / first_name / last_name_kana / first_name_kana` を空文字 → null 化禁止。`saveBasicEdit` で送信前にトーストブロック** |
+
+理由: `employees.{last_name, first_name, last_name_kana, first_name_kana}` はすべて NOT NULL。フォームの「空文字 → null 一括変換」を素通しすると `null value in column "last_name" violates not-null constraint` で保存失敗する。フロントで空文字ブロックする。

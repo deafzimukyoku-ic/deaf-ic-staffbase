@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import type { Employee, Facility, CustomEmployeeField, QualificationType } from '@/lib/types';
+import type { Employee, Facility, CustomEmployeeField } from '@/lib/types';
 import { PostalCodeField } from './PostalCodeField';
 import { CustomFieldsCard } from './CustomFieldsCard';
+import QualificationsInput from './QualificationsInput';
 
 type BasicFields = Pick<Employee,
   'last_name' | 'first_name' | 'last_name_kana' | 'first_name_kana' |
@@ -31,9 +32,8 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [positions, setPositions] = useState<{ id: string; name: string }[]>([]);
   const [tenantBanks, setTenantBanks] = useState<string[]>([]);
-  /* 所属施設の qualification_types。シフト設定で施設管理者が定義した資格マスタ。
-     県/市で法令が違うので施設ごとに別セット（migration では facility_shift_settings.qualification_types）。 */
-  const [qualificationTypes, setQualificationTypes] = useState<QualificationType[]>([]);
+  /* migration 129 で「保有資格」は自由入力に分離。事業所マスタ (facility_shift_settings.qualification_types) は
+     シフト・送迎側 (employees.shift_qualifications) でのみ使用するため、ここでは取得不要。 */
   const supabase = createClient();
 
   const isYucho = (data.bank_name || '').includes('ゆうちょ');
@@ -57,23 +57,6 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
     }
     loadMasters();
   }, [supabase]);
-
-  /* 所属施設が変わった時に qualification_types を取り直す */
-  useEffect(() => {
-    if (!data.facility_id) {
-      setQualificationTypes([]);
-      return;
-    }
-    (async () => {
-      const { data: settings } = await supabase
-        .from('facility_shift_settings')
-        .select('qualification_types')
-        .eq('facility_id', data.facility_id)
-        .maybeSingle();
-      const qts = settings?.qualification_types as QualificationType[] | null;
-      setQualificationTypes(Array.isArray(qts) ? qts : []);
-    })();
-  }, [data.facility_id, supabase]);
 
   function update<K extends keyof BasicFields>(key: K, value: BasicFields[K]) {
     onChange({ ...data, [key]: value });
@@ -167,40 +150,18 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
             <Field label="業務内容" value={data.job_type || ''} onChange={(v) => update('job_type', v || null)} />
             <Field label="個人番号（マイナンバー）" value={data.my_number || ''} onChange={(v) => update('my_number', v || null)} />
             <Field label="最終就職先" value={data.previous_employer || ''} onChange={(v) => update('previous_employer', v || null)} />
-            {/* 保有資格: 所属施設の qualification_types から選択（チップ式トグル）。
-                施設未設定 or 資格マスタ未定義の場合は案内文を出して選択不可。
-                DB は text[]、選んだ資格名の配列で保存される。 */}
+            {/* 保有資格: 個人が持っている資格の自由入力（介護福祉士、英検 等）。
+                migration 129 で運用分離 — シフト・送迎用の有資格者判定は employees.shift_qualifications を使用。
+                ここで入力された値は employees.qualifications text[] にそのまま保存される（事業所マスタ非依存）。 */}
             <div className="space-y-2">
               <Label>保有資格</Label>
-              {!data.facility_id ? (
-                <p className="text-xs text-diletto-gray-light px-1">所属施設を選択すると、施設で定義された資格から選べます。</p>
-              ) : qualificationTypes.length === 0 ? (
-                <p className="text-xs text-diletto-gray-light px-1">所属施設の資格マスタが未設定です。管理者にシフト設定からの登録を依頼してください。</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {qualificationTypes.map((q) => {
-                    const selected = (data.qualifications ?? []).includes(q.name);
-                    return (
-                      <button
-                        type="button"
-                        key={q.name}
-                        onClick={() => {
-                          const cur = data.qualifications ?? [];
-                          const next = selected ? cur.filter((n) => n !== q.name) : [...cur, q.name];
-                          update('qualifications', next);
-                        }}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all border ${
-                          selected
-                            ? 'bg-diletto-blue text-white border-diletto-blue'
-                            : 'bg-white text-diletto-ink border-diletto-gray/20 hover:border-diletto-blue/40'
-                        }`}
-                      >
-                        {q.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              <p className="text-[11px] text-diletto-gray-light px-1">
+                個人で取得した資格を自由に追加できます（プロフィール表示用）。シフト・送迎の有資格者判定は事業所側で別途管理されます。
+              </p>
+              <QualificationsInput
+                value={data.qualifications ?? []}
+                onChange={(next) => update('qualifications', next)}
+              />
             </div>
           </>}
         </CardContent>

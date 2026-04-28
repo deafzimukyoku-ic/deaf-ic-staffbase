@@ -35,12 +35,21 @@ const shiftNav: NavItem[] = [
   { kind: 'link', href: '/mgr/shifts/transport', label: '送迎表', icon: '🚗' },
   { kind: 'link', href: '/mgr/shifts/output/daily', label: '日次出力', icon: '📄' },
   { kind: 'link', href: '/mgr/shifts/output/daily-report', label: '業務日報', icon: '📋' },
+  { kind: 'link', href: '/mgr/shifts/output/billing', label: '利用料金表', icon: '💰' },
   /* 週次送迎は送迎表ページの出力ボタンに統合（サイドバーからは除外） */
   { kind: 'link', href: '/mgr/requests', label: '休み希望', icon: '✋' },
-  { kind: 'section', label: '⚙️ シフト設定' },
-  { kind: 'link', href: '/mgr/shifts/facility-settings', label: '事業所設定', icon: '🏢' },
-  { kind: 'link', href: '/mgr/shifts/staff-settings', label: '職員管理', icon: '👔' },
-  { kind: 'link', href: '/mgr/children', label: '児童管理', icon: '👶' },
+  {
+    kind: 'accordion',
+    key: 'shift-settings',
+    label: 'シフト設定',
+    icon: '⚙️',
+    children: [
+      { kind: 'link', href: '/mgr/shifts/facility-settings', label: '事業所設定', icon: '🏢' },
+      { kind: 'link', href: '/mgr/shifts/staff-settings', label: '職員管理', icon: '👔' },
+      { kind: 'link', href: '/mgr/children', label: '児童管理', icon: '👶' },
+      { kind: 'link', href: '/mgr/shifts/events', label: 'イベント設定', icon: '🎉' },
+    ],
+  },
 ];
 
 function detectModeFromPath(path: string): Mode | null {
@@ -74,12 +83,40 @@ function SidebarNav({
   pathname,
   mode,
   onNavigate,
+  transportEnabled,
+  shiftOnlyMode,
 }: {
   pathname: string;
   mode: Mode;
   onNavigate?: () => void;
+  /** false の場合、シフトモードのナビから送迎表を除外（migration 116） */
+  transportEnabled: boolean;
+  /** true の場合、シフトモードのナビをシフト表 / 休み希望 / 職員管理 / ダッシュボードのみに絞る（migration 125） */
+  shiftOnlyMode: boolean;
 }) {
-  const items = mode === 'staff' ? staffNav : shiftNav;
+  const baseItems = mode === 'staff' ? staffNav : shiftNav;
+  let items = baseItems;
+  if (mode === 'shift') {
+    if (shiftOnlyMode) {
+      const keepHrefs = new Set([
+        '/mgr/shifts/dashboard',
+        '/mgr/shifts',
+        '/mgr/requests',
+        '/mgr/shifts/staff-settings',
+      ]);
+      items = baseItems.flatMap<NavItem>((it) => {
+        if (it.kind === 'section') return [it];
+        if (it.kind === 'link') return keepHrefs.has(it.href) ? [it] : [];
+        if (it.kind === 'accordion') {
+          const kept = it.children.filter((c) => keepHrefs.has(c.href));
+          return kept.length > 0 ? [{ ...it, children: kept }] : [];
+        }
+        return [];
+      });
+    } else if (!transportEnabled) {
+      items = baseItems.filter((it) => it.kind !== 'link' || it.href !== '/mgr/shifts/transport');
+    }
+  }
   const initialOpen = useMemo(() => {
     const map: Record<string, boolean> = {};
     for (const item of items) {
@@ -182,10 +219,14 @@ function SidebarContent({
   pathname,
   mode,
   onNavigate,
+  transportEnabled,
+  shiftOnlyMode,
 }: {
   pathname: string;
   mode: Mode;
   onNavigate?: () => void;
+  transportEnabled: boolean;
+  shiftOnlyMode: boolean;
 }) {
   const homeHref = mode === 'staff' ? '/mgr/dashboard' : '/mgr/shifts/dashboard';
   return (
@@ -198,7 +239,13 @@ function SidebarContent({
       <ModeLabel mode={mode} />
       {/* 常時表示スクロールバーで「下にもう項目あるよ」を視覚化（admin と同方針） */}
       <div className="flex-1 overflow-y-auto py-3 sidebar-scroll">
-        <SidebarNav pathname={pathname} mode={mode} onNavigate={onNavigate} />
+        <SidebarNav
+          pathname={pathname}
+          mode={mode}
+          onNavigate={onNavigate}
+          transportEnabled={transportEnabled}
+          shiftOnlyMode={shiftOnlyMode}
+        />
       </div>
       <div className="border-t border-diletto-gray/10 bg-diletto-beige p-3 space-y-1">
         <p className="text-[10px] text-diletto-gray-light px-1 mb-1">切り替え</p>
@@ -240,7 +287,14 @@ function ModeFab({
   );
 }
 
-type FacilityLite = { id: string; name: string };
+type FacilityLite = {
+  id: string;
+  name: string;
+  /** migration 116: false なら送迎関連 sidebar 項目を非表示 */
+  transport_enabled?: boolean;
+  /** migration 125: true なら sidebar をシフト表 / 休み希望 / 職員管理 / ダッシュボードのみに絞る */
+  shift_only_mode?: boolean;
+};
 
 function FacilityHeaderSelector({ facilities, value, onChange }: { facilities: FacilityLite[]; value: string | null; onChange: (id: string) => void }) {
   if (facilities.length === 0) return null;
@@ -267,6 +321,18 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   const [mode, setMode] = useState<Mode>('staff');
   const [facilities, setFacilities] = useState<FacilityLite[]>([]);
   const [facilityId, setFacilityId] = useShiftFacilityId();
+
+  /* 選択中事業所のフラグ（migration 116 / 125） */
+  const transportEnabled = useMemo(() => {
+    if (!facilityId) return true;
+    const f = facilities.find((x) => x.id === facilityId);
+    return f ? f.transport_enabled !== false : true;
+  }, [facilities, facilityId]);
+  const shiftOnlyMode = useMemo(() => {
+    if (!facilityId) return false;
+    const f = facilities.find((x) => x.id === facilityId);
+    return f ? f.shift_only_mode === true : false;
+  }, [facilities, facilityId]);
 
   useEffect(() => {
     const detected = detectModeFromPath(pathname);
@@ -306,10 +372,12 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
       });
 
       /* 担当施設取得（manager_facilities + 自分の facility）。
-         migration 116: shift_enabled=false の施設は除外 + display_order 順 */
+         migration 116: shift_enabled=false の施設は除外 + display_order 順 + transport_enabled
+         migration 125: shift_only_mode も取得（sidebar フィルタに使用） */
+      const facCols = 'id, name, display_order, shift_enabled, transport_enabled, shift_only_mode';
       const { data: mfs } = await supabase
         .from('manager_facilities')
-        .select('facility_id, facility:facilities(id, name, display_order, shift_enabled)')
+        .select(`facility_id, facility:facilities(${facCols})`)
         .eq('employee_id', emp.id);
       type FacilityWithMeta = FacilityLite & { display_order: number; shift_enabled: boolean };
       const collected: FacilityWithMeta[] = [];
@@ -317,24 +385,49 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
       if (emp.facility_id) {
         const { data: own } = await supabase
           .from('facilities')
-          .select('id, name, display_order, shift_enabled')
+          .select(facCols)
           .eq('id', emp.facility_id)
           .single();
-        if (own && own.shift_enabled !== false) {
-          collected.push({ id: own.id, name: own.name, display_order: own.display_order ?? 0, shift_enabled: own.shift_enabled ?? true });
+        /* shift_only_mode=true は shift_enabled=false を上書きしてセレクタに表示（migration 125） */
+        if (own && (own.shift_enabled !== false || own.shift_only_mode === true)) {
+          collected.push({
+            id: own.id,
+            name: own.name,
+            display_order: own.display_order ?? 0,
+            shift_enabled: own.shift_enabled ?? true,
+            transport_enabled: own.transport_enabled ?? true,
+            shift_only_mode: own.shift_only_mode === true,
+          });
           seen.add(own.id);
         }
       }
       for (const mf of (mfs || [])) {
-        const raw = (mf as unknown as { facility: { id: string; name: string; display_order: number; shift_enabled: boolean } | { id: string; name: string; display_order: number; shift_enabled: boolean }[] | null }).facility;
+        const raw = (mf as unknown as {
+          facility:
+            | { id: string; name: string; display_order: number; shift_enabled: boolean; transport_enabled?: boolean; shift_only_mode?: boolean }
+            | { id: string; name: string; display_order: number; shift_enabled: boolean; transport_enabled?: boolean; shift_only_mode?: boolean }[]
+            | null;
+        }).facility;
         const f = Array.isArray(raw) ? raw[0] : raw;
-        if (f && !seen.has(f.id) && f.shift_enabled !== false) {
-          collected.push({ id: f.id, name: f.name, display_order: f.display_order ?? 0, shift_enabled: f.shift_enabled ?? true });
+        if (f && !seen.has(f.id) && (f.shift_enabled !== false || f.shift_only_mode === true)) {
+          collected.push({
+            id: f.id,
+            name: f.name,
+            display_order: f.display_order ?? 0,
+            shift_enabled: f.shift_enabled ?? true,
+            transport_enabled: f.transport_enabled ?? true,
+            shift_only_mode: f.shift_only_mode === true,
+          });
           seen.add(f.id);
         }
       }
       collected.sort((a, b) => a.display_order - b.display_order);
-      const list: FacilityLite[] = collected.map(({ id, name }) => ({ id, name }));
+      const list: FacilityLite[] = collected.map(({ id, name, transport_enabled, shift_only_mode }) => ({
+        id,
+        name,
+        transport_enabled,
+        shift_only_mode,
+      }));
       setFacilities(list);
 
       /* ① 仕様: 初期値は本人の所属施設 (emp.facility_id) を優先。
@@ -373,7 +466,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex h-screen bg-diletto-beige">
       <aside className="hidden lg:flex lg:flex-col border-r border-diletto-gray/10 w-64">
-        <SidebarContent pathname={pathname} mode={mode} />
+        <SidebarContent pathname={pathname} mode={mode} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -385,7 +478,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
               </svg>
             </SheetTrigger>
             <SheetContent side="left" className="w-[260px] p-0" style={{ height: '100dvh' }}>
-              <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} />
+              <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
             </SheetContent>
           </Sheet>
           <Link href={mode === 'staff' ? '/mgr/dashboard' : '/mgr/shifts/dashboard'} className="flex items-center min-w-0 shrink">

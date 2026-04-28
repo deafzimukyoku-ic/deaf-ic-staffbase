@@ -17,14 +17,16 @@
 
 import type { Employee } from '@/lib/types';
 
-/** Employee の boolean フラグのみ抽出した型 */
-type EmployeeBooleanField = {
+/** Employee の boolean フラグのみ抽出した型。
+ *  注: Employee に optional プロパティがあると `[keyof Employee]` 索引時に `undefined` が混入するため
+ *  NonNullable で除外する（型は文字列リテラル union だけにする）。 */
+type EmployeeBooleanField = NonNullable<{
   [K in keyof Employee]: Employee[K] extends boolean | null | undefined
     ? Employee[K] extends string | number | object
       ? never
       : K
     : never;
-}[keyof Employee];
+}[keyof Employee]>;
 
 /**
  * コアフィールド（employees テーブルの固定列）のゲート定義。

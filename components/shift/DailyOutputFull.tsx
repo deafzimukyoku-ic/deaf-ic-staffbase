@@ -172,7 +172,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
         supabase
           .from('employees')
           .select(
-            'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
+            'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
           )
           .eq('facility_id', facilityId)
           .eq('status', 'active'),
@@ -214,6 +214,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
           pickup_transport_areas: (e.pickup_transport_areas as string[]) ?? [],
           dropoff_transport_areas: (e.dropoff_transport_areas as string[]) ?? [],
           qualifications: (e.qualifications as string[]) ?? [],
+          shift_qualifications: ((e.shift_qualifications as string[] | undefined) ?? (e.qualifications as string[]) ?? []),
           is_qualified: (e.is_qualified as boolean) ?? false,
           is_driver: (e.is_driver as boolean) ?? false,
           is_attendant: (e.is_attendant as boolean) ?? false,
@@ -298,6 +299,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
     for (const entry of entries) {
       if (entry.attendance_status === 'absent') continue;
       if (entry.attendance_status === 'leave') continue;
+      if (entry.attendance_status === 'waitlist') continue; /* Phase 64: waitlist は別セクションで表示 */
       if (!entry.pickup_time && !entry.dropoff_time) continue; /* 旧データ互換のお休み除外 */
 
       const child = childById.get(entry.child_id);
@@ -495,17 +497,41 @@ export default function DailyOutputFull({ role: _role }: Props) {
   );
 
   /* 利用児童数: 当日 entries のうち「実際に来所する」児童のユニーク数。
-     欠席・お休み（attendance_status='absent'/'leave' または times 両方 null）を除外。 */
+     欠席・お休み（attendance_status='absent'/'leave' または times 両方 null）を除外。
+     Phase 64: waitlist も実際の来所ではないので除外（別セクションで表示）。 */
   const activeChildCount = useMemo(() => {
     const ids = new Set<string>();
     for (const e of entries) {
       if (e.attendance_status === 'absent') continue;
       if (e.attendance_status === 'leave') continue;
+      if (e.attendance_status === 'waitlist') continue;
       if (!e.pickup_time && !e.dropoff_time) continue;
       ids.add(e.child_id);
     }
     return ids.size;
   }, [entries]);
+
+  /* Phase 64: 当日キャンセル待ち児童（順番昇順、null 末尾、同番号は児童 display_order 順） */
+  const waitlistChildren = useMemo(() => {
+    const childById = new Map(children.map((c) => [c.id, c]));
+    const childOrderById = new Map(children.map((c, idx) => [c.id, idx]));
+    const list = entries
+      .filter((e) => e.attendance_status === 'waitlist')
+      .map((e) => ({
+        scheduleEntryId: e.id,
+        childId: e.child_id,
+        childName: childById.get(e.child_id)?.name ?? '(不明)',
+        waitlistOrder: e.waitlist_order ?? null,
+      }));
+    list.sort((a, b) => {
+      const oa = a.waitlistOrder ?? 999;
+      const ob = b.waitlistOrder ?? 999;
+      if (oa !== ob) return oa - ob;
+      return (childOrderById.get(a.childId) ?? Number.MAX_SAFE_INTEGER) -
+             (childOrderById.get(b.childId) ?? Number.MAX_SAFE_INTEGER);
+    });
+    return list;
+  }, [entries, children]);
 
   /**
    * ブラウザ標準の印刷ダイアログを起動。
@@ -690,6 +716,11 @@ export default function DailyOutputFull({ role: _role }: Props) {
                     </div>
                     <div className="text-base font-bold mt-1" style={{ color: 'var(--ink)' }}>
                       出勤者 {onDuty.length}名・利用児童 {activeChildCount}名
+                      {waitlistChildren.length > 0 && (
+                        <>
+                          ・<span style={{ color: 'var(--ink-2)' }}>キャンセル待ち {waitlistChildren.length}名</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -775,25 +806,45 @@ export default function DailyOutputFull({ role: _role }: Props) {
                   )}
                 </section>
 
-                <section>
-                  <h3
-                    className="text-base font-black pb-1 mb-2"
-                    style={{ color: 'var(--ink)', borderBottom: '2.5px solid var(--ink)' }}
-                  >
-                    休憩
-                  </h3>
-                  <div
-                    className="p-3 rounded text-sm font-semibold"
-                    style={{
-                      border: '1px dashed var(--rule)',
-                      color: 'var(--ink-2)',
-                      minHeight: '70px',
-                      lineHeight: '1.5',
-                    }}
-                  >
-                    休憩時間をずらす
-                  </div>
-                </section>
+                {/* Phase 64: 「休憩」セクションを撤去し、キャンセル待ちセクションへ置換。
+                    waitlist が無い日は丸ごと非表示。 */}
+                {waitlistChildren.length > 0 && (
+                  <section>
+                    <h3
+                      className="text-base font-black pb-1 mb-2"
+                      style={{ color: 'var(--ink)', borderBottom: '2.5px solid var(--ink)' }}
+                    >
+                      キャンセル待ち
+                    </h3>
+                    <ul className="flex flex-col">
+                      {waitlistChildren.map((w) => {
+                        const orderMark = w.waitlistOrder
+                          ? '①②③④⑤⑥⑦⑧⑨⑩'.charAt(w.waitlistOrder - 1)
+                          : '－';
+                        return (
+                          <li
+                            key={w.scheduleEntryId}
+                            className="flex items-center gap-3 py-1.5"
+                            style={{ borderBottom: '1px dashed var(--rule)' }}
+                          >
+                            <span
+                              className="text-base font-black whitespace-nowrap"
+                              style={{ color: 'var(--ink-2)', minWidth: '1.2em' }}
+                            >
+                              {orderMark}
+                            </span>
+                            <span
+                              className="text-base font-black whitespace-nowrap"
+                              style={{ color: 'var(--ink)' }}
+                            >
+                              {w.childName}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                )}
               </div>
             </div>
           </div>

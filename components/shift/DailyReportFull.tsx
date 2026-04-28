@@ -60,13 +60,14 @@ function classifyService(grade: GradeType): '児童発達' | '放課後' {
   return '放課後';
 }
 
-/** 出欠ステータス→セル文字 */
+/** 出欠ステータス→セル文字。Phase 64: waitlist は「待」、leave は空欄。 */
 function attendanceLabel(status: string | null | undefined): string {
   switch (status) {
     case 'present': return '✓';
     case 'absent': return '✗';
     case 'late': return '遅';
     case 'early_leave': return '早';
+    case 'waitlist': return '待';
     default: return '';
   }
 }
@@ -126,7 +127,7 @@ export default function DailyReportFull({ role: _role }: Props) {
         supabase.from('facilities').select('*').eq('id', facilityId).single(),
         supabase
           .from('employees')
-          .select('id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status')
+          .select('id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status')
           .eq('facility_id', facilityId)
           .eq('status', 'active'),
         supabase.from('children').select('*').eq('facility_id', facilityId),
@@ -166,6 +167,7 @@ export default function DailyReportFull({ role: _role }: Props) {
         pickup_transport_areas: (e.pickup_transport_areas as string[]) ?? [],
         dropoff_transport_areas: (e.dropoff_transport_areas as string[]) ?? [],
         qualifications: (e.qualifications as string[]) ?? [],
+        shift_qualifications: ((e.shift_qualifications as string[] | undefined) ?? (e.qualifications as string[]) ?? []),
         is_qualified: (e.is_qualified as boolean) ?? false,
         is_driver: (e.is_driver as boolean) ?? false,
         is_attendant: (e.is_attendant as boolean) ?? false,

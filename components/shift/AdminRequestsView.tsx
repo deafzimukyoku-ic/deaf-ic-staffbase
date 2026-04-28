@@ -87,13 +87,13 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
       .order('shift_display_order', { ascending: true, nullsFirst: false })
       .order('last_name', { ascending: true });
 
-    const empRows: EmployeeRow[] = (emps ?? [])
-      .filter((e) => e.role === 'employee' || e.role === 'manager')
-      .map((e) => ({
-        id: e.id,
-        name: staffDisplayName({ last_name: e.last_name, first_name: e.first_name }),
-        employment_type: (e.employment_type ?? null) as 'full_time' | 'part_time' | null,
-      }));
+    /* 本部などシフトのみモードの事業所には admin ロールの社員も在籍するため、role フィルタを撤去。
+       「自分が休み希望を提出する」運用は role に関係なく可能。 */
+    const empRows: EmployeeRow[] = (emps ?? []).map((e) => ({
+      id: e.id,
+      name: staffDisplayName({ last_name: e.last_name, first_name: e.first_name }),
+      employment_type: (e.employment_type ?? null) as 'full_time' | 'part_time' | null,
+    }));
 
     const { data: reqs } = await supabase
       .from('shift_requests')

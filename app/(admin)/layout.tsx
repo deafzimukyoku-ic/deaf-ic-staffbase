@@ -41,12 +41,21 @@ const shiftNav: NavItem[] = [
   { kind: 'link', href: '/admin/shifts/transport', label: '送迎表', icon: '🚗' },
   { kind: 'link', href: '/admin/shifts/output/daily', label: '日次出力', icon: '📄' },
   { kind: 'link', href: '/admin/shifts/output/daily-report', label: '業務日報', icon: '📋' },
+  { kind: 'link', href: '/admin/shifts/output/billing', label: '利用料金表', icon: '💰' },
   /* 週次送迎は送迎表ページの出力ボタンに統合（サイドバーからは除外） */
   { kind: 'link', href: '/admin/requests', label: '休み希望', icon: '✋' },
-  { kind: 'section', label: '⚙️ シフト設定' },
-  { kind: 'link', href: '/admin/shifts/facility-settings', label: '事業所設定', icon: '🏢' },
-  { kind: 'link', href: '/admin/shifts/staff-settings', label: '職員管理', icon: '👔' },
-  { kind: 'link', href: '/admin/children', label: '児童管理', icon: '👶' },
+  {
+    kind: 'accordion',
+    key: 'shift-settings',
+    label: 'シフト設定',
+    icon: '⚙️',
+    children: [
+      { kind: 'link', href: '/admin/shifts/facility-settings', label: '事業所設定', icon: '🏢' },
+      { kind: 'link', href: '/admin/shifts/staff-settings', label: '職員管理', icon: '👔' },
+      { kind: 'link', href: '/admin/children', label: '児童管理', icon: '👶' },
+      { kind: 'link', href: '/admin/shifts/events', label: 'イベント設定', icon: '🎉' },
+    ],
+  },
 ];
 
 // URL から mode を判定（shift系パスなら shift、それ以外は null=判定不能で localStorage に委ねる）
@@ -86,17 +95,41 @@ function SidebarNav({
   mode,
   onNavigate,
   transportEnabled,
+  shiftOnlyMode,
 }: {
   pathname: string;
   mode: Mode;
   onNavigate?: () => void;
   /** false の場合、シフトモードのナビから送迎表 / 週次送迎を除外（migration 116） */
   transportEnabled: boolean;
+  /** true の場合、シフトモードのナビをシフト表 / 休み希望 / 職員管理 / ダッシュボードのみに絞る（migration 125） */
+  shiftOnlyMode: boolean;
 }) {
   const baseItems = mode === 'staff' ? staffNav : shiftNav;
-  const items = mode === 'shift' && !transportEnabled
-    ? baseItems.filter((it) => it.kind !== 'link' || it.href !== '/admin/shifts/transport')
-    : baseItems;
+  let items = baseItems;
+  if (mode === 'shift') {
+    if (shiftOnlyMode) {
+      /* シフトのみモード: 4 項目に絞る。
+         残す: /admin/shifts/dashboard, /admin/shifts (シフト表), /admin/requests, /admin/shifts/staff-settings */
+      const keepHrefs = new Set([
+        '/admin/shifts/dashboard',
+        '/admin/shifts',
+        '/admin/requests',
+        '/admin/shifts/staff-settings',
+      ]);
+      items = baseItems.flatMap<NavItem>((it) => {
+        if (it.kind === 'section') return [it];
+        if (it.kind === 'link') return keepHrefs.has(it.href) ? [it] : [];
+        if (it.kind === 'accordion') {
+          const kept = it.children.filter((c) => keepHrefs.has(c.href));
+          return kept.length > 0 ? [{ ...it, children: kept }] : [];
+        }
+        return [];
+      });
+    } else if (!transportEnabled) {
+      items = baseItems.filter((it) => it.kind !== 'link' || it.href !== '/admin/shifts/transport');
+    }
+  }
 
   // アコーディオン展開状態（デフォルト: そのアコーディオン配下のURLがアクティブなら展開）
   const initialOpen = useMemo(() => {
@@ -202,11 +235,13 @@ function SidebarContent({
   mode,
   onNavigate,
   transportEnabled,
+  shiftOnlyMode,
 }: {
   pathname: string;
   mode: Mode;
   onNavigate?: () => void;
   transportEnabled: boolean;
+  shiftOnlyMode: boolean;
 }) {
   const homeHref = mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard';
   return (
@@ -221,7 +256,13 @@ function SidebarContent({
          ScrollArea は base-ui のカスタム実装だが thumb が控えめすぎるので native overflow に置換。
          WebKit 系のスクロールバーをカラーリングして diletto テイストに合わせる。 */}
       <div className="flex-1 overflow-y-auto py-3 sidebar-scroll">
-        <SidebarNav pathname={pathname} mode={mode} onNavigate={onNavigate} transportEnabled={transportEnabled} />
+        <SidebarNav
+          pathname={pathname}
+          mode={mode}
+          onNavigate={onNavigate}
+          transportEnabled={transportEnabled}
+          shiftOnlyMode={shiftOnlyMode}
+        />
       </div>
     </div>
   );
@@ -268,6 +309,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const f = facilities.find((x) => x.id === shiftFacilityId);
     return f ? (f as Facility & { transport_enabled?: boolean }).transport_enabled !== false : true;
   }, [facilities, shiftFacilityId]);
+  /* migration 125: 選択中事業所が shift_only_mode=true なら、シフト表 / 休み希望 / 職員管理 / ダッシュボード以外を sidebar から除外 */
+  const shiftOnlyMode = useMemo(() => {
+    if (!shiftFacilityId) return false;
+    const f = facilities.find((x) => x.id === shiftFacilityId);
+    return f ? (f as Facility & { shift_only_mode?: boolean }).shift_only_mode === true : false;
+  }, [facilities, shiftFacilityId]);
 
   // localStorage から復元 + URL 判定で上書き
   useEffect(() => {
@@ -310,11 +357,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       /* facility 一覧（シフトモード上部セレクタ用）。
          migration 116: display_order 順 + shift_enabled=true のみセレクタに出す。 */
+      /* shift_enabled=true の事業所、または shift_only_mode=true の事業所をセレクタに出す。
+         migration 125 で shift_only_mode を追加し、本部のような「シフトのみ」事業所も
+         セレクタに表示する必要があるため、shift_enabled の単純フィルタは外して or 条件にした。 */
       const { data: facData } = await supabase
         .from('facilities')
-        .select('id, tenant_id, name, address, created_at, display_order, shift_enabled, transport_enabled')
+        .select('id, tenant_id, name, address, created_at, display_order, shift_enabled, transport_enabled, shift_only_mode')
         .eq('tenant_id', emp.tenant_id)
-        .eq('shift_enabled', true)
+        .or('shift_enabled.eq.true,shift_only_mode.eq.true')
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: true });
       const all = (facData as Facility[]) || [];
@@ -365,7 +415,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex h-screen bg-diletto-beige">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col border-r border-diletto-gray/10 w-64">
-        <SidebarContent pathname={pathname} mode={mode} transportEnabled={transportEnabled} />
+        <SidebarContent pathname={pathname} mode={mode} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
       </aside>
 
       {/* Main area */}
@@ -379,7 +429,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </svg>
             </SheetTrigger>
             <SheetContent side="left" className="w-[260px] p-0" style={{ height: '100dvh' }}>
-              <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} transportEnabled={transportEnabled} />
+              <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
             </SheetContent>
           </Sheet>
           <Link href={mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard'} className="flex items-center min-w-0 shrink">

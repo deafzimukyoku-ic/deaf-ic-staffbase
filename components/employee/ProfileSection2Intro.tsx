@@ -5,8 +5,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Employee } from '@/lib/types';
 
+/* 注意: `qualifications` は employees.qualifications (text[]) のため、
+   ProfileSection1Basic の chip-toggle UI（資格マスタから選ぶ配列保存）でのみ扱う。
+   ここでテキストエリアにすると string が渡って "malformed array literal" で保存失敗するため除外。 */
 type IntroFields = Pick<Employee,
-  'self_introduction' | 'current_duties' | 'past_duties' | 'qualifications' |
+  'self_introduction' | 'current_duties' | 'past_duties' |
   'efforts_focused_on' | 'how_others_describe' | 'values_and_motivation'
 >;
 
@@ -19,7 +22,6 @@ const fields: { key: keyof IntroFields; label: string; placeholder: string }[] =
   { key: 'self_introduction', label: '自己紹介', placeholder: '簡単な自己紹介をお書きください' },
   { key: 'current_duties', label: '現在の主な担当業務', placeholder: '現在担当している業務内容' },
   { key: 'past_duties', label: '過去に担当した業務', placeholder: '以前担当していた業務' },
-  { key: 'qualifications', label: '保有資格・得意分野', placeholder: '資格やスキル' },
   { key: 'efforts_focused_on', label: '力を入れてきたこと', placeholder: 'これまで注力してきたこと' },
   { key: 'how_others_describe', label: '周囲からどのような人だと言われるか', placeholder: '周りの人からの評価' },
   { key: 'values_and_motivation', label: '仕事をするうえで大切にしていること', placeholder: '仕事への価値観' },

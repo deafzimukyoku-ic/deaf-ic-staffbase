@@ -40,6 +40,8 @@ interface StaffRow {
   pickup_transport_areas: string[];
   dropoff_transport_areas: string[];
   qualifications: string[];
+  /* migration 129: シフト用資格 */
+  shift_qualifications: string[];
   is_qualified: boolean;
   is_driver: boolean;
   is_attendant: boolean;
@@ -57,7 +59,8 @@ type EditableStaff = {
   default_end_time: string;
   pickup_transport_areas: string[];
   dropoff_transport_areas: string[];
-  qualifications: string[];
+  /* migration 129: シフト・送迎用資格（事業所マスタ連動）。プロフィールの「保有資格」とは別。 */
+  shift_qualifications: string[];
   is_qualified: boolean;
   is_driver: boolean;
   is_attendant: boolean;
@@ -263,7 +266,7 @@ export default function StaffSettingsFull({ scope }: Props) {
       // 職員一覧（自facility）
       const baseSel = supabase
         .from('employees')
-        .select('id, tenant_id, facility_id, last_name, first_name, email, role, status, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, is_qualified, is_driver, is_attendant, shift_display_order')
+        .select('id, tenant_id, facility_id, last_name, first_name, email, role, status, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order')
         .eq('tenant_id', me.tenant_id)
         .eq('facility_id', selectedFacilityId);
       const filteredSel = showRetired ? baseSel : baseSel.eq('status', 'active');
@@ -317,7 +320,7 @@ export default function StaffSettingsFull({ scope }: Props) {
       default_end_time: s.default_end_time ?? DEFAULT_END_TIME,
       pickup_transport_areas: s.pickup_transport_areas ?? [],
       dropoff_transport_areas: s.dropoff_transport_areas ?? [],
-      qualifications: s.qualifications ?? [],
+      shift_qualifications: s.shift_qualifications ?? s.qualifications ?? [],
       is_qualified: s.is_qualified ?? false,
       is_driver: s.is_driver ?? false,
       is_attendant: s.is_attendant ?? false,
@@ -338,7 +341,7 @@ export default function StaffSettingsFull({ scope }: Props) {
           default_end_time: editing.default_end_time || null,
           pickup_transport_areas: editing.pickup_transport_areas,
           dropoff_transport_areas: editing.dropoff_transport_areas,
-          qualifications: editing.qualifications,
+          shift_qualifications: editing.shift_qualifications,
           is_qualified: editing.is_qualified,
           is_driver: editing.is_driver,
           is_attendant: editing.is_attendant,
@@ -562,9 +565,9 @@ export default function StaffSettingsFull({ scope }: Props) {
                     </div>
                   </td>
                   <td className="px-3 py-2" style={{ borderBottom: '1px solid var(--rule)', fontSize: '0.8rem' }}>
-                    {(s.qualifications ?? []).length > 0 ? (
+                    {(s.shift_qualifications ?? s.qualifications ?? []).length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {(s.qualifications ?? []).map((q) => (
+                        {(s.shift_qualifications ?? s.qualifications ?? []).map((q) => (
                           <span
                             key={q}
                             className="px-1.5 py-0.5 rounded text-xs whitespace-nowrap"
@@ -649,9 +652,9 @@ export default function StaffSettingsFull({ scope }: Props) {
                 </div>
               );
             })()}
-            {(s.qualifications ?? []).length > 0 && (
+            {(s.shift_qualifications ?? s.qualifications ?? []).length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
-                {(s.qualifications ?? []).map((q) => (
+                {(s.shift_qualifications ?? s.qualifications ?? []).map((q) => (
                   <span
                     key={q}
                     className="px-1.5 py-0.5 rounded text-xs whitespace-nowrap"
@@ -878,17 +881,17 @@ export default function StaffSettingsFull({ scope }: Props) {
                   </p>
                 )}
                 {qualificationTypes.map((q) => {
-                  const has = editing.qualifications.includes(q.name);
+                  const has = editing.shift_qualifications.includes(q.name);
                   return (
                     <button
                       key={q.name}
                       type="button"
                       onClick={() => {
                         const updated = has
-                          ? editing.qualifications.filter((n) => n !== q.name)
-                          : [...editing.qualifications, q.name];
+                          ? editing.shift_qualifications.filter((n) => n !== q.name)
+                          : [...editing.shift_qualifications, q.name];
                         const isQualified = updated.some((n) => countable.includes(n));
-                        setEditing({ ...editing, qualifications: updated, is_qualified: isQualified });
+                        setEditing({ ...editing, shift_qualifications: updated, is_qualified: isQualified });
                       }}
                       className="px-3 py-1.5 text-xs font-medium rounded-md transition-all"
                       style={{

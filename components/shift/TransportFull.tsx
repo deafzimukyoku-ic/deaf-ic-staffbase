@@ -11,6 +11,7 @@ import DateStepperFull from '@/components/shift/DateStepperFull';
 import Button from '@/components/shift-compat/Button';
 import Modal from '@/components/shift-compat/Modal';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
+import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
 import {
   DEFAULT_TRANSPORT_MIN_END_TIME,
   DEFAULT_PICKUP_COOLDOWN_MINUTES,
@@ -237,7 +238,7 @@ export default function TransportFull({ role }: Props) {
         supabase
           .from('employees')
           .select(
-            'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
+            'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
           )
           .eq('facility_id', facilityId)
           .eq('status', 'active'),
@@ -286,6 +287,7 @@ export default function TransportFull({ role }: Props) {
           pickup_transport_areas: (e.pickup_transport_areas as string[]) ?? [],
           dropoff_transport_areas: (e.dropoff_transport_areas as string[]) ?? [],
           qualifications: (e.qualifications as string[]) ?? [],
+          shift_qualifications: ((e.shift_qualifications as string[] | undefined) ?? (e.qualifications as string[]) ?? []),
           is_qualified: (e.is_qualified as boolean) ?? false,
           is_driver: (e.is_driver as boolean) ?? false,
           is_attendant: (e.is_attendant as boolean) ?? false,
@@ -301,11 +303,13 @@ export default function TransportFull({ role }: Props) {
         return a.name.localeCompare(b.name, 'ja');
       }));
 
-      /* 送迎表で出さないものを除外（欠席・お休み・両時刻 null） */
+      /* 送迎表で出さないものを除外（欠席・お休み・両時刻 null）。
+         Phase 64: waitlist は集約バー表示用に時刻有無に関わらず保持する。 */
       setScheduleEntries(
         ((entryRes.data ?? []) as ScheduleEntryRow[]).filter((e) => {
           if (e.attendance_status === 'absent') return false;
           if (e.attendance_status === 'leave') return false;
+          if (e.attendance_status === 'waitlist') return true;
           if (!e.pickup_time && !e.dropoff_time) return false;
           return true;
         })
@@ -370,10 +374,10 @@ export default function TransportFull({ role }: Props) {
 
   const childNameMap = useMemo(() => new Map(children.map((c) => [c.id, c.name])), [children]);
 
-  /* UI 用エントリ構築 */
+  /* UI 用エントリ構築（Phase 64: waitlist は通常テーブルから除外） */
   const currentDayEntries: UiTransportEntry[] = useMemo(() => {
     const scheduleIds = scheduleEntries
-      .filter((e) => e.date === selectedDate)
+      .filter((e) => e.date === selectedDate && e.attendance_status !== 'waitlist')
       .map((e) => e.id);
     const entryById = new Map(scheduleEntries.map((e) => [e.id, e]));
     const assignByEntry = new Map(transportAssignments.map((t) => [t.schedule_entry_id, t]));
@@ -442,6 +446,63 @@ export default function TransportFull({ role }: Props) {
     pendingChanges,
   ]);
 
+  /* Phase 64: 当日キャンセル待ち（順番昇順、null は末尾、同番号は児童 display_order 順） */
+  type WaitlistDayEntry = {
+    scheduleEntryId: string;
+    childId: string;
+    childName: string;
+    pickupTime: string | null;
+    dropoffTime: string | null;
+    waitlistOrder: number | null;
+  };
+  const currentDayWaitlist: WaitlistDayEntry[] = useMemo(() => {
+    const childOrderById = new Map(children.map((c, idx) => [c.id, idx]));
+    const rows = scheduleEntries
+      .filter((e) => e.date === selectedDate && e.attendance_status === 'waitlist')
+      .map<WaitlistDayEntry>((e) => ({
+        scheduleEntryId: e.id,
+        childId: e.child_id,
+        childName: childNameMap.get(e.child_id) ?? '(不明)',
+        pickupTime: e.pickup_time,
+        dropoffTime: e.dropoff_time,
+        waitlistOrder: e.waitlist_order ?? null,
+      }));
+    rows.sort((a, b) => {
+      const oa = a.waitlistOrder ?? 999;
+      const ob = b.waitlistOrder ?? 999;
+      if (oa !== ob) return oa - ob;
+      const ca = childOrderById.get(a.childId) ?? Number.MAX_SAFE_INTEGER;
+      const cb = childOrderById.get(b.childId) ?? Number.MAX_SAFE_INTEGER;
+      return ca - cb;
+    });
+    return rows;
+  }, [selectedDate, scheduleEntries, childNameMap, children]);
+
+  /* Phase 64: 「利用に変える」確認モーダル */
+  const [convertTarget, setConvertTarget] = useState<WaitlistDayEntry | null>(null);
+  const [converting, setConverting] = useState(false);
+
+  const handleConvertWaitlistToPresent = useCallback(async (target: WaitlistDayEntry) => {
+    setConverting(true);
+    try {
+      const { error: rpcErr } = await supabase.rpc('update_schedule_entry_attendance', {
+        p_entry_id: target.scheduleEntryId,
+        p_status: 'present',
+        p_waitlist_order: null,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+      setConvertTarget(null);
+      await fetchAll();
+    } catch (e) {
+      setToast({
+        kind: 'error',
+        message: e instanceof Error ? e.message : '切り替えに失敗しました',
+      });
+    } finally {
+      setConverting(false);
+    }
+  }, [supabase, fetchAll]);
+
   const unassignedByDate = useMemo(() => {
     const map = new Map<string, number>();
     const assignMap = new Map(transportAssignments.map((t) => [t.schedule_entry_id, t]));
@@ -473,7 +534,10 @@ export default function TransportFull({ role }: Props) {
   const staffAreaMarksForDay = useMemo(() => {
     const pickupResult = new Map<string, string[]>();
     const dropoffResult = new Map<string, string[]>();
-    const dayEntries = scheduleEntries.filter((e) => e.date === selectedDate);
+    /* Phase 64: waitlist は送迎担当を持たないため除外 */
+    const dayEntries = scheduleEntries.filter(
+      (e) => e.date === selectedDate && e.attendance_status !== 'waitlist',
+    );
     const childById = new Map(children.map((c) => [c.id, c]));
     const TRIP_GAP_MIN = 30;
 
@@ -622,7 +686,10 @@ export default function TransportFull({ role }: Props) {
       for (let i = 0; i < targetDates.length; i++) {
         const date = targetDates[i];
         setGenerateProgress({ current: i + 1, total: targetDates.length });
-        const entriesForDate = scheduleEntries.filter((e) => e.date === date);
+        /* Phase 64: waitlist は送迎担当の自動割り当て対象外 */
+        const entriesForDate = scheduleEntries.filter(
+          (e) => e.date === date && e.attendance_status !== 'waitlist',
+        );
 
         const genRes = await fetch('/api/shifts/transport/generate', {
           method: 'POST',
@@ -846,46 +913,57 @@ export default function TransportFull({ role }: Props) {
 
     setAddShiftModal((prev) => (prev ? { ...prev, saving: true, errorMsg: '' } : prev));
 
-    const existingSegments = shiftAssignments.filter(
-      (sa) =>
-        sa.employee_id === addShiftModal.staffId &&
-        sa.date === selectedDate &&
-        sa.assignment_type !== 'off'
-    );
-    const nextSegmentOrder =
-      existingSegments.length === 0
-        ? 0
-        : Math.max(...existingSegments.map((sa) => sa.segment_order ?? 0)) + 1;
+    /* Phase 66+: 共通ヘルパー replaceShiftDay 経由で 1 日まるごと送信。
+       segment_order の採番はヘルパー側で行うので、クライアントでの計算ロジックを廃止。
+       'off'（休み）行はシフト生成のダミーなので維持しない（送信前に除外）→ 結果的にゴミ off 行が掃除される。
+       paid_leave / public_holiday は normal と同列で残す（分割の前後コマとして扱う）。 */
+    const staffId = addShiftModal.staffId;
+    const existingSegments = shiftAssignments
+      .filter(
+        (sa) =>
+          sa.employee_id === staffId &&
+          sa.date === selectedDate &&
+          sa.assignment_type !== 'off'
+      )
+      .sort((a, b) => (a.segment_order ?? 0) - (b.segment_order ?? 0));
 
-    try {
-      const { error: insErr } = await supabase
-        .from('shift_assignments')
-        .insert({
-          tenant_id: tenantId,
-          facility_id: facilityId,
-          employee_id: addShiftModal.staffId,
-          date: selectedDate,
-          start_time: addShiftModal.startTime,
-          end_time: addShiftModal.endTime,
-          assignment_type: 'normal',
-          is_confirmed: false,
-          segment_order: nextSegmentOrder,
-          publish_status: 'draft',
-        });
-      if (insErr) throw new Error(insErr.message);
-      setAddShiftModal(null);
-      await fetchAll();
-    } catch (err) {
+    const newSegment: ShiftSegmentInput = {
+      start_time: addShiftModal.startTime,
+      end_time: addShiftModal.endTime,
+      assignment_type: 'normal',
+      note: null,
+    };
+    const segments: ShiftSegmentInput[] = [
+      ...existingSegments.map<ShiftSegmentInput>((sa) => ({
+        start_time: sa.start_time,
+        end_time: sa.end_time,
+        assignment_type: sa.assignment_type,
+        note: sa.note ?? null,
+      })),
+      newSegment,
+    ];
+
+    /* publish_status / is_confirmed は既存セグメントの状態を引き継ぐ（無ければ draft / 未確定）。
+       送迎表からの追加で保留中のシフトを意図せず公開・確定状態で書き換えないように。 */
+    const firstExisting = existingSegments[0];
+    const result = await replaceShiftDay({
+      supabase,
+      tenantId,
+      facilityId,
+      employeeId: staffId,
+      date: selectedDate,
+      segments,
+      isConfirmed: firstExisting?.is_confirmed ?? false,
+      publishStatus: (firstExisting?.publish_status as 'draft' | 'ready' | 'published') ?? 'draft',
+    });
+    if (!result.ok) {
       setAddShiftModal((prev) =>
-        prev
-          ? {
-              ...prev,
-              saving: false,
-              errorMsg: err instanceof Error ? err.message : 'シフト追加に失敗しました',
-            }
-          : prev
+        prev ? { ...prev, saving: false, errorMsg: result.error } : prev,
       );
+      return;
     }
+    setAddShiftModal(null);
+    await fetchAll();
   };
 
   const handleSelectDate = (date: string) => {
@@ -966,26 +1044,45 @@ export default function TransportFull({ role }: Props) {
       <div className="px-6 py-3 overflow-y-auto">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-3">
-            {/* 当日利用人数 */}
+            {/* 当日利用人数 + Phase 64: キャンセル待ち件数 */}
             {(() => {
               const dayEntries = scheduleEntries.filter(
                 (e) =>
                   e.date === selectedDate &&
                   e.attendance_status !== 'absent' &&
-                  e.attendance_status !== 'leave'
+                  e.attendance_status !== 'leave' &&
+                  e.attendance_status !== 'waitlist'
               );
+              const waitlistCount = scheduleEntries.filter(
+                (e) => e.date === selectedDate && e.attendance_status === 'waitlist'
+              ).length;
               return (
-                <span
-                  className="text-xs font-semibold px-2 py-1 rounded"
-                  style={{
-                    background: 'var(--bg)',
-                    color: 'var(--ink-2)',
-                    border: '1px solid var(--rule)',
-                  }}
-                  title="この日の利用児童数（欠席除く）"
-                >
-                  🧒 利用 {dayEntries.length}人
-                </span>
+                <>
+                  <span
+                    className="text-xs font-semibold px-2 py-1 rounded"
+                    style={{
+                      background: 'var(--bg)',
+                      color: 'var(--ink-2)',
+                      border: '1px solid var(--rule)',
+                    }}
+                    title="この日の利用児童数（欠席・キャンセル待ち除く）"
+                  >
+                    🧒 利用 {dayEntries.length}人
+                  </span>
+                  {waitlistCount > 0 && (
+                    <span
+                      className="text-xs font-semibold px-2 py-1 rounded"
+                      style={{
+                        background: 'var(--bg)',
+                        color: 'var(--ink-2)',
+                        border: '1px dashed var(--rule-strong)',
+                      }}
+                      title="この日のキャンセル待ち件数"
+                    >
+                      ⏳ 待 {waitlistCount}人
+                    </span>
+                  )}
+                </>
               );
             })()}
             {(() => {
@@ -1180,6 +1277,51 @@ export default function TransportFull({ role }: Props) {
               onColumnReorder={handleColumnReorder}
               onAddCustomArea={handleAddCustomArea}
             />
+
+            {/* Phase 64: キャンセル待ち集約バー（兄弟同番号 OK / 「利用に変える」で確認モーダル） */}
+            {currentDayWaitlist.length > 0 && (
+              <div
+                className="mt-3 px-4 py-3 rounded flex items-center flex-wrap gap-x-4 gap-y-2"
+                style={{
+                  background: 'rgba(0,0,0,0.04)',
+                  border: '1px solid var(--rule)',
+                  fontSize: '0.85rem',
+                }}
+              >
+                <span className="font-bold whitespace-nowrap" style={{ color: 'var(--ink-2)' }}>
+                  キャンセル待ち
+                </span>
+                {currentDayWaitlist.map((w) => {
+                  const orderMark = w.waitlistOrder ? '①②③④⑤⑥⑦⑧⑨⑩'.charAt(w.waitlistOrder - 1) : '－';
+                  const timeRange = w.pickupTime || w.dropoffTime
+                    ? `${w.pickupTime ? w.pickupTime.slice(0, 5) : '?'}〜${w.dropoffTime ? w.dropoffTime.slice(0, 5) : '?'}`
+                    : null;
+                  return (
+                    <span key={w.scheduleEntryId} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                      <span style={{ color: 'var(--ink-2)', fontWeight: 700 }}>{orderMark}</span>
+                      <span>{w.childName}</span>
+                      {timeRange && (
+                        <span style={{ color: 'var(--ink-3)', fontSize: '0.78rem' }}>
+                          ({timeRange})
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setConvertTarget(w)}
+                        className="ml-1 text-xs font-semibold px-2 py-0.5 rounded print-hide"
+                        style={{
+                          background: 'var(--white)',
+                          color: 'var(--accent)',
+                          border: '1px solid var(--accent)',
+                        }}
+                      >
+                        利用に変える
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-3 mt-4 print-hide">
               {pendingCountForDay > 0 && (
@@ -1470,6 +1612,54 @@ export default function TransportFull({ role }: Props) {
               );
             })()
           )}
+        </Modal>
+      )}
+
+      {/* Phase 64: キャンセル待ち → 利用 切替確認モーダル */}
+      {convertTarget && (
+        <Modal
+          isOpen={true}
+          onClose={() => (converting ? null : setConvertTarget(null))}
+          title="キャンセル待ち → 利用 への切替"
+          size="md"
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm" style={{ lineHeight: 1.6 }}>
+              <span className="font-bold">{convertTarget.childName}</span> さんを本日の{' '}
+              <span className="font-bold" style={{ color: 'var(--green)' }}>利用 (出席)</span>{' '}
+              に切り替えます。
+            </p>
+            <div
+              className="px-3 py-2 rounded text-sm"
+              style={{ background: 'var(--bg)', border: '1px solid var(--rule)' }}
+            >
+              利用時間:{' '}
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                {convertTarget.pickupTime ? convertTarget.pickupTime.slice(0, 5) : '?'}
+                {' 〜 '}
+                {convertTarget.dropoffTime ? convertTarget.dropoffTime.slice(0, 5) : '?'}
+              </span>
+              <div className="text-xs mt-1" style={{ color: 'var(--ink-3)' }}>
+                切替後は送迎担当が未割当の状態になります。送迎表で担当を割り当ててください。
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setConvertTarget(null)}
+                disabled={converting}
+              >
+                キャンセル
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => handleConvertWaitlistToPresent(convertTarget)}
+                disabled={converting}
+              >
+                {converting ? '切替中...' : '利用に変える'}
+              </Button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

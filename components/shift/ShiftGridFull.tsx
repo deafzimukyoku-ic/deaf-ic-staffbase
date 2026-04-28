@@ -46,6 +46,8 @@ interface ShiftGridProps {
   warnings: ShiftWarning[];
   onCellClick: (staffId: string, date: string) => void;
   childrenCountByDate?: Map<string, number>;
+  /** Phase 64: 日別キャンセル待ち件数（バッジ「待 N」表示用） */
+  childrenWaitlistCountByDate?: Map<string, number>;
   /** facility_shift_settings.core_start_time (HH:MM)。未指定時は 10:30 */
   coreStartTime?: string | null;
   /** facility_shift_settings.core_end_time (HH:MM)。未指定時は 16:30 */
@@ -71,6 +73,7 @@ export default function ShiftGridFull({
   warnings,
   onCellClick,
   childrenCountByDate,
+  childrenWaitlistCountByDate,
   coreStartTime,
   coreEndTime,
   minQualifiedStaff = 2,
@@ -232,10 +235,23 @@ export default function ShiftGridFull({
                   <div style={{ fontSize: '0.85rem' }}>{d.day}</div>
                   {(() => {
                     const childCount = childrenCountByDate?.get(d.dateStr) ?? 0;
-                    if (childCount === 0) return null;
+                    const waitlistCount = childrenWaitlistCountByDate?.get(d.dateStr) ?? 0;
+                    if (childCount === 0 && waitlistCount === 0) return null;
                     return (
                       <div style={{ fontSize: '0.6rem', color: 'var(--ink-3)', fontWeight: 400, lineHeight: 1 }}>
-                        {childCount}人
+                        {childCount > 0 && <span>{childCount}人</span>}
+                        {waitlistCount > 0 && (
+                          <span
+                            style={{
+                              marginLeft: childCount > 0 ? '3px' : '0',
+                              color: 'var(--ink-2)',
+                              fontWeight: 600,
+                            }}
+                            title={`キャンセル待ち ${waitlistCount} 名`}
+                          >
+                            待{waitlistCount}
+                          </span>
+                        )}
                       </div>
                     );
                   })()}

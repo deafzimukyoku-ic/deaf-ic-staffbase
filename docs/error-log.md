@@ -170,4 +170,29 @@
 - **再発防止**: 新エディタを既存データに適用する際は「旧フィールド→新フィールドへの自動seed」を必ずopenEditに実装。disabled 条件も「旧データのまま」でトリガーされないよう検証する
 
 ---
+## 社員 名前/カナの保存ができない（NOT NULL 違反）
+
+- **発生日**: 2026-04-28
+- **発生箇所**: app/(admin)/admin/employees/[id]/page.tsx `saveBasicEdit`
+- **フェーズ**: Phase 64 着手前
+- **エラー内容**: 社員詳細画面で姓・名・姓カナ・名カナを編集して保存するとエラー（toast に PostgreSQL の NOT NULL 制約違反メッセージ）
+- **原因**: `saveBasicEdit` で `payload[k] = v === '' ? null : v` と空文字を null に変換していたが、`employees.last_name / first_name / last_name_kana / first_name_kana` は NOT NULL 制約。ユーザーがフィールドをクリアした状態で保存すると DB が拒否
+- **解決方法**: `REQUIRED_BASIC_KEYS = ['last_name','first_name','last_name_kana','first_name_kana']` を定義し、保存前に空文字 / 空白のみをトーストでブロック。それ以外のカラムは従来どおり空文字 → null 化を許可
+- **再発防止**: NOT NULL 列に対する空文字 → null 一括変換は危険。フォーム保存時に必須カラムリストを明示してフロントでブロックする運用にする
+
+---
+## 利用料金表 出席日数が常に 0 になる
+
+- **発生日**: 2026-04-28
+- **発生箇所**: components/shift/BillingFull.tsx fetchAll の出席カウント、および ScheduleFull の出欠 UI
+- **フェーズ**: Phase 66-C 動作確認時にユーザー指摘
+- **エラー内容**: 利用料金表ページで全児童の「出席日数」が 0。利用表に時間を入れても反映されない
+- **原因**: 出席判定が `attendance_status === 'present'` のハード一致だったため、PDF インポート直後の `planned + 時間あり` 状態が出席扱いにならず、毎回手動で「出席」ボタンを押す運用になっていた
+- **解決方法**: deaf-ic 仕様として「時間が入っていれば自動で出席扱い」を一元化。
+  - 出席判定ロジック: `(pickup_time != null OR dropoff_time != null) AND attendance_status NOT IN ('absent', 'leave', 'waitlist')`
+  - 利用表モーダルから「出席」ボタン削除（3 ボタン化: お休み / 欠席 / キャンセル待ち、各ボタントグル解除可）
+  - present / late / early_leave ステータスは既存データ互換のため enum に残置（UI からは設定しない）
+- **再発防止**: 「明示マーク必須」型の運用は現場（放デイ）に合わない。"自動で出席、欠席連絡だけマーク" の方が運用負荷が小さく、忘れによる集計ミスも起きない。出席判定はこの 1 行ロジックに統一（CLAUDE.md §10 出欠記録に明記）
+
+---
 *(以降、新規エラーがあれば追記)*

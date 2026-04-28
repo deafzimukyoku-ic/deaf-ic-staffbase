@@ -17,11 +17,14 @@ import Modal from '@/components/shift-compat/Modal';
 import { staffDisplayName, GRADE_LABELS } from '@/lib/shift-utils';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import type { GradeType } from '@/lib/constants';
+import { COPAY_TIERS, COPAY_TIER_LABELS, type CopayTierConst } from '@/lib/constants';
+import { isFreeOfCharge, resolveCopayCap } from '@/lib/logic/computeBilling';
 import type {
   ChildRow,
   AreaLabel,
   ChildAreaEligibleStaffRow,
   Facility,
+  CopayTier,
 } from '@/lib/types';
 
 interface StaffLite {
@@ -51,6 +54,12 @@ type EditableChild = {
   custom_pickup_areas: AreaLabel[];
   custom_dropoff_areas: AreaLabel[];
   eligibility: Map<string, Set<string>>;
+  /* Phase 66-A: 利用料金表 算出のための属性（migration 126） */
+  municipality: string | null;
+  copay_tier: CopayTier;
+  copay_freeform_amount: number | null;
+  /** 公文代の月額（円、自然数）。null = 計上しない */
+  kumon_monthly_fee: number | null;
   isNew?: boolean;
 };
 
@@ -215,6 +224,10 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       custom_pickup_areas: [],
       custom_dropoff_areas: [],
       eligibility: new Map(),
+      municipality: null,
+      copay_tier: 'zero',
+      copay_freeform_amount: null,
+      kumon_monthly_fee: null,
       isNew: true,
     });
   };
@@ -247,6 +260,10 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       custom_pickup_areas: Array.isArray(child.custom_pickup_areas) ? child.custom_pickup_areas : [],
       custom_dropoff_areas: Array.isArray(child.custom_dropoff_areas) ? child.custom_dropoff_areas : [],
       eligibility,
+      municipality: child.municipality ?? null,
+      copay_tier: (child.copay_tier ?? 'zero') as CopayTier,
+      copay_freeform_amount: child.copay_freeform_amount ?? null,
+      kumon_monthly_fee: child.kumon_monthly_fee ?? null,
     });
   };
 
@@ -255,6 +272,8 @@ export default function ChildrenSettingsFull({ scope }: Props) {
     setSaving(true);
     setError('');
     try {
+      /* Phase 66-A: copay_freeform_amount は freeform 階層のときのみ送信、それ以外は強制 null（DB CHECK 整合）。 */
+      const freeformAmt = editing.copay_tier === 'freeform' ? editing.copay_freeform_amount : null;
       const payload = {
         tenant_id: me.tenant_id,
         facility_id: editing.facility_id,
@@ -267,6 +286,13 @@ export default function ChildrenSettingsFull({ scope }: Props) {
         dropoff_area_labels: editing.dropoff_area_labels,
         custom_pickup_areas: editing.custom_pickup_areas,
         custom_dropoff_areas: editing.custom_dropoff_areas,
+        municipality: editing.municipality && editing.municipality.trim() !== '' ? editing.municipality.trim() : null,
+        copay_tier: editing.copay_tier,
+        copay_freeform_amount: freeformAmt,
+        kumon_monthly_fee:
+          editing.kumon_monthly_fee != null && editing.kumon_monthly_fee > 0
+            ? Math.floor(editing.kumon_monthly_fee)
+            : null,
       };
       let targetId = editing.id;
       if (editing.isNew) {
@@ -446,7 +472,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
               >
                 ↕
               </th>
-              {['氏名', '学年', ...(scope === 'admin' ? ['事業所'] : []), '迎マーク', '送マーク', '専用エリア', 'ステータス'].map((h) => (
+              {['氏名', '学年', '上限', '公文', '迎マーク', '送マーク', '専用エリア', 'ステータス'].map((h) => (
                 <th key={h} className="px-3 py-2 text-left font-semibold" style={{ background: 'var(--ink)', color: '#fff' }}>{h}</th>
               ))}
             </tr>
@@ -454,7 +480,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
           <tbody>
             {visibleChildren.length === 0 && (
               <tr>
-                <td colSpan={scope === 'admin' ? 8 : 7} className="px-3 py-4 text-center" style={{ color: 'var(--ink-3)' }}>
+                <td colSpan={9} className="px-3 py-4 text-center" style={{ color: 'var(--ink-3)' }}>
                   児童が登録されていません
                 </td>
               </tr>
@@ -467,7 +493,6 @@ export default function ChildrenSettingsFull({ scope }: Props) {
               const dropoffCount = filterValidLabels(c.dropoff_area_labels, childDropoffAreas).length;
               const isDragging = draggingChildIdx === idx;
               const isDropTarget = dragOverChildIdx === idx && draggingChildIdx !== null && draggingChildIdx !== idx;
-              const facility = facilityMap.get(c.facility_id);
               return (
                 <tr
                   key={c.id}
@@ -534,11 +559,43 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   <td className="px-3 py-2" style={{ borderBottom: '1px solid var(--rule)' }}>
                     <Badge variant="info">{GRADE_LABELS[c.grade_type]}</Badge>
                   </td>
-                  {scope === 'admin' && (
-                    <td className="px-3 py-2" style={{ borderBottom: '1px solid var(--rule)', color: 'var(--ink-2)' }}>
-                      {facility?.name ?? '（不明）'}
-                    </td>
-                  )}
+                  {/* 上限負担額（無償化判定込み）*/}
+                  <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)', fontVariantNumeric: 'tabular-nums' }}>
+                    {(() => {
+                      const free = isFreeOfCharge(c.grade_type, c.municipality ?? null);
+                      if (free) {
+                        return (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold"
+                            style={{ background: 'var(--accent-pale)', color: 'var(--accent)', border: '1px solid var(--accent)' }}
+                            title="無償化対象（年少/年中/年長 または 名古屋市の preschool）"
+                          >
+                            無償化
+                          </span>
+                        );
+                      }
+                      const tier = (c.copay_tier ?? 'zero') as CopayTier;
+                      const cap = resolveCopayCap({ copayTier: tier, copayFreeformAmount: c.copay_freeform_amount ?? null });
+                      if (cap == null || cap <= 0) {
+                        return <span style={{ color: 'var(--ink-3)' }}>¥0</span>;
+                      }
+                      return (
+                        <span style={{ color: 'var(--green)', fontWeight: 700 }}>
+                          ¥{cap.toLocaleString('ja-JP')}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  {/* 公文代 */}
+                  <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)', fontVariantNumeric: 'tabular-nums' }}>
+                    {c.kumon_monthly_fee != null && c.kumon_monthly_fee > 0 ? (
+                      <span style={{ color: 'var(--red)', fontWeight: 700 }}>
+                        ¥{c.kumon_monthly_fee.toLocaleString('ja-JP')}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--ink-3)' }}>—</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2" style={{ borderBottom: '1px solid var(--rule)', color: pickupCount > 0 ? 'var(--accent)' : 'var(--ink-3)' }}>
                     {pickupCount === 0 ? '—' : `${pickupCount}件`}
                   </td>
@@ -685,6 +742,132 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                 <p className="text-xs" style={{ color: 'var(--ink-3)' }}>
                   送りマークに住所が未設定の場合、ここが自動で使われます（送迎表 → 地図で開く）
                 </p>
+              </div>
+
+              {/* Phase 66-A: 利用料金表 用の児童属性（migration 126）— 色分けで他フィールドと差別化 */}
+              <div
+                className="flex flex-col gap-3 p-4 rounded-lg"
+                style={{
+                  background: 'var(--gold-pale)',
+                  border: '2px solid var(--gold)',
+                  boxShadow: '0 1px 3px rgba(138,97,32,0.12)',
+                }}
+              >
+                <div
+                  className="flex items-center gap-2 pb-2"
+                  style={{ borderBottom: '1.5px solid rgba(138,97,32,0.25)' }}
+                >
+                  <span style={{ fontSize: '1.25rem' }}>💰</span>
+                  <span className="text-sm font-black" style={{ color: 'var(--gold)' }}>
+                    利用料金表 用の設定
+                  </span>
+                </div>
+
+                {/* 市町村 — 青系（accent） */}
+                <div
+                  className="flex flex-col gap-1.5 p-3 rounded"
+                  style={{ background: 'var(--white)', borderLeft: '3px solid var(--accent)' }}
+                >
+                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+                    🏙 市町村
+                    <span className="text-[10px] font-normal" style={{ color: 'var(--ink-3)' }}>
+                      （利用料金表「市町村」列に出力）
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.municipality ?? ''}
+                    onChange={(e) => setEditing({ ...editing, municipality: e.target.value })}
+                    className="outline-none"
+                    style={inputStyle}
+                    placeholder="例）半田市 / 名古屋市"
+                  />
+                  <p className="text-[11px]" style={{ color: 'var(--accent)', fontWeight: 500 }}>
+                    💡 名古屋市の場合は未就学（preschool）も自動で無償化対象になります
+                  </p>
+                </div>
+
+                {/* 利用者上限負担額 — 緑系（green） */}
+                <div
+                  className="flex flex-col gap-1.5 p-3 rounded"
+                  style={{ background: 'var(--white)', borderLeft: '3px solid var(--green)' }}
+                >
+                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--green)' }}>
+                    💴 利用者上限負担額
+                  </label>
+                  <select
+                    value={editing.copay_tier}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        copay_tier: e.target.value as CopayTier,
+                        copay_freeform_amount:
+                          (e.target.value as CopayTier) === 'freeform'
+                            ? editing.copay_freeform_amount
+                            : null,
+                      })
+                    }
+                    className="outline-none font-semibold"
+                    style={{ ...inputStyle, color: 'var(--ink)' }}
+                  >
+                    {COPAY_TIERS.map((t) => (
+                      <option key={t} value={t}>
+                        {COPAY_TIER_LABELS[t as CopayTierConst]}
+                      </option>
+                    ))}
+                  </select>
+                  {editing.copay_tier === 'freeform' && (
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={editing.copay_freeform_amount != null
+                        ? `¥${editing.copay_freeform_amount.toLocaleString('ja-JP')}`
+                        : ''}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d]/g, '');
+                        const n = raw === '' ? null : Math.max(1, parseInt(raw, 10));
+                        setEditing({ ...editing, copay_freeform_amount: n });
+                      }}
+                      className="outline-none mt-1 font-semibold"
+                      style={{ ...inputStyle, color: 'var(--green)' }}
+                      placeholder="例）¥21,000"
+                    />
+                  )}
+                  <p className="text-[11px]" style={{ color: 'var(--green)', fontWeight: 500 }}>
+                    💡 年少 / 年中 / 年長は学年で自動的に無償化対象（&quot;—&quot;表示）になります
+                  </p>
+                </div>
+
+                {/* 公文代 — 赤系（red） */}
+                <div
+                  className="flex flex-col gap-1.5 p-3 rounded"
+                  style={{ background: 'var(--white)', borderLeft: '3px solid var(--red)' }}
+                >
+                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--red)' }}>
+                    ✏️ 公文代（教材印刷代）月額
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={editing.kumon_monthly_fee != null
+                      ? `¥${editing.kumon_monthly_fee.toLocaleString('ja-JP')}`
+                      : ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^\d]/g, '');
+                      const n = raw === '' ? null : Math.max(0, parseInt(raw, 10));
+                      setEditing({
+                        ...editing,
+                        kumon_monthly_fee: n != null && n > 0 ? n : null,
+                      });
+                    }}
+                    className="outline-none font-semibold"
+                    style={{ ...inputStyle, color: 'var(--ink)' }}
+                    placeholder="例）¥2,000 ／ 空欄=計上しない"
+                  />
+                  <p className="text-[11px]" style={{ color: 'var(--red)', fontWeight: 500 }}>
+                    💡 施設・児童ごとに金額が違うため自由入力。空欄なら料金表の「公文代」列は空白
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center justify-end">

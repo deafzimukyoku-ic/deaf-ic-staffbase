@@ -24,7 +24,11 @@
 - **super_admin ロール** 完全削除（3段階 admin / manager / employee に統一）
 - **デモモード**（shift-maker の `sp_demo` cookie / DEV_SKIP_AUTH）完全削除
 - **マルチテナント**は1テナント固定（NPO本部）、配下事業所は `facilities` で表現
-- **送迎機能のON/OFF切替**は実装しない（全事業所で常時有効）
+- **事業所単位の機能 ON/OFF**は `facilities` テーブルのフラグで制御:
+  - `shift_enabled` — false なら事業所セレクタからも除外（本部など）（migration 116）。**設定 UI のトグルは「シフトのみ」と紛らわしいため削除済み**。デフォルト true で運用、本部除外が必要なら DB 直接更新
+  - `transport_enabled` — false なら送迎表ナビ + 送迎関連 UI を非表示（migration 116）
+  - `shift_only_mode` — true なら利用表 / 送迎表 / 日次出力 / 業務日報 / 事業所設定 / 児童管理 を sidebar から除外し、ダッシュボード + シフト表 + 休み希望 + 職員管理 のみ表示（migration 125）
+- これらは事業所ごとに独立。テナントレベルの機能 ON/OFF は持たない（1 テナント固定運用のため）。
 - **デザインは現 staffbase をそのまま維持**。完成後に**ロゴ・アイコン・アプリ名のみ差替**（deaf-ic.org風デザイン適用はしない）
 
 ---
@@ -77,7 +81,7 @@ tenants (1行固定: NPO本部)
 ```
 
 - `tenants` は固定1行。将来の多法人展開も構造上は可能（納品時は1行固定運用）
-- `facilities` に全事業所。全事業所でシフトパズル＋送迎表が常時有効（ON/OFFフラグ不要）
+- `facilities` に全事業所。事業所単位で機能 ON/OFF が可能（`shift_enabled` / `transport_enabled` / `shift_only_mode`、上記§1参照）
 - shift-maker 由来のテーブル（`children`, `schedule_entries`, `shift_requests`, `shift_assignments`, `transport_assignments` 等）は全て `facility_id` カラム追加 + RLS を facility 単位に改造
 
 ### シフト公開フロー（Phase 5 要件）
@@ -212,6 +216,14 @@ shift-maker 由来:
 - `DEFAULT_MIN_QUALIFIED_STAFF=2`
 - `TRANSPORT_TRIP_GAP_MINUTES=30`
 
+利用料金表 (Phase 66, migration 126〜):
+- `SNACK_FEE_PER_DAY=50`（おやつ消耗品代、円/日、固定）
+- 公文代: 児童ごとに `children.kumon_monthly_fee`（円、自然数、null=計上しない）。施設・児童で金額を変えられる
+- `COPAY_TIERS=['zero','4600','37200','freeform']`
+- `NAGOYA_FREE_PRESCHOOL_MUNICIPALITY='名古屋市'`（preschool も無償化対象になる市）
+- `FREE_GRADES_NATIONWIDE=['nursery_3','nursery_4','nursery_5']`（全国無償化対象）
+- 利用負担額の精緻計算（出席日数 × 単価でクリップ等）はデイロボに任せ、月次料金表ページで手動入力。child 属性として 1日単価は持たない
+
 削除された定数: `PLAN_NAMES`, `PLAN_LIMITS`, `PLAN_PRICES_JPY`（Stripe削除のため）
 
 ---
@@ -280,10 +292,14 @@ shift-maker 由来:
 - `admin`: 全操作可。シフト変更申請承認は出勤中 admin のみ
 
 ### 出欠記録
-- `schedule_entries.attendance_status`: `planned|present|absent|late|early_leave`
-- 更新は RPC `update_schedule_entry_attendance(p_entry_id, p_status)` 経由
-- `attendance_audit_logs` に履歴自動記録（changed_by_name スナップショット）
-- `absent` 児童は日次出力・送迎表から除外
+- `schedule_entries.attendance_status`: `planned|present|absent|late|early_leave|leave|waitlist`
+- 更新は RPC `update_schedule_entry_attendance(p_entry_id, p_status, p_waitlist_order)` 経由（migration 124 で 第3引数追加）
+- `attendance_audit_logs` に status 変更時のみ履歴記録（changed_by_name スナップショット）
+- **deaf-ic 出席判定（一元化）**: 「出席扱い = 時間が入っている (`pickup_time` または `dropoff_time` not null) AND `attendance_status NOT IN ('absent', 'leave', 'waitlist')`」
+  - `planned + 時間あり` も自動で出席扱い（PDF インポート直後でカウントされる）
+  - 利用表モーダルから「出席」ボタンは削除済。明示マークは「お休み / 欠席 / キャンセル待ち」の 3 つのみ（再押下でトグル解除）
+  - `present` ステータスは互換のため enum に残置。既存データはそのまま動く（時間ありなら出席扱いに該当）
+- `absent` / `leave` / `waitlist` 児童は日次出力・送迎表・シフト生成・利用料金表 出席日数 から除外
 
 ### AI診断
 - `claude-haiku-4-5` 固定

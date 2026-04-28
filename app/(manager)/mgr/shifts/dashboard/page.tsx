@@ -1,30 +1,34 @@
 // シフト・送迎ダッシュボード（manager）
 // 担当facility のみ集計。UI は admin 版と同じ。
 
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { MonthStatusBadge } from '@/components/shift/MonthStatusBadge';
+import DashboardCardsGrid, {
+  type DashboardCard,
+  type DashboardCardKey,
+  type DashboardStatus,
+} from '@/components/shift/DashboardCardsGrid';
 
 export const dynamic = 'force-dynamic';
 
-type Status = 'empty' | 'incomplete' | 'complete';
-type CardKey = 'schedule' | 'shift' | 'transport' | 'request';
+type Status = DashboardStatus;
+type CardKey = DashboardCardKey;
 
-interface Card {
-  href: string;
-  title: string;
-  desc: string;
-  icon: string;
-  key?: CardKey;
-}
-
-const MANAGER_CARDS: Card[] = [
+const MANAGER_CARDS: DashboardCard[] = [
+  /* 業務 */
   { href: '/mgr/shifts/schedule', title: '利用表', desc: 'PDFインポート・カレンダー確認', icon: '📅', key: 'schedule' },
   { href: '/mgr/shifts', title: 'シフト表', desc: 'シフト生成・調整・公開', icon: '📋', key: 'shift' },
   { href: '/mgr/shifts/transport', title: '送迎表', desc: '担当割り当て・公開', icon: '🚗', key: 'transport' },
+  /* 出力 */
   { href: '/mgr/shifts/output/daily', title: '日次出力', desc: '当日の送迎・出勤をホワイトボード風に表示', icon: '📄' },
+  { href: '/mgr/shifts/output/daily-report', title: '業務日報', desc: '当日の業務内容を A4 で出力', icon: '📋' },
+  { href: '/mgr/shifts/output/billing', title: '利用料金表', desc: '月次の請求書を生成・印刷', icon: '💰' },
+  /* 申請 */
   { href: '/mgr/requests', title: '休み希望一覧', desc: '担当事業所の提出状況を確認', icon: '✋', key: 'request' },
-  { href: '/mgr/shifts/facility-settings', title: '設定', desc: '事業所・職員・児童の管理', icon: '⚙️' },
+  /* シフト設定 */
+  { href: '/mgr/shifts/facility-settings', title: '事業所設定', desc: 'コアタイム・エリア・最低出勤数', icon: '🏢' },
+  { href: '/mgr/shifts/staff-settings', title: '職員管理', desc: '出勤予定・有資格者・送迎エリア', icon: '👔' },
+  { href: '/mgr/children', title: '児童管理', desc: '学年・上限負担額・公文代', icon: '👶' },
+  { href: '/mgr/shifts/events', title: 'イベント設定', desc: '月次の有料イベント登録', icon: '🎉' },
 ];
 
 async function computeStatuses(
@@ -141,27 +145,7 @@ export default async function ManagerShiftsDashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {MANAGER_CARDS.map((c) => {
-          const status = c.key ? statuses[c.key] : null;
-          return (
-            <Link
-              key={c.href}
-              href={c.href}
-              className="relative p-5 bg-white rounded-md border border-diletto-gray/10 shadow-sm hover:shadow-md hover:border-diletto-blue/30 transition-all group"
-            >
-              {status && status !== 'empty' && (
-                <div className="absolute top-3 right-3">
-                  <MonthStatusBadge status={status} compact />
-                </div>
-              )}
-              <div className="text-3xl mb-3">{c.icon}</div>
-              <div className="text-base font-bold text-diletto-ink mb-1">{c.title}</div>
-              <div className="text-xs text-diletto-gray leading-relaxed">{c.desc}</div>
-            </Link>
-          );
-        })}
-      </div>
+      <DashboardCardsGrid cards={MANAGER_CARDS} statuses={statuses} scope="manager" />
     </div>
   );
 }

@@ -129,7 +129,7 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
         supabase
           .from('employees')
           .select(
-            'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status',
+            'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status',
           )
           .eq('facility_id', facilityId)
           .eq('status', 'active'),
@@ -167,6 +167,7 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
           pickup_transport_areas: (e.pickup_transport_areas as string[]) ?? [],
           dropoff_transport_areas: (e.dropoff_transport_areas as string[]) ?? [],
           qualifications: (e.qualifications as string[]) ?? [],
+          shift_qualifications: ((e.shift_qualifications as string[] | undefined) ?? (e.qualifications as string[]) ?? []),
           is_qualified: (e.is_qualified as boolean) ?? false,
           is_driver: (e.is_driver as boolean) ?? false,
           is_attendant: (e.is_attendant as boolean) ?? false,
@@ -176,11 +177,13 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
       setStaff(staffRows);
       setChildren((childRes.data ?? []) as ChildRow[]);
 
-      /* 欠席 (absent)・お休み (leave または時刻両方 null) は印刷対象外 */
+      /* 欠席 (absent)・お休み (leave または時刻両方 null)・キャンセル待ち (waitlist) は印刷対象外。
+         Phase 64: waitlist は週次送迎の送迎担当を持たないので除外。 */
       setScheduleEntries(
         ((entryRes.data ?? []) as ScheduleEntryRow[]).filter((e) => {
           if (e.attendance_status === 'absent') return false;
           if (e.attendance_status === 'leave') return false;
+          if (e.attendance_status === 'waitlist') return false;
           if (!e.pickup_time && !e.dropoff_time) return false;
           return true;
         }),

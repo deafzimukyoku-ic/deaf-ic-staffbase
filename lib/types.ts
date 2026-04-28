@@ -130,8 +130,13 @@ export interface Employee {
   self_introduction: string | null;
   current_duties: string | null;
   past_duties: string | null;
-  /* migration 114 で text → text[]。施設の qualification_types から選択した資格名の配列。 */
+  /* migration 114 で text → text[]。
+     migration 129 で運用分離: 「保有資格」(個人の自由入力、プロフィール表示用)。
+     シフト/送迎の有資格者判定には employees.shift_qualifications を使用。 */
   qualifications: string[];
+  /* migration 129: シフト・送迎モード用資格。facility_shift_settings.qualification_types マスタ連動。
+     is_qualified 判定・シフト自動生成で参照される。 */
+  shift_qualifications?: string[];
   efforts_focused_on: string | null;
   how_others_describe: string | null;
   values_and_motivation: string | null;
@@ -189,6 +194,7 @@ export interface Employee {
 
 // --- Facilities ---
 // migration 116 で display_order / shift_enabled / transport_enabled 追加。
+// migration 125 で shift_only_mode 追加。
 export interface Facility {
   id: string;
   tenant_id: string;
@@ -198,6 +204,8 @@ export interface Facility {
   display_order?: number;
   shift_enabled?: boolean;
   transport_enabled?: boolean;
+  /* migration 125: シフトのみモード。true なら sidebar を シフト表 / 休み希望 / 職員管理 / ダッシュボードのみに絞る。 */
+  shift_only_mode?: boolean;
   /* migration 121: 業務日報の活動内容/連絡事項枠に印字するテンプレート（複数行プレーンテキスト）。 */
   daily_report_template?: string;
 }
@@ -255,11 +263,30 @@ export interface StaffShiftFields {
   default_end_time: string | null;
   pickup_transport_areas: string[];   // facility の pickup_area_labels.id 配列
   dropoff_transport_areas: string[];
-  qualifications: string[];           // QualificationType.name の配列
+  /** migration 129 で運用分離 — シフト用資格は shift_qualifications を使用。
+   *  これは互換のため残置（プロフィール側「保有資格」の自由入力）。 */
+  qualifications: string[];
+  /** migration 129: シフト・送迎用資格（facility マスタ連動、is_qualified 判定の元）。 */
+  shift_qualifications: string[];
   is_qualified: boolean;
   is_driver: boolean;
   is_attendant: boolean;
   shift_display_order: number | null;
+}
+
+/* Phase 66-A: 利用者上限負担額の階層 (migration 126) */
+export type CopayTier = 'zero' | '4600' | '37200' | 'freeform';
+
+/* Phase 66-B: イベント (migration 127) */
+export interface EventRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  price: number; // 円
+  display_order: number | null;
+  created_at: string;
 }
 
 export interface ChildRow {
@@ -278,12 +305,26 @@ export interface ChildRow {
   // この児童専用のエリア定義
   custom_pickup_areas: AreaLabel[];
   custom_dropoff_areas: AreaLabel[];
+  /* Phase 66-A: 利用料金表（migration 126） */
+  municipality?: string | null;
+  copay_tier?: CopayTier;
+  copay_freeform_amount?: number | null;
+  /** 公文代の月額（円、自然数）。null = 計上しない。施設・児童ごとに金額を変えられる。 */
+  kumon_monthly_fee?: number | null;
   created_at: string;
 }
 
 // --- Shift-maker: 利用予定 ---
 // Phase 4 Step 2-Full: shift-puzzle に合わせて 'leave' を追加（migration 105）
-export type AttendanceStatus = 'planned' | 'present' | 'absent' | 'late' | 'early_leave' | 'leave';
+// Phase 64: 'waitlist'（キャンセル待ち）を追加（migration 124）
+export type AttendanceStatus =
+  | 'planned'
+  | 'present'
+  | 'absent'
+  | 'late'
+  | 'early_leave'
+  | 'leave'
+  | 'waitlist';
 
 export interface ScheduleEntryRow {
   id: string;
@@ -302,6 +343,8 @@ export interface ScheduleEntryRow {
   attendance_status: AttendanceStatus;
   attendance_updated_at: string | null;
   attendance_updated_by: string | null;
+  /** Phase 64 (migration 124): waitlist 時のみ 1〜10、それ以外は null。同日内重複可（兄弟想定）。 */
+  waitlist_order: number | null;
   created_at: string;
 }
 
@@ -650,7 +693,10 @@ export interface StaffRow {
   default_end_time: string | null;
   pickup_transport_areas: string[];
   dropoff_transport_areas: string[];
+  /** 保有資格（個人の自由入力、プロフィール表示用）。migration 129 で分離。 */
   qualifications: string[];
+  /** シフト・送迎用資格（facility マスタ連動）。is_qualified 判定の元。migration 129。 */
+  shift_qualifications: string[];
   is_qualified: boolean;
   is_driver: boolean;
   is_attendant: boolean;

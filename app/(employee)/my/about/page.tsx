@@ -96,7 +96,7 @@ export default function AboutPage() {
           <ProfileSection2Intro
             data={{
               self_introduction: employee.self_introduction, current_duties: employee.current_duties,
-              past_duties: employee.past_duties, qualifications: employee.qualifications,
+              past_duties: employee.past_duties,
               efforts_focused_on: employee.efforts_focused_on, how_others_describe: employee.how_others_describe,
               values_and_motivation: employee.values_and_motivation,
             }}

@@ -61,9 +61,10 @@ export default function SettingsPage() {
   const [banks, setBanks] = useState<{ bank_name: string; is_default: boolean }[]>([]);
   /* migration 116: facilities に display_order / shift_enabled / transport_enabled を追加。
      migration 121: daily_report_template を追加。
-     UI でドラッグ&ドロップ並び替え + 2 トグルを編集可能に。 */
+     migration 125: shift_only_mode を追加（true で sidebar をシフト系のみに絞る）。
+     UI でドラッグ&ドロップ並び替え + 3 トグルを編集可能に。 */
   const [facilities, setFacilities] = useState<
-    { id?: string; name: string; address: string; display_order: number; shift_enabled: boolean; transport_enabled: boolean; daily_report_template: string }[]
+    { id?: string; name: string; address: string; display_order: number; shift_enabled: boolean; transport_enabled: boolean; shift_only_mode: boolean; daily_report_template: string }[]
   >([]);
   const [positions, setPositions] = useState<(Omit<Position, 'tenant_id' | 'created_at' | 'id'> & { id?: string })[]>([]);
   /* gate_fields: 「この項目を入力するのは誰か」を表す employees の boolean 列名の配列。
@@ -96,7 +97,7 @@ export default function SettingsPage() {
 
       const { data: facilityData } = await supabase
         .from('facilities')
-        .select('id, name, address, display_order, shift_enabled, transport_enabled, daily_report_template')
+        .select('id, name, address, display_order, shift_enabled, transport_enabled, shift_only_mode, daily_report_template')
         .eq('tenant_id', me.tenant_id)
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: true });
@@ -109,6 +110,7 @@ export default function SettingsPage() {
             display_order: (f.display_order as number | null) ?? 0,
             shift_enabled: (f.shift_enabled as boolean | null) ?? true,
             transport_enabled: (f.transport_enabled as boolean | null) ?? true,
+            shift_only_mode: (f.shift_only_mode as boolean | null) ?? false,
             daily_report_template: (f.daily_report_template as string | null) ?? '',
           })),
         );
@@ -177,6 +179,7 @@ export default function SettingsPage() {
           display_order: i,
           shift_enabled: f.shift_enabled,
           transport_enabled: f.transport_enabled,
+          shift_only_mode: f.shift_only_mode,
           daily_report_template: f.daily_report_template,
         })
         .eq('id', f.id);
@@ -194,6 +197,7 @@ export default function SettingsPage() {
           display_order: idx,
           shift_enabled: f.shift_enabled,
           transport_enabled: f.transport_enabled,
+          shift_only_mode: f.shift_only_mode,
           daily_report_template: f.daily_report_template,
         })),
       );
@@ -276,7 +280,7 @@ export default function SettingsPage() {
     // リロード（新規作成分のIDを取得）
     const { data: reloadedFacilities } = await supabase
       .from('facilities')
-      .select('id, name, address, display_order, shift_enabled, transport_enabled, daily_report_template')
+      .select('id, name, address, display_order, shift_enabled, transport_enabled, shift_only_mode, daily_report_template')
       .eq('tenant_id', tenantId)
       .order('display_order', { ascending: true })
       .order('created_at', { ascending: true });
@@ -289,6 +293,7 @@ export default function SettingsPage() {
           display_order: (f.display_order as number | null) ?? 0,
           shift_enabled: (f.shift_enabled as boolean | null) ?? true,
           transport_enabled: (f.transport_enabled as boolean | null) ?? true,
+          shift_only_mode: (f.shift_only_mode as boolean | null) ?? false,
           daily_report_template: (f.daily_report_template as string | null) ?? '',
         })),
       );
@@ -424,7 +429,7 @@ export default function SettingsPage() {
                 onClick={() =>
                   setFacilities([
                     ...facilities,
-                    { name: '', address: '', display_order: facilities.length, shift_enabled: true, transport_enabled: true, daily_report_template: '' },
+                    { name: '', address: '', display_order: facilities.length, shift_enabled: true, transport_enabled: true, shift_only_mode: false, daily_report_template: '' },
                   ])
                 }
               >
@@ -710,7 +715,7 @@ function NavCard({
   );
 }
 
-/* ===== 施設一覧: ドラッグ&ドロップ並び替え + 2 トグル (migration 116) ===== */
+/* ===== 施設一覧: ドラッグ&ドロップ並び替え + 3 トグル (migration 116 + 125) ===== */
 type FacilityRow = {
   id?: string;
   name: string;
@@ -718,6 +723,7 @@ type FacilityRow = {
   display_order: number;
   shift_enabled: boolean;
   transport_enabled: boolean;
+  shift_only_mode: boolean;
   daily_report_template: string;
 };
 
@@ -825,16 +831,20 @@ function FacilityRowItem({
           onChange={(e) => onChange({ ...facility, address: e.target.value })}
         />
       </div>
-      <div className="flex items-center gap-1.5">
-        <Toggle
-          checked={facility.shift_enabled}
-          onToggle={() => onChange({ ...facility, shift_enabled: !facility.shift_enabled })}
-          label="シフト"
-        />
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {/* 「シフト ON/OFF」(`shift_enabled`) は migration 116 で追加されたが、
+            「シフトのみ ON/OFF」と紛らわしいため UI から削除。
+            DB カラムは残置（デフォルト true）。本部などをシフトモードから除外したい場合は DB 直接更新で対応。 */}
         <Toggle
           checked={facility.transport_enabled}
           onToggle={() => onChange({ ...facility, transport_enabled: !facility.transport_enabled })}
           label="送迎"
+        />
+        {/* migration 125: シフトのみモード。ON で利用表/送迎表/日次出力/業務日報/事業所設定/児童管理を sidebar から除外。 */}
+        <Toggle
+          checked={facility.shift_only_mode}
+          onToggle={() => onChange({ ...facility, shift_only_mode: !facility.shift_only_mode })}
+          label="シフトのみ"
         />
       </div>
       <Button size="sm" variant="ghost" className="text-diletto-red" onClick={onDelete}>

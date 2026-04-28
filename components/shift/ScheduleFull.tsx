@@ -20,6 +20,7 @@ import PdfImportModal from '@/components/shift/PdfImportModal';
 import ExcelPasteModal, { type ExistingEntrySummary } from '@/components/shift/ExcelPasteModal';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import type { ChildRow, ScheduleEntryRow, AttendanceStatus, AttendanceAuditLogRow, Facility, AreaLabel, ParsedScheduleEntry } from '@/lib/types';
+import { inferChildDefaultTimes } from '@/lib/logic/inferDefaultTimes';
 
 interface Props {
   scope: 'admin' | 'manager';
@@ -73,7 +74,10 @@ const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
   late: '遅刻',
   early_leave: '早退',
   leave: 'お休み',
+  waitlist: 'キャンセル待ち',
 };
+
+const WAITLIST_MARKS = '①②③④⑤⑥⑦⑧⑨⑩';
 
 function defaultCurrentMonth(): { year: number; month: number } {
   const d = new Date();
@@ -109,6 +113,8 @@ export default function ScheduleFull({ scope }: Props) {
   const [attendanceBusy, setAttendanceBusy] = useState(false);
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceAuditLogRow[]>([]);
   const [logsOpen, setLogsOpen] = useState(false);
+  // Phase 64: キャンセル待ちの順番（1〜10、null = 未指定）
+  const [waitlistOrder, setWaitlistOrder] = useState<number | null>(null);
   const [pickupHour, setPickupHour] = useState('13');
   const [pickupMin, setPickupMin] = useState('20');
   const [pickupMethod, setPickupMethod] = useState<'self' | 'pickup'>('pickup');
@@ -181,6 +187,7 @@ export default function ScheduleFull({ scope }: Props) {
           pickup_method: e.pickup_method === 'self' ? 'self' : 'pickup',
           dropoff_method: e.dropoff_method === 'self' ? 'self' : 'dropoff',
           attendance_status: e.attendance_status ?? 'planned',
+          waitlist_order: e.waitlist_order ?? null,
           note: e.note ?? null,
         }))
       );
@@ -202,8 +209,18 @@ export default function ScheduleFull({ scope }: Props) {
 
   const handleCellClick = (childId: string, date: string) => {
     const cellData = cells.find((c) => c.child_id === childId && c.date === date);
+    /* Phase 66+: 空セル時は同児童 × 同日タイプ（平日 / 土日祝）の最頻値を初期値に。
+       既存の rawEntries から推定。データが無ければ 13:00 / 16:00 にフォールバック。 */
+    const inferred =
+      !cellData?.pickup_time || !cellData?.dropoff_time
+        ? inferChildDefaultTimes(childId, date, rawEntries)
+        : { pickup: null, dropoff: null };
+
     if (cellData?.pickup_time) {
       const [h, m] = cellData.pickup_time.split(':');
+      setPickupHour(h); setPickupMin(m);
+    } else if (inferred.pickup) {
+      const [h, m] = inferred.pickup.split(':');
       setPickupHour(h); setPickupMin(m);
     } else {
       setPickupHour('13'); setPickupMin('00');
@@ -211,22 +228,31 @@ export default function ScheduleFull({ scope }: Props) {
     if (cellData?.dropoff_time) {
       const [h, m] = cellData.dropoff_time.split(':');
       setDropoffHour(h); setDropoffMin(m);
+    } else if (inferred.dropoff) {
+      const [h, m] = inferred.dropoff.split(':');
+      setDropoffHour(h); setDropoffMin(m);
     } else {
       setDropoffHour('16'); setDropoffMin('00');
     }
     setPickupMethod(cellData?.pickup_method || 'pickup');
     setDropoffMethod(cellData?.dropoff_method || 'dropoff');
     setAttendanceStatus(cellData?.attendance_status ?? 'planned');
+    setWaitlistOrder(cellData?.waitlist_order ?? null);
     setAttendanceLogs([]);
     setLogsOpen(false);
     setSelectedCell({ childId, date });
   };
 
-  const handleAttendanceChange = async (next: AttendanceStatus) => {
+  const handleAttendanceChange = async (
+    next: AttendanceStatus,
+    nextOrder: number | null = null,
+  ) => {
     if (!selectedCell || !me) return;
     const cell = cells.find(
       (c) => c.child_id === selectedCell.childId && c.date === selectedCell.date,
     );
+    /* Phase 64: waitlist 以外なら順番は強制 NULL（DB CHECK 制約と整合） */
+    const orderToSend = next === 'waitlist' ? nextOrder : null;
     setAttendanceBusy(true);
     try {
       let entryId = cell?.entry_id ?? null;
@@ -254,10 +280,11 @@ export default function ScheduleFull({ scope }: Props) {
         if (!entryId) throw new Error('利用予定の作成に失敗しました');
       }
 
-      // RPC update_schedule_entry_attendance を呼ぶ（migration 102）
+      // RPC update_schedule_entry_attendance を呼ぶ（migration 124 で第3引数 p_waitlist_order 追加）
       const { error: rpcErr } = await supabase.rpc('update_schedule_entry_attendance', {
         p_entry_id: entryId,
         p_status: next,
+        p_waitlist_order: orderToSend,
       });
       if (rpcErr) {
         // RPC が無い/失敗時は直接 update
@@ -265,6 +292,7 @@ export default function ScheduleFull({ scope }: Props) {
           .from('schedule_entries')
           .update({
             attendance_status: next,
+            waitlist_order: orderToSend,
             attendance_updated_at: new Date().toISOString(),
             attendance_updated_by: me.id,
           })
@@ -273,11 +301,16 @@ export default function ScheduleFull({ scope }: Props) {
       }
 
       setAttendanceStatus(next);
+      setWaitlistOrder(orderToSend);
       const finalEntryId = entryId;
       setCells((prev) => {
         const exists = prev.some((c) => c.entry_id === finalEntryId);
         if (exists) {
-          return prev.map((c) => c.entry_id === finalEntryId ? { ...c, attendance_status: next } : c);
+          return prev.map((c) =>
+            c.entry_id === finalEntryId
+              ? { ...c, attendance_status: next, waitlist_order: orderToSend }
+              : c,
+          );
         }
         void fetchAll();
         return prev;
@@ -340,7 +373,10 @@ export default function ScheduleFull({ scope }: Props) {
 
   const handleSave = async () => {
     if (!selectedCell || !me) return;
-    const isPresent = attendanceStatus !== 'absent' && attendanceStatus !== 'leave';
+    /* Phase 64: waitlist は時刻保持（present 昇格時に引き継ぐため）。absent/leave は時刻 NULL。 */
+    const isPresent =
+      attendanceStatus !== 'absent' &&
+      attendanceStatus !== 'leave';
     const pickup = isPresent
       ? `${pickupHour.padStart(2, '0')}:${pickupMin.padStart(2, '0')}`
       : null;
@@ -640,12 +676,34 @@ export default function ScheduleFull({ scope }: Props) {
               </>
             )}
 
+            {attendanceStatus === 'waitlist' && (
+              <div
+                className="px-3 py-2 rounded text-xs font-semibold"
+                style={{
+                  background: 'rgba(0,0,0,0.05)',
+                  color: 'var(--ink-2)',
+                  border: '1px dashed var(--rule-strong)',
+                }}
+              >
+                この利用時間でキャンセル待ちです
+                {waitlistOrder ? `（順番: ${waitlistOrder} 番）` : ''}
+              </div>
+            )}
+
             <div className="flex flex-col gap-2 pt-3 mt-1" style={{ borderTop: '1px solid var(--rule)' }}>
+              {/* deaf-ic 仕様: 時間が入っていれば自動で出席扱い。
+                  「お休み / 欠席 / キャンセル待ち」のみマーク。各ボタンはトグル（再押下で予定に戻す）。 */}
+              <div
+                className="text-xs px-3 py-2 rounded"
+                style={{ background: 'var(--green-pale)', color: 'var(--green)', border: '1px solid rgba(42,122,82,0.3)' }}
+              >
+                ✓ 時間が入っていれば自動で出席扱いになります。下のボタンは欠席連絡などがあった時のみ押してください。
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 {([
-                  { label: '出席', value: 'present' as AttendanceStatus, color: 'var(--green)' },
                   { label: 'お休み', value: 'leave' as AttendanceStatus, color: 'var(--ink-3)' },
                   { label: '欠席', value: 'absent' as AttendanceStatus, color: 'var(--red)' },
+                  { label: 'キャンセル待ち', value: 'waitlist' as AttendanceStatus, color: '#6b7280' },
                 ]).map((opt) => {
                   const on = attendanceStatus === opt.value;
                   return (
@@ -653,8 +711,17 @@ export default function ScheduleFull({ scope }: Props) {
                       key={opt.value}
                       type="button"
                       disabled={attendanceBusy}
-                      onClick={() => handleAttendanceChange(opt.value)}
-                      className="py-3 text-base font-bold rounded transition-all"
+                      onClick={() => {
+                        if (on) {
+                          /* トグル解除: 同じボタンを再度押したら planned に戻す（=出席扱いに戻る） */
+                          handleAttendanceChange('planned', null);
+                          return;
+                        }
+                        /* waitlist に切替時は既存 order を維持、それ以外は null */
+                        const carryOrder = opt.value === 'waitlist' ? waitlistOrder : null;
+                        handleAttendanceChange(opt.value, carryOrder);
+                      }}
+                      className="py-3 text-sm font-bold rounded transition-all"
                       style={{
                         background: on ? opt.color : 'var(--bg)',
                         color: on ? '#fff' : 'var(--ink-2)',
@@ -662,12 +729,60 @@ export default function ScheduleFull({ scope }: Props) {
                         opacity: attendanceBusy ? 0.6 : 1,
                         cursor: attendanceBusy ? 'wait' : 'pointer',
                       }}
+                      title={on ? 'もう一度押すと予定に戻します（出席扱い）' : undefined}
                     >
-                      {opt.label}
+                      {opt.label}{on ? ' ✓' : ''}
                     </button>
                   );
                 })}
               </div>
+
+              {/* Phase 64: キャンセル待ちの順番ピッカー（5×2 グリッド、同番号重複可） */}
+              {attendanceStatus === 'waitlist' && (
+                <div className="flex flex-col gap-2 mt-2">
+                  <label className="text-xs font-semibold" style={{ color: 'var(--ink-2)' }}>
+                    順番（同じ番号が複数いてもOK：兄弟など）
+                  </label>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
+                      const on = waitlistOrder === n;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          disabled={attendanceBusy}
+                          onClick={() => handleAttendanceChange('waitlist', n)}
+                          className="py-2 text-base font-bold rounded transition-all"
+                          style={{
+                            background: on ? '#6b7280' : 'var(--bg)',
+                            color: on ? '#fff' : 'var(--ink-2)',
+                            border: `2px solid ${on ? '#6b7280' : 'var(--rule-strong)'}`,
+                            opacity: attendanceBusy ? 0.6 : 1,
+                            cursor: attendanceBusy ? 'wait' : 'pointer',
+                          }}
+                        >
+                          {WAITLIST_MARKS.charAt(n - 1)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {waitlistOrder != null && (
+                    <button
+                      type="button"
+                      onClick={() => handleAttendanceChange('waitlist', null)}
+                      disabled={attendanceBusy}
+                      className="text-xs font-semibold py-1.5 rounded"
+                      style={{
+                        background: 'transparent',
+                        color: 'var(--ink-3)',
+                        border: '1px dashed var(--rule-strong)',
+                      }}
+                    >
+                      順番をクリア
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 mt-2">
