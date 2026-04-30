@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { resend, FROM_EMAIL } from '@/lib/resend';
+import { brandedInviteHtml } from '@/lib/email/invite-html';
 
 export async function POST(request: NextRequest) {
   // 1. 認証チェック
@@ -172,24 +173,13 @@ async function resendInviteOnly({
   const { error: mailErr } = await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
-    subject: `【${company}】staffbase への招待（再送信）`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #1a1a2e;">${company}</h2>
-        <p>${employeeName}さん</p>
-        <p>staffbase（職員ステーション）への招待メールを再送信しました。</p>
-        <p>以下のリンクからパスワードを設定してログインしてください。</p>
-        <p style="margin: 24px 0;">
-          <a href="${inviteLink}"
-             style="display: inline-block; background-color: #4169e1; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
-            招待を受け入れる
-          </a>
-        </p>
-        <p style="color: #666; font-size: 12px;">このメールに心当たりがない場合は無視してください。</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 11px;">diletto by AI Skill Exchange — staffbase</p>
-      </div>
-    `,
+    subject: `【${company}】職員ステーションへの招待（再送信）`,
+    html: brandedInviteHtml({
+      company,
+      employeeName,
+      inviteLink,
+      isResend: true,
+    }),
   });
 
   if (mailErr) {
@@ -315,28 +305,12 @@ async function createEmployeeAndSendInvite({
   const company = tenant?.company_name || '';
   const employeeName = `${last_name} ${first_name}`;
 
-  // Resendで招待メール送信
+  // Resend で招待メール送信（NPO ブランド HTML / migration: lib/email/invite-html.ts）
   const { error: mailErr } = await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
-    subject: `【${company}】staffbase への招待`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #1a1a2e;">${company}</h2>
-        <p>${employeeName}さん</p>
-        <p>staffbase（職員ステーション）への招待が届きました。</p>
-        <p>以下のリンクからパスワードを設定してログインしてください。</p>
-        <p style="margin: 24px 0;">
-          <a href="${inviteLink}"
-             style="display: inline-block; background-color: #4169e1; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
-            招待を受け入れる
-          </a>
-        </p>
-        <p style="color: #666; font-size: 12px;">このメールに心当たりがない場合は無視してください。</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 11px;">diletto by AI Skill Exchange — staffbase</p>
-      </div>
-    `,
+    subject: `【${company}】職員ステーションへの招待`,
+    html: brandedInviteHtml({ company, employeeName, inviteLink, isResend: false }),
   });
 
   if (mailErr) {

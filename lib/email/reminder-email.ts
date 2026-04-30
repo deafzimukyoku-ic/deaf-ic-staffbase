@@ -49,7 +49,7 @@ export function buildReminderEmail({ category, employeeName, companyName, appUrl
           <a href="${link}" style="display:inline-block;background:#1a3eb8;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:600;">${escapeHtml(label)}を開く →</a>
         </td></tr>
         <tr><td style="padding:16px 28px 24px;border-top:1px solid rgba(0,0,0,0.08);">
-          <p style="margin:0;font-size:11px;color:#a8a8a0;">このメールは diletto StaffBase から管理者が送信しました。</p>
+          <p style="margin:0;font-size:11px;color:#a8a8a0;">このメールは 名古屋ろう国際センター 職員ステーション から管理者が送信しました。</p>
         </td></tr>
       </table>
     </td></tr>
@@ -68,7 +68,7 @@ ${link}
 
 ---
 ${companyName}
-このメールは diletto StaffBase から管理者が送信しました。`;
+このメールは 名古屋ろう国際センター 職員ステーション から管理者が送信しました。`;
 
   return { subject, html, text };
 }

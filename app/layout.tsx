@@ -16,8 +16,8 @@ const notoSansJP = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: 'staffbase',
-  description: '入社書類・遵守事項・研修・お知らせをワンストップ化した社員管理SaaS',
+  title: '名古屋ろう国際センター 職員ステーション',
+  description: '認定NPO法人 名古屋ろう国際センターの職員向け統合管理システム — シフト・送迎・書類・研修・お知らせをワンストップで管理',
   icons: {
     icon: '/favicon.svg',
   },

@@ -86,6 +86,32 @@ export default function LoginPage() {
           width: '100%',
           minHeight: '100vh',
         }}>
+          {/* NPO ロゴ + 法人名（モバイル含めて常時表示）*/}
+          <div className="auth-form-brand" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 32,
+            paddingBottom: 28,
+            borderBottom: '1px solid rgba(0,0,0,0.08)',
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.jpg"
+              alt="認定NPO法人 名古屋ろう国際センター"
+              style={{ height: 96, width: 'auto', objectFit: 'contain' }}
+            />
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#111', letterSpacing: '0.02em', marginBottom: 4 }}>
+                認定NPO法人 名古屋ろう国際センター
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', letterSpacing: '0.04em' }}>
+                職員ステーション
+              </div>
+            </div>
+          </div>
+
           <h2 style={{
             fontSize: '1.8rem',
             fontWeight: 800,
@@ -100,7 +126,7 @@ export default function LoginPage() {
             color: '#888',
             marginBottom: 32,
           }}>
-            staff<span style={{ color: '#1a3eb8', fontWeight: 700 }}>base</span> アカウントにログイン
+            職員ステーションにログイン
           </p>
 
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -144,15 +170,9 @@ export default function LoginPage() {
           </form>
 
           <div style={{ marginTop: 24, textAlign: 'center', fontSize: '0.85rem', color: '#888' }}>
-            <p style={{ marginBottom: 8 }}>
+            <p>
               <Link href="/reset-password" className="text-diletto-blue hover:underline">
                 パスワードを忘れた方
-              </Link>
-            </p>
-            <p>
-              すでにアカウントをお持ちでない方は{' '}
-              <Link href="/register" className="text-diletto-blue hover:underline" style={{ fontWeight: 600 }}>
-                新規登録
               </Link>
             </p>
           </div>

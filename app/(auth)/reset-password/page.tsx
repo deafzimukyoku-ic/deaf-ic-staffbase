@@ -39,10 +39,16 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-diletto-beige px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">
-            staff<span className="text-diletto-blue">base</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.jpg"
+            alt="認定NPO法人 名古屋ろう国際センター"
+            style={{ height: 80, width: 'auto', objectFit: 'contain', margin: '0 auto 12px' }}
+          />
+          <CardTitle className="text-base font-bold tracking-tight">
+            認定NPO法人 名古屋ろう国際センター
           </CardTitle>
-          <CardDescription>パスワードリセット</CardDescription>
+          <CardDescription>職員ステーション — パスワードリセット</CardDescription>
         </CardHeader>
         <CardContent>
           {sent ? (

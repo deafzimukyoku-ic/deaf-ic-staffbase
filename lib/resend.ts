@@ -2,4 +2,4 @@ import { Resend } from 'resend';
 
 export const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'diletto StaffBase <zimukyoku@diletto-s.com>';
+export const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || '名古屋ろう国際センター <noreply@deaf-ic-nagoya.org>';

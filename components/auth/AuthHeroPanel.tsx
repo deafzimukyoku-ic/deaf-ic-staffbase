@@ -1,11 +1,11 @@
 'use client';
 
-/* ─── 左側の紹介パネル（スプリットレイアウト用） ─── */
+/* ─── 認証画面の左側パネル（認定NPO法人 名古屋ろう国際センター ブランド） ─── */
 export function AuthHeroPanel() {
   return (
     <>
       <div className="auth-hero-panel" style={{
-        background: '#111',
+        background: '#1a1a2e',
         color: '#fff',
         padding: '60px 48px 40px',
         display: 'flex',
@@ -13,14 +13,17 @@ export function AuthHeroPanel() {
         justifyContent: 'center',
         minHeight: '100vh',
       }}>
-        {/* ロゴ */}
+        {/* ロゴ + サブタイトル（法人名はロゴ画像に含まれているため省略） */}
         <div style={{ marginBottom: 40 }}>
-          <a href="https://www.diletto-s.com/" style={{ fontSize: '1.05rem', fontWeight: 800, letterSpacing: '0.12em', textDecoration: 'none', color: '#fff' }}>
-            di<em style={{ fontStyle: 'normal', color: '#5b7fff' }}>letto</em>{' '}
-            <span style={{ fontSize: '0.62em', fontWeight: 600, opacity: 0.8 }}>
-              by <span style={{ color: '#4adb5e' }}>AI Skill</span> Exchange
-            </span>
-          </a>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.jpg"
+            alt="認定NPO法人 名古屋ろう国際センター"
+            style={{ height: 64, width: 'auto', objectFit: 'contain', marginBottom: 16, background: '#fff', borderRadius: 8, padding: 6 }}
+          />
+          <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', letterSpacing: '0.02em' }}>
+            職員ステーション
+          </div>
         </div>
 
         {/* ヘッドライン */}
@@ -31,7 +34,7 @@ export function AuthHeroPanel() {
           letterSpacing: '0.02em',
           marginBottom: 24,
         }}>
-          社員管理を、<br/>もっとシンプルに。
+          シフト・職員管理を、<br/>もっとシンプルに。
         </h1>
 
         {/* 説明文 */}
@@ -42,8 +45,8 @@ export function AuthHeroPanel() {
           marginBottom: 32,
           maxWidth: 400,
         }}>
-          入退社書類・研修・遵守事項・お知らせを<br/>
-          ワンストップで管理。紙の手続きから卒業しませんか。
+          シフト作成・送迎割当・書類・研修・お知らせを<br/>
+          ワンストップで管理。事業所運営をシンプルに。
         </p>
 
         {/* 特徴リスト */}
@@ -56,10 +59,10 @@ export function AuthHeroPanel() {
           gap: 14,
         }}>
           {[
-            '入社書類をオンラインで完結。ブラウザだけでOK',
-            '研修・遵守事項の管理を一元化',
-            'お知らせ・通知を全社員に即配信',
-            '金額異常・表記ゆれを自動チェック。ミスを未然に防止',
+            'シフト・送迎担当を半自動で作成',
+            '書類提出・研修受講をオンライン完結',
+            '遵守事項・お知らせを全職員に即配信',
+            '事業所ごとの権限・公開フローを細かく制御',
           ].map((text) => (
             <li key={text} style={{
               fontSize: '0.9rem',
@@ -88,8 +91,8 @@ export function AuthHeroPanel() {
           marginBottom: 32,
         }}>
           {[
-            { value: '3ステップ', label: 'で導入完了' },
-            { value: 'ペーパーレス', label: '入社手続き' },
+            { value: '4事業所', label: '統合運営' },
+            { value: 'ペーパーレス', label: '入退社・書類' },
             { value: '自動', label: '通知・リマインド' },
           ].map((m) => (
             <div key={m.value}>
@@ -118,7 +121,7 @@ export function AuthHeroPanel() {
           color: 'rgba(255,255,255,0.35)',
           marginTop: 'auto',
         }}>
-          © 2026 diletto by AI Skill Exchange. All rights reserved.
+          © 2026 認定NPO法人 名古屋ろう国際センター
         </div>
       </div>
 

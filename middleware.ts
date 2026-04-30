@@ -97,6 +97,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|favicon\\.svg|icon\\.svg|api/).*)',
+    /* /public 以下の静的ファイル（logo.jpg / favicon / 画像 / フォント等）と _next / api を
+       middleware の対象から外す。これらは認証チェック不要で、未ログインでも配信される必要がある
+       （ログイン画面のロゴ等）。  */
+    '/((?!_next/static|_next/image|api/|.*\\.(?:jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf|css|js|map)$).*)',
   ],
 };

@@ -45,7 +45,7 @@ export function buildNotificationEmail({ contentType, title, bodySnippet, compan
           <a href="${link}" style="display:inline-block;background:#1a3eb8;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:600;">内容を確認する →</a>
         </td></tr>
         <tr><td style="padding:16px 28px 24px;border-top:1px solid rgba(0,0,0,0.08);">
-          <p style="margin:0;font-size:11px;color:#a8a8a0;">このメールは diletto StaffBase から自動送信されています。</p>
+          <p style="margin:0;font-size:11px;color:#a8a8a0;">このメールは 名古屋ろう国際センター 職員ステーション から自動送信されています。</p>
         </td></tr>
       </table>
     </td></tr>
@@ -61,7 +61,7 @@ ${bodySnippet || ''}
 
 ---
 ${companyName}
-このメールは diletto StaffBase から自動送信されています。`;
+このメールは 名古屋ろう国際センター 職員ステーション から自動送信されています。`;
 
   return { subject, html, text };
 }
