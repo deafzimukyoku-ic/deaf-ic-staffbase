@@ -27,6 +27,9 @@ export default function MyDocumentsPage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [employeeData, setEmployeeData] = useState<{ license_image_path: string | null; commute_route_image_path: string | null; custom_fields: Record<string, string> | null } | null>(null);
   const [imageFieldDefs, setImageFieldDefs] = useState<{ field_key: string; label: string; field_type: string }[]>([]);
+  /* 基本情報の最終更新時刻。document_submissions.submitted_at と比較して
+     「提出後に基本情報が変わった」場合に再提出ボタンを強調表示するため。 */
+  const [employeeUpdatedAt, setEmployeeUpdatedAt] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -48,10 +51,13 @@ export default function MyDocumentsPage() {
         }
         setEmployeeId(me.id);
         setTenantId(me.tenant_id);
+        setEmployeeUpdatedAt((me.updated_at as string) ?? null);
         setEmployeeData({
           license_image_path: me.license_image_path,
           commute_route_image_path: me.commute_route_image_path,
-          custom_fields: null,
+          /* 旧バグ: ここで null をハードコードしていたためアップロード後にページ再読み込みすると
+             カスタム画像が「未アップロード」表示に戻っていた。DB の値をそのまま反映する。 */
+          custom_fields: (me.custom_fields ?? null) as Record<string, string> | null,
         });
 
         // 画像タイプのカスタムフィールド定義
@@ -248,9 +254,14 @@ export default function MyDocumentsPage() {
           {items.map(({ template, submission }) => {
             const isConfirmed = submission?.status === 'submitted';
             const isPreviewOpen = previewId === template.id;
+            /* 提出後に基本情報が更新されていれば「再提出」ボタンを強調表示する。
+               employees.updated_at > document_submissions.submitted_at で判定。 */
+            const needsResubmit = isConfirmed && submission?.submitted_at && employeeUpdatedAt
+              ? new Date(employeeUpdatedAt) > new Date(submission.submitted_at)
+              : false;
 
             return (
-              <Card key={template.id} className={isConfirmed ? 'opacity-70' : ''}>
+              <Card key={template.id} className={isConfirmed && !needsResubmit ? 'opacity-70' : ''}>
                 <CardContent className="py-4">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -263,21 +274,36 @@ export default function MyDocumentsPage() {
                             <> · 確認日: {new Date(submission.submitted_at).toLocaleDateString('ja-JP')}</>
                           )}
                         </p>
+                        {needsResubmit && (
+                          <p className="text-xs text-diletto-red mt-1 font-semibold">
+                            ⚠ 提出後に基本情報が更新されました。最新内容で再提出してください。
+                          </p>
+                        )}
                       </div>
                     </div>
 
                     <div className="flex items-center flex-wrap gap-2 shrink-0">
-                      {isConfirmed ? (
+                      {/* 提出済バッジ（変化なし時は淡く、再提出が必要なら警告色） */}
+                      {isConfirmed && !needsResubmit && (
                         <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">確認済</Badge>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => handleConfirm(template.id)}
-                          disabled={actionId === template.id}
-                        >
-                          {actionId === template.id ? '処理中...' : '内容を確認しました'}
-                        </Button>
                       )}
+                      {/* 提出 / 再提出ボタン: いつでも押せる仕様。
+                          状態によってラベル・色を変える */}
+                      <Button
+                        size="sm"
+                        variant={needsResubmit ? 'default' : isConfirmed ? 'outline' : 'default'}
+                        className={needsResubmit ? 'bg-diletto-red hover:bg-diletto-red/90' : ''}
+                        onClick={() => handleConfirm(template.id)}
+                        disabled={actionId === template.id}
+                      >
+                        {actionId === template.id
+                          ? '処理中...'
+                          : needsResubmit
+                          ? '再提出する'
+                          : isConfirmed
+                          ? '再提出'
+                          : '内容を確認しました'}
+                      </Button>
 
                       {template.template_type === 'pdf' && (
                         <>
