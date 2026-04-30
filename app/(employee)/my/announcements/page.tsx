@@ -15,6 +15,7 @@ import { BlockRenderer } from '@/components/admin/BlockRenderer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
 import { logView } from '@/lib/view-log';
+import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
 
 interface AnnouncementWithRead extends Announcement {
   isRead: boolean;
@@ -62,9 +63,13 @@ export default function MyAnnouncementsPage() {
 
         const readSet = new Set((reads || []).map((r) => r.announcement_id));
 
+        // 自分の所属 facility 集合（主所属 + 兼任先 / migration 130）
+        const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
+
         // フィルタリング（施設・役職） — migration 115 で部署フィルタ廃止
+        // migration 130: 兼任先の facility 配信も届くように、target_facility_ids ∩ myFacilityIds で判定
         const docList = (announcements || []).filter(a => {
-          if (a.target_type === 'facility' && !a.target_facility_ids.includes(me.facility_id || '')) return false;
+          if (a.target_type === 'facility' && !facilityTargetsMatchMine(a.target_facility_ids, myFacilityIds)) return false;
           if (a.target_position_ids && a.target_position_ids.length > 0) {
             if (!a.target_position_ids.includes(me.position_id || '')) return false;
           }

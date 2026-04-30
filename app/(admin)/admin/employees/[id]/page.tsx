@@ -77,6 +77,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [allFacilitiesMaster, setAllFacilitiesMaster] = useState<{ id: string; name: string }[]>([]);
   const [mgrFacilities, setMgrFacilities] = useState<string[]>([]);
   const [newFacility, setNewFacility] = useState('');
+  // 兼任先（migration 130: employee_facilities）
+  // 主所属 (employees.facility_id) とは別に、追加で所属する事業所。
+  // 兼任先のお知らせ / 遵守事項 / 研修 / マニュアルが届く + 兼任先のシフト表に登場する。
+  const [additionalFacilities, setAdditionalFacilities] = useState<string[]>([]);
+  const [newAdditionalFacility, setNewAdditionalFacility] = useState('');
   // 施設
   const [facilityName, setFacilityName] = useState<string | null>(null);
   const [allFacilities, setAllFacilities] = useState<Facility[]>([]);
@@ -103,6 +108,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [qualEditing, setQualEditing] = useState(false);
   const [qualDraft, setQualDraft] = useState<string[]>([]);
   const [qualSaving, setQualSaving] = useState(false);
+  /* email 変更（migration 132 / 専用 API 経由）。退職者は変更不可。 */
+  const [emailEditing, setEmailEditing] = useState(false);
+  const [emailDraft, setEmailDraft] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
 
   const router = useRouter();
   const supabase = createClient();
@@ -149,6 +158,13 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           .select('facility_id')
           .eq('employee_id', emp.id);
         setMgrFacilities((mFacs || []).map((f) => f.facility_id));
+
+        // 兼任先（migration 130）
+        const { data: addlFacs } = await supabase
+          .from('employee_facilities')
+          .select('facility_id')
+          .eq('employee_id', emp.id);
+        setAdditionalFacilities((addlFacs || []).map((f) => f.facility_id));
 
         // 書類テンプレート + 提出データ
         const { data: templates } = await supabase
@@ -256,6 +272,40 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     toast.success(`「${fName}」を担当施設から外しました`);
   }
 
+  // 兼任先（employee_facilities）の追加 / 削除
+  async function addAdditionalFacility(facId: string) {
+    if (!employee || !facId) return;
+    if (facId === employee.facility_id) {
+      toast.error('主所属と同じ事業所は兼任先に追加できません');
+      return;
+    }
+    const { error } = await supabase
+      .from('employee_facilities')
+      .insert({ employee_id: employee.id, facility_id: facId });
+    if (error) {
+      if (error.code === '23505') toast.error('既に兼任先に追加済みです');
+      else toast.error('追加に失敗しました', { description: error.message });
+      return;
+    }
+    setAdditionalFacilities((prev) => [...prev, facId]);
+    setNewAdditionalFacility('');
+    const fName = allFacilitiesMaster.find(f => f.id === facId)?.name || '選択した施設';
+    toast.success(`「${fName}」を兼任先に追加しました`);
+  }
+
+  async function removeAdditionalFacility(facId: string) {
+    if (!employee) return;
+    const { error } = await supabase
+      .from('employee_facilities')
+      .delete()
+      .eq('employee_id', employee.id)
+      .eq('facility_id', facId);
+    if (error) { toast.error('削除に失敗しました', { description: error.message }); return; }
+    const fName = allFacilitiesMaster.find(f => f.id === facId)?.name || '選択した施設';
+    setAdditionalFacilities((prev) => prev.filter((f) => f !== facId));
+    toast.success(`「${fName}」を兼任先から外しました`);
+  }
+
   async function handleRetire() {
     if (!employee) return;
     setRetireLoading(true);
@@ -290,7 +340,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       last_name_kana: employee.last_name_kana, first_name_kana: employee.first_name_kana,
       birth_date: employee.birth_date, gender: employee.gender,
       postal_code: employee.postal_code, address: employee.address,
-      phone: employee.phone, email: employee.email,
+      phone: employee.phone,
+      /* email は migration 132 のトリガで protect 済み。専用 UI から /api/employees/[id]/email 経由で変更する。
+         ここでは draft に含めない（含めると保存時にトリガで弾かれる）。 */
       join_date: employee.join_date,
       bank_name: employee.bank_name, bank_branch_name: employee.bank_branch_name,
       bank_account_type: employee.bank_account_type,
@@ -384,6 +436,39 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     toast.success('保有資格を更新しました');
   }
 
+  /* email 変更: /api/employees/[id]/email POST 経由で auth.users.email と同期更新 */
+  async function handleSaveEmail() {
+    if (!employee) return;
+    const newEmail = emailDraft.trim();
+    if (!newEmail) {
+      toast.error('メールアドレスを入力してください');
+      return;
+    }
+    if (newEmail === employee.email) {
+      setEmailEditing(false);
+      return;
+    }
+    setEmailSaving(true);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'メールアドレス変更に失敗しました');
+      setEmployee({ ...employee, email: newEmail });
+      setEmailEditing(false);
+      toast.success('メールアドレスを変更しました', {
+        description: 'ログイン用の認証情報も同時に更新されました',
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'メールアドレス変更に失敗しました');
+    } finally {
+      setEmailSaving(false);
+    }
+  }
+
   async function handleSaveFacility() {
     if (!employee) return;
     setFacilitySaving(true);
@@ -401,6 +486,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     setFacilityName(newId ? (allFacilities.find((f) => f.id === newId)?.name || null) : null);
     setFacilityEditing(false);
     setFacilitySaving(false);
+    // migration 130 トリガで「主所属と同じ facility は兼任先から削除」されるので、ローカルでも反映
+    if (newId) setAdditionalFacilities((prev) => prev.filter((f) => f !== newId));
     toast.success('施設を更新しました');
   }
 
@@ -609,7 +696,51 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 <EditableRow label="郵便番号" editing={basicEditing} value={basicEditing ? basicDraft.postal_code : employee.postal_code} onChange={(v) => updBasic('postal_code', String(v))} />
                 <EditableRow label="住所" editing={basicEditing} value={basicEditing ? basicDraft.address : employee.address} onChange={(v) => updBasic('address', String(v))} />
                 <EditableRow label="電話番号" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.phone : employee.phone} onChange={(v) => updBasic('phone', String(v))} />
-                <EditableRow label="メール" type="email" editing={basicEditing} value={basicEditing ? basicDraft.email : employee.email} onChange={(v) => updBasic('email', String(v))} />
+                {/* メール: migration 132 で employees.email の直接 UPDATE は禁止。
+                    変更は /api/employees/[id]/email 経由で auth.users.email と同期される。
+                    退職者 (status='retired') は変更不可。 */}
+                <div className="flex items-start justify-between gap-2 py-1.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-diletto-gray-light font-bold uppercase mb-0.5">メール</div>
+                    {emailEditing ? (
+                      <div className="space-y-2">
+                        <input
+                          type="email"
+                          value={emailDraft}
+                          onChange={(e) => setEmailDraft(e.target.value)}
+                          className="w-full h-9 rounded-lg border border-diletto-gray/20 bg-white px-2 text-sm focus:ring-2 focus:ring-diletto-blue/20 outline-none"
+                          placeholder="new@example.com"
+                          autoFocus
+                          disabled={emailSaving}
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" className="h-8 text-[11px]" onClick={handleSaveEmail} disabled={emailSaving}>
+                            {emailSaving ? '保存中...' : '保存'}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-8 text-[11px]" onClick={() => { setEmailEditing(false); setEmailDraft(''); }} disabled={emailSaving}>
+                            キャンセル
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-diletto-gray-light leading-tight">
+                          ※ 変更するとログイン用の認証情報も同時に書き換わり、新メールでのみログイン可能になります
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium text-diletto-ink truncate">{employee.email || '-'}</p>
+                    )}
+                  </div>
+                  {!emailEditing && (
+                    <button
+                      type="button"
+                      onClick={() => { setEmailDraft(employee.email); setEmailEditing(true); }}
+                      disabled={employee.status === 'retired'}
+                      title={employee.status === 'retired' ? '退職者のメールアドレスは変更できません' : 'メールアドレスを変更'}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-diletto-blue/5 text-diletto-blue hover:bg-diletto-blue hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-diletto-blue/5 disabled:hover:text-diletto-blue"
+                    >
+                      変更
+                    </button>
+                  )}
+                </div>
                 <Separator className="my-2 opacity-50" />
                 <EditableRow label="入社日" type="date" editing={basicEditing} value={basicEditing ? basicDraft.join_date : employee.join_date} onChange={(v) => updBasic('join_date', String(v))} />
                 {!basicEditing && (
@@ -865,6 +996,43 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     ) : (
                       <p className={`text-sm pl-1 ${facilityName ? 'font-bold text-diletto-ink' : 'text-diletto-gray-light italic'}`}>{facilityName || '未所属'}</p>
                     )}
+                  </div>
+                </div>
+
+                {/* 兼任先（migration 130 / 複数事業所所属）
+                    主所属とは別に、シフト・お知らせ・遵守事項などが届く事業所を追加できる */}
+                <div className="relative overflow-hidden rounded-xl border border-diletto-gray/10 bg-white/50 hover:bg-white hover:shadow-sm transition-all duration-300">
+                  <div className="p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-diletto-gray uppercase tracking-wider">兼任先</span>
+                      <span className="text-[10px] text-diletto-gray-light">主所属とは別に所属する事業所</span>
+                    </div>
+                    {additionalFacilities.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {additionalFacilities.map((fId) => (
+                          <Badge key={fId} variant="secondary" className="bg-diletto-blue/5 text-diletto-blue border-none rounded-md px-2 py-0.5 flex items-center gap-1">
+                            {allFacilitiesMaster.find(f => f.id === fId)?.name || '不明'}
+                            <button onClick={() => removeAdditionalFacility(fId)} className="hover:text-diletto-red" aria-label="兼任先から削除">×</button>
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-diletto-gray-light italic pl-1 mt-1">兼任先なし</p>
+                    )}
+                    <div className="mt-2 flex gap-1">
+                      <select
+                        title="兼任先を追加"
+                        className="flex-1 h-8 rounded-lg border border-diletto-gray/20 text-xs px-2"
+                        value={newAdditionalFacility}
+                        onChange={(e) => setNewAdditionalFacility(e.target.value)}
+                      >
+                        <option value="">追加する事業所...</option>
+                        {allFacilitiesMaster
+                          .filter((f) => f.id !== employee.facility_id && !additionalFacilities.includes(f.id))
+                          .map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
+                      </select>
+                      <Button size="sm" className="h-8 text-[10px]" onClick={() => addAdditionalFacility(newAdditionalFacility)} disabled={!newAdditionalFacility}>追加</Button>
+                    </div>
                   </div>
                 </div>
 

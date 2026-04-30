@@ -20,6 +20,7 @@ import { BlockRenderer } from '@/components/admin/BlockRenderer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { logView } from '@/lib/view-log';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
+import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
 
 interface TrainingWithSub {
   training: Training;
@@ -71,9 +72,13 @@ export default function MyTrainingsPage() {
         const subMap = new Map((subs || []).map((s) => [s.training_id, s as TrainingSubmission]));
         const texts: Record<string, string> = {};
 
+        // 自分の所属 facility 集合（主所属 + 兼任先 / migration 130）
+        const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
+
         // フィルタリング（施設・役職） — migration 115 で部署フィルタ廃止
+        // migration 130: 兼任先の facility 配信も届くように、target_facility_ids ∩ myFacilityIds で判定
         const scopedTrainings = (trainings || []).filter(t => {
-          if (t.target_type === 'facility' && !t.target_facility_ids.includes(me.facility_id || '')) return false;
+          if (t.target_type === 'facility' && !facilityTargetsMatchMine(t.target_facility_ids, myFacilityIds)) return false;
           if (t.target_position_ids && t.target_position_ids.length > 0) {
             if (!t.target_position_ids.includes(me.position_id || '')) return false;
           }

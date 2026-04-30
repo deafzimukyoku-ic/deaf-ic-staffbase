@@ -64,6 +64,11 @@ export interface Employee {
   job_type: string | null;
   work_location: string | null;
   facility_id: string | null;
+  /* migration 130: 兼任先 facility（primary 以外）。
+     UI/API 側で employee_facilities を join して合成する optional プロパティ。
+     DB 行そのものには存在しない（employees テーブルには facility_id 単一しか無い）。
+     primary を含む全所属施設は [facility_id, ...additional_facility_ids] で取得可能。 */
+  additional_facility_ids?: string[];
   join_date: string;
   retirement_date: string | null;
   retirement_reason: string | null;
@@ -208,6 +213,15 @@ export interface Facility {
   shift_only_mode?: boolean;
   /* migration 121: 業務日報の活動内容/連絡事項枠に印字するテンプレート（複数行プレーンテキスト）。 */
   daily_report_template?: string;
+}
+
+// migration 130: 職員の兼任先（複数事業所所属）
+// employees.facility_id (primary) とは別に、追加の所属事業所を持つテーブル。
+// 兼任先のお知らせ / 遵守事項 / 研修 / マニュアルが届く + 兼任先 facility のシフト表に登場する。
+export interface EmployeeFacilityRow {
+  employee_id: string;
+  facility_id: string;
+  created_at: string;
 }
 
 // --- Shift-maker: 児童・送迎エリア ---

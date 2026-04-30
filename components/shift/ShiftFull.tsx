@@ -16,6 +16,8 @@ import { useShiftFacilityId } from '@/lib/shift-facility';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { generateShiftAssignments, type ShiftWarning } from '@/lib/logic/generateShift';
 import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
+import { fetchFacilityMemberIds } from '@/lib/multi-facility';
+import { toast } from 'sonner';
 import type {
   ShiftAssignmentType,
   ShiftAssignmentRow,
@@ -91,6 +93,10 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   // 「全行 draft」なら draft、混在なら mixed。
   const [monthStatus, setMonthStatus] = useState<PublishStatus | 'mixed' | 'empty'>('empty');
 
+  /* migration 130: 兼任職員が他施設で勤務している cell を「○○ 勤務」と表示するためのマップ。
+     key = `${staff_id}_${date}`、value = 他施設名。本施設に assignment が無い cell でのみ表示。 */
+  const [crossFacilityWorkByCell, setCrossFacilityWorkByCell] = useState<Map<string, string>>(new Map());
+
   const [editingCell, setEditingCell] = useState<{ staffId: string; date: string } | null>(null);
   const [editType, setEditType] = useState<ShiftAssignmentType>('normal');
   /* Phase 66+: 分割シフト（午前・午後など 2 コマ）。本家 shift-puzzle Phase 65 から移植。
@@ -147,15 +153,20 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       const to = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
 
       // employees (active)
-      const { data: emps, error: eErr } = await supabase
-        .from('employees')
-        .select(
-          'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
-        )
-        .eq('facility_id', facilityId)
-        .eq('status', 'active')
-        .order('shift_display_order', { ascending: true, nullsFirst: false })
-        .order('last_name', { ascending: true });
+      // migration 130: 兼任職員 (employee_facilities) も含めるため、まず member ids を取得
+      const memberIds = await fetchFacilityMemberIds(supabase, facilityId);
+
+      const { data: emps, error: eErr } = memberIds.length === 0
+        ? { data: [], error: null }
+        : await supabase
+            .from('employees')
+            .select(
+              'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
+            )
+            .in('id', memberIds)
+            .eq('status', 'active')
+            .order('shift_display_order', { ascending: true, nullsFirst: false })
+            .order('last_name', { ascending: true });
       if (eErr) throw new Error('職員取得失敗: ' + eErr.message);
 
       const staffRows: StaffRow[] = (emps ?? []).map((e) => ({
@@ -197,13 +208,40 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         .eq('facility_id', facilityId)
         .eq('month', monthStr);
 
-      // shift_assignments
+      // shift_assignments (本施設)
       const { data: assigns } = await supabase
         .from('shift_assignments')
         .select('*')
         .eq('facility_id', facilityId)
         .gte('date', from)
         .lte('date', to);
+
+      // migration 130: 兼任職員の他施設での勤務 (assignment_type='normal') を fetch して
+      // 本施設シフト表で「○○ 勤務」と表示する
+      const { data: crossAssigns } = memberIds.length === 0
+        ? { data: [] }
+        : await supabase
+            .from('shift_assignments')
+            .select('employee_id, date, facility_id, assignment_type')
+            .neq('facility_id', facilityId)
+            .in('employee_id', memberIds)
+            .gte('date', from)
+            .lte('date', to)
+            .eq('assignment_type', 'normal');
+
+      // facility 名のマップを作成（バッジ表示用）
+      const { data: facsList } = await supabase
+        .from('facilities')
+        .select('id, name')
+        .eq('tenant_id', emps && emps.length > 0 ? emps[0].tenant_id : '');
+      const facilityNames = new Map((facsList ?? []).map((f) => [f.id, f.name as string]));
+
+      const crossMap = new Map<string, string>();
+      for (const a of (crossAssigns ?? []) as Array<{ employee_id: string; date: string; facility_id: string }>) {
+        const key = `${a.employee_id}_${a.date}`;
+        crossMap.set(key, facilityNames.get(a.facility_id) ?? '他施設');
+      }
+      setCrossFacilityWorkByCell(crossMap);
 
       // facility_shift_settings: コアタイム + 有資格者基準（migration 116）
       const { data: fss } = await supabase
@@ -447,6 +485,32 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       alert(result.error);
       return;
     }
+
+    /* migration 130 / Phase 9: 同職員・同日に他施設で勤務 (assignment_type='normal') が
+       既に登録されている場合、警告トーストを表示（保存自体はブロックしない）。
+       兼任職員のシフトを別施設で組んだ際、二重アサインに気付けるようにする。 */
+    if (editType === 'normal') {
+      const { data: conflicts } = await supabase
+        .from('shift_assignments')
+        .select('facility_id, start_time, end_time')
+        .eq('employee_id', editingCell.staffId)
+        .eq('date', editingCell.date)
+        .eq('assignment_type', 'normal')
+        .neq('facility_id', facilityId);
+      if (conflicts && conflicts.length > 0) {
+        const { data: facsList } = await supabase
+          .from('facilities')
+          .select('id, name')
+          .in('id', conflicts.map((c) => c.facility_id));
+        const facName = (facsList ?? []).find((f) => f.id === conflicts[0].facility_id)?.name ?? '他事業所';
+        const staffName = staff.find((s) => s.id === editingCell.staffId)?.name ?? '対象職員';
+        toast.warning(
+          `${staffName} は ${editingCell.date} に「${facName}」でも勤務予定です。重複に注意してください。`,
+          { duration: 7000 }
+        );
+      }
+    }
+
     setEditingCell(null);
     await fetchAll();
   };
@@ -680,6 +744,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                   name: s.name,
                   employment_type: s.employment_type,
                   is_qualified: s.is_qualified,
+                  /* migration 130: 主所属が現在の facility と異なる場合は「兼任 (主: ○○)」マークを名前横に表示 */
+                  primary_facility_id: s.facility_id ?? null,
                 }))}
                 cells={cells}
                 warnings={warnings}
@@ -689,6 +755,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                 coreStartTime={coreStartTime}
                 coreEndTime={coreEndTime}
                 minQualifiedStaff={minQualifiedStaff}
+                currentFacilityId={facilityId}
+                crossFacilityWorkByCell={crossFacilityWorkByCell}
               />
             </div>
 

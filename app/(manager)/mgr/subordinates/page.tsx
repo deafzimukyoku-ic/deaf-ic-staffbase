@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { SubordinateTable } from '@/components/manager/SubordinateTable';
 import { Card, CardContent } from '@/components/ui/card';
+import { fetchEmployeeIdsForFacilities } from '@/lib/multi-facility';
 
 interface SubordinateRow {
   id: string;
@@ -61,12 +62,13 @@ export default function SubordinatesPage() {
         return;
       }
 
-      // 部下取得
-      const { data: subs } = await supabase
+      // 部下取得（migration 130: 兼任職員も含めるため employee_facilities も考慮）
+      const memberIds = await fetchEmployeeIdsForFacilities(supabase, facilityIds);
+      const { data: subs } = memberIds.length === 0 ? { data: [] } : await supabase
         .from('employees')
         .select('id, employee_number, last_name, first_name, position, status, join_date, facility:facilities(name)')
         .eq('tenant_id', me.tenant_id)
-        .in('facility_id', facilityIds)
+        .in('id', memberIds)
         .neq('id', me.id)
         .order('employee_number');
 

@@ -14,6 +14,7 @@ import Badge from '@/components/shift-compat/Badge';
 import Modal from '@/components/shift-compat/Modal';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { useShiftFacilityId } from '@/lib/shift-facility';
+import { fetchFacilityMemberIds } from '@/lib/multi-facility';
 import type { AreaLabel, QualificationType, Facility, EmploymentType } from '@/lib/types';
 
 type EmployeeRole = 'admin' | 'manager' | 'employee';
@@ -24,6 +25,18 @@ const EMPLOYMENT_LABELS: Record<EmploymentType, string> = { full_time: '常勤',
 const DEFAULT_START_TIME = '09:30';
 const DEFAULT_END_TIME = '18:30';
 const TIME_STEP_SECONDS = 600;
+
+/* migration 114 で text → text[] 変換時、元値が "[]" / "{}" / 空文字 / "null" だった行は
+   string_to_array(...,",") で「その文字列を 1 要素持つ配列」に化けて UI に「[]」バッジが
+   出ていた。migration 133 で DB 側もクリーンアップ済みだが、UI でも防御的にフィルタする。 */
+function cleanQualList(arr: string[] | null | undefined): string[] {
+  if (!arr) return [];
+  return arr.filter((q) => {
+    if (!q) return false;
+    const t = q.trim();
+    return t !== '' && t !== '[]' && t !== '{}' && t.toLowerCase() !== 'null';
+  });
+}
 
 interface StaffRow {
   id: string;
@@ -263,12 +276,14 @@ export default function StaffSettingsFull({ scope }: Props) {
     if (!me || !selectedFacilityId) return;
     setError('');
     try {
-      // 職員一覧（自facility）
+      // 職員一覧（自 facility + 兼任先で来ている職員）
+      // migration 130: 送迎担当・エリア割当の編集対象として兼任職員も含める
+      const memberIds = await fetchFacilityMemberIds(supabase, selectedFacilityId);
       const baseSel = supabase
         .from('employees')
         .select('id, tenant_id, facility_id, last_name, first_name, email, role, status, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order')
         .eq('tenant_id', me.tenant_id)
-        .eq('facility_id', selectedFacilityId);
+        .in('id', memberIds.length > 0 ? memberIds : ['00000000-0000-0000-0000-000000000000']);
       const filteredSel = showRetired ? baseSel : baseSel.eq('status', 'active');
       const { data: empRows } = await filteredSel
         .order('shift_display_order', { ascending: true, nullsFirst: false })
@@ -565,25 +580,28 @@ export default function StaffSettingsFull({ scope }: Props) {
                     </div>
                   </td>
                   <td className="px-3 py-2" style={{ borderBottom: '1px solid var(--rule)', fontSize: '0.8rem' }}>
-                    {(s.shift_qualifications ?? s.qualifications ?? []).length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {(s.shift_qualifications ?? s.qualifications ?? []).map((q) => (
-                          <span
-                            key={q}
-                            className="px-1.5 py-0.5 rounded text-xs whitespace-nowrap"
-                            style={{
-                              background: countable.includes(q) ? 'var(--green-pale)' : 'var(--bg)',
-                              color: countable.includes(q) ? 'var(--green)' : 'var(--ink-3)',
-                              fontSize: '0.7rem',
-                            }}
-                          >
-                            {q}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span style={{ color: 'var(--ink-3)' }}>-</span>
-                    )}
+                    {(() => {
+                      const quals = cleanQualList(s.shift_qualifications ?? s.qualifications);
+                      return quals.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {quals.map((q) => (
+                            <span
+                              key={q}
+                              className="px-1.5 py-0.5 rounded text-xs whitespace-nowrap"
+                              style={{
+                                background: countable.includes(q) ? 'var(--green-pale)' : 'var(--bg)',
+                                color: countable.includes(q) ? 'var(--green)' : 'var(--ink-3)',
+                                fontSize: '0.7rem',
+                              }}
+                            >
+                              {q}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--ink-3)' }}>-</span>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)' }}>
                     <Badge variant={s.role === 'admin' ? 'error' : s.role === 'manager' ? 'info' : 'neutral'}>
@@ -594,7 +612,7 @@ export default function StaffSettingsFull({ scope }: Props) {
                     {s.employment_type ? EMPLOYMENT_LABELS[s.employment_type] : '-'}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)', color: 'var(--ink-2)' }}>
-                    {s.default_start_time ?? '-'}〜{s.default_end_time ?? '-'}
+                    {s.default_start_time ? s.default_start_time.slice(0, 5) : '-'}〜{s.default_end_time ? s.default_end_time.slice(0, 5) : '-'}
                   </td>
                   <td className="px-3 py-2" style={{ borderBottom: '1px solid var(--rule)' }}>
                     <TransportAreasPopover pickup={resolveAreas(pickupIds, 'pickup')} dropoff={resolveAreas(dropoffIds, 'dropoff')} />
@@ -640,7 +658,7 @@ export default function StaffSettingsFull({ scope }: Props) {
             </div>
             <div className="text-xs mb-1" style={{ color: 'var(--ink-2)' }}>
               <span className="font-medium">勤務: </span>
-              {s.default_start_time ?? '-'}〜{s.default_end_time ?? '-'}
+              {s.default_start_time ? s.default_start_time.slice(0, 5) : '-'}〜{s.default_end_time ? s.default_end_time.slice(0, 5) : '-'}
             </div>
             {(() => {
               const pickupIds = s.pickup_transport_areas ?? [];
@@ -652,9 +670,11 @@ export default function StaffSettingsFull({ scope }: Props) {
                 </div>
               );
             })()}
-            {(s.shift_qualifications ?? s.qualifications ?? []).length > 0 && (
+            {(() => {
+              const quals = cleanQualList(s.shift_qualifications ?? s.qualifications);
+              return quals.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
-                {(s.shift_qualifications ?? s.qualifications ?? []).map((q) => (
+                {quals.map((q) => (
                   <span
                     key={q}
                     className="px-1.5 py-0.5 rounded text-xs whitespace-nowrap"
@@ -668,7 +688,8 @@ export default function StaffSettingsFull({ scope }: Props) {
                   </span>
                 ))}
               </div>
-            )}
+              ) : null;
+            })()}
           </div>
         ))}
       </div>

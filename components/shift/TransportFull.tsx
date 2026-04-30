@@ -12,6 +12,7 @@ import Button from '@/components/shift-compat/Button';
 import Modal from '@/components/shift-compat/Modal';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
 import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
+import { fetchFacilityMemberIds } from '@/lib/multi-facility';
 import {
   DEFAULT_TRANSPORT_MIN_END_TIME,
   DEFAULT_PICKUP_COOLDOWN_MINUTES,
@@ -226,6 +227,10 @@ export default function TransportFull({ role }: Props) {
       if (!me) throw new Error('社員情報が取得できません');
       setTenantId(me.tenant_id);
 
+      // migration 130: 送迎表にも兼任職員を含める（兼任で送迎担当する運用があるため）
+      // memberIds が空でも .in('id', []) は 0 行返却で安全
+      const memberIds = await fetchFacilityMemberIds(supabase, facilityId);
+
       const [
         empRes,
         childRes,
@@ -240,7 +245,7 @@ export default function TransportFull({ role }: Props) {
           .select(
             'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
           )
-          .eq('facility_id', facilityId)
+          .in('id', memberIds.length > 0 ? memberIds : ['00000000-0000-0000-0000-000000000000'])
           .eq('status', 'active'),
         supabase.from('children').select('*').eq('facility_id', facilityId),
         supabase

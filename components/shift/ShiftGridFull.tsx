@@ -20,6 +20,9 @@ interface ShiftStaff {
   name: string;
   employment_type: 'full_time' | 'part_time';
   is_qualified: boolean;
+  /* migration 130: 兼任職員判定用。主所属 facility が現在表示中の facility と異なるとき
+     名前横に「兼任」バッジを表示する。 */
+  primary_facility_id?: string | null;
 }
 
 interface ShiftCell {
@@ -54,6 +57,11 @@ interface ShiftGridProps {
   coreEndTime?: string | null;
   /** facility_shift_settings.min_qualified_staff。「有資格者基準」判定用 */
   minQualifiedStaff?: number;
+  /** migration 130: 現在表示中の facility id。兼任職員判定で primary_facility_id と比較する。 */
+  currentFacilityId?: string | null;
+  /** migration 130: 兼任職員が他施設で勤務している cell の表示用マップ。
+       key=`${staff_id}_${date}`、value=他施設名。assignment 未設定 cell でのみ「○○ 勤務」と表示。 */
+  crossFacilityWorkByCell?: Map<string, string>;
 }
 
 const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; color: string; bg: string }> = {
@@ -77,6 +85,8 @@ export default function ShiftGridFull({
   coreStartTime,
   coreEndTime,
   minQualifiedStaff = 2,
+  currentFacilityId = null,
+  crossFacilityWorkByCell,
 }: ShiftGridProps) {
   const daysInMonth = getDaysInMonth(new Date(year, month - 1));
   const dates: { day: number; dow: number; dateStr: string }[] = [];
@@ -280,6 +290,16 @@ export default function ShiftGridFull({
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-1.5">
                     <span className="group-hover:text-[var(--accent)] transition-colors">{s.name}</span>
+                    {/* migration 130: 主所属が現 facility と異なる = 兼任で来てる職員 */}
+                    {currentFacilityId && s.primary_facility_id && s.primary_facility_id !== currentFacilityId && (
+                      <span
+                        className="text-xs px-1 rounded"
+                        style={{ background: 'var(--accent-pale)', color: 'var(--accent)', fontSize: '0.6rem' }}
+                        title="他事業所が主所属の兼任職員"
+                      >
+                        兼任
+                      </span>
+                    )}
                     {s.is_qualified && (
                       <span
                         className="text-xs px-1 rounded"
@@ -309,17 +329,24 @@ export default function ShiftGridFull({
                 const cell = pickPrimary(segs);
                 const type = cell?.assignment_type || 'off';
                 const config = TYPE_CONFIG[type];
+                /* migration 130: 本施設に assignment が無く、かつ他施設で勤務している cell は
+                   「○○ 勤務」と表示する（cell の type は 'off' のまま） */
+                const crossFacilityName = (segs.length === 0 && crossFacilityWorkByCell)
+                  ? crossFacilityWorkByCell.get(`${s.id}_${d.dateStr}`)
+                  : undefined;
                 const baseTitle =
                   type === 'normal'
                     ? segs
                         .filter((c) => c.assignment_type === 'normal')
                         .map((c) => `${c.start_time}〜${c.end_time}`)
                         .join(' / ')
+                    : crossFacilityName
+                    ? `${crossFacilityName} で勤務予定`
                     : config.label;
                 const normalSegs = segs.filter((c) => c.assignment_type === 'normal');
 
                 const cellBg = type !== 'normal'
-                  ? config.bg
+                  ? (crossFacilityName ? 'var(--accent-pale)' : config.bg)
                   : s.is_qualified
                   ? 'var(--gold-pale, #fdf6e3)'
                   : getCellBg(d.dow);
@@ -375,6 +402,22 @@ export default function ShiftGridFull({
                             )}
                           </>
                         )}
+                      </div>
+                    ) : crossFacilityName ? (
+                      /* migration 130: 他施設で勤務する日 — 本施設シフト編集はクリックで可能だが
+                         デフォルト表示は「○○ 勤務」のバッジ */
+                      <div className="flex flex-col gap-0.5 leading-tight py-0.5">
+                        <span
+                          className="font-semibold"
+                          style={{
+                            color: 'var(--accent)',
+                            fontSize: '0.65rem',
+                            lineHeight: 1.1,
+                          }}
+                        >
+                          {crossFacilityName}
+                        </span>
+                        <span style={{ color: 'var(--accent)', fontSize: '0.6rem', lineHeight: 1.1 }}>勤務</span>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-0.5 leading-tight py-0.5">

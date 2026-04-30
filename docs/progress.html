@@ -47,7 +47,29 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-25（タスクD 日次出力 完了） / 全体完了率: 約 95%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-30（Phase 67 複数事業所所属 完了） / 全体完了率: 約 96%</p>
+
+<!-- Phase 67: 複数事業所所属（兼任）対応 -->
+<div class="phase">
+  <h2>Phase 67 — 複数事業所所属（兼任）対応 <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>migration 130: employee_facilities テーブル + 3 ヘルパー関数 + 重複防止 trigger × 2</td><td class="files">supabase/migrations/130_employee_facilities.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>主所属＝employees.facility_id（残置） / 兼任先のみテーブル化</td></tr>
+      <tr><td>migration 131: RLS 大改修（10 テーブル）+ get_manager_subordinate_ids 兼任対応</td><td class="files">supabase/migrations/131_multi_facility_rls.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shift系 RLS が manager_facilities を見ていなかった既存 bug も解消</td></tr>
+      <tr><td>lib/types.ts: EmployeeFacilityRow 型 + Employee.additional_facility_ids 合成 prop</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>lib/multi-facility.ts: 4 クライアントヘルパー</td><td class="files">lib/multi-facility.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>fetchMyFacilityIds / facilityTargetsMatchMine / fetchFacilityMemberIds / fetchEmployeeIdsForFacilities</td></tr>
+      <tr><td>lib/auth/shift-api-helpers: manager 複数 facility 対応</td><td class="files">lib/auth/shift-api-helpers.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>scopedFacilityIds で managed/belonging 集合をハンドラに伝える</td></tr>
+      <tr><td>employee 側 4 ページのフィルタを intersection に変更</td><td class="files">app/(employee)/my/{compliance,announcements,trainings,manuals}/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>兼任先の配信も届く</td></tr>
+      <tr><td>admin 員工詳細ページに「兼任先」チップ + 追加 UI</td><td class="files">app/(admin)/admin/employees/[id]/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>所属設定カード内に追加。主所属変更時に local dedupe</td></tr>
+      <tr><td>manager 部下一覧で兼任職員も含むよう memberIds ベースに変更</td><td class="files">app/(manager)/mgr/subordinates/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>休み希望管理（AdminRequestsView）で兼任職員の他施設希望も両管理者に表示</td><td class="files">components/shift/AdminRequestsView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shift_requests も memberIds ベースに</td></tr>
+      <tr><td>シフト表（ShiftFull / ShiftGridFull）で兼任職員 + 「○○ 勤務」表示</td><td class="files">components/shift/ShiftFull.tsx, ShiftGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>currentFacilityId + crossFacilityWorkByCell prop 追加。「兼任」バッジ + 「○○ 勤務」セル表示</td></tr>
+      <tr><td>シフト保存時の facility 跨ぎ重複警告（toast 警告のみ・保存はブロックしない）</td><td class="files">components/shift/ShiftFull.tsx (handleSave)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>同職員・同日に他施設で normal assignment 既存なら警告</td></tr>
+      <tr class="check"><td colspan="5">別視点確認: ① migration 130/131 を Supabase に適用 → ② admin 画面で兼任先を追加 → ③ employee 画面でその施設の配信が見えるか → ④ 兼任職員のシフトを A 側で組む → ⑤ B 側のシフト表に「A 勤務」が出るか → ⑥ B 側に同日勤務時間入力で警告 toast 出るか</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 直近の進捗サマリー（手動追記） -->
 <div style="background:#fffbeb; border:1px solid #fbd38d; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px; line-height:1.6;">

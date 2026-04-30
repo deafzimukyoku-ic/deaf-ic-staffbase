@@ -73,18 +73,23 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
               <TableRow key={emp.id}>
                 <TableCell className="font-mono text-xs">{emp.employee_number}</TableCell>
                 <TableCell>
-                  <Link
-                    href={`/admin/employees/${emp.id}`}
-                    className="font-medium text-diletto-blue hover:underline"
-                  >
-                    {emp.last_name} {emp.first_name}
-                  </Link>
-                  {emp.role === 'admin' && (
-                    <Badge variant="outline" className="ml-2 text-[10px]">管理者</Badge>
-                  )}
-                  {emp.role === 'manager' && (
-                    <Badge variant="outline" className="ml-2 text-[10px] border-diletto-blue/30 text-diletto-blue">マネージャー</Badge>
-                  )}
+                  {/* 氏名 + role バッジ: バッジを行間で縦に揃えるため、氏名側に min-w を設定。
+                      role バッジ: admin=紫 / manager=青（access-matrix 凡例と統一）。
+                      共通: variant="outline" + text-[10px] + 同じ border-opacity / 同じ width。 */}
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/admin/employees/${emp.id}`}
+                      className="font-medium text-diletto-blue hover:underline inline-block min-w-[9em]"
+                    >
+                      {emp.last_name} {emp.first_name}
+                    </Link>
+                    {emp.role === 'admin' && (
+                      <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-600 w-[6.5em] justify-center whitespace-nowrap">管理者</Badge>
+                    )}
+                    {emp.role === 'manager' && (
+                      <Badge variant="outline" className="text-[10px] border-diletto-blue/30 text-diletto-blue w-[6.5em] justify-center whitespace-nowrap">マネージャー</Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-sm text-diletto-gray">{emp.email}</TableCell>
                 <TableCell className="text-sm">

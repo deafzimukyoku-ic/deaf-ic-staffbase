@@ -2,8 +2,10 @@
  * シフト関連 API の共通認証・スコープ解決ヘルパー
  *
  * - admin: facility_id を query/body から指定可（指定なしで全件は不可、必ず1施設指定）
- * - manager: 自分の facility_id 固定（query 値が違っても上書き）
- * - employee: 一部 GET と自分の shift_requests / shift_change_requests 書き込みのみ許可
+ * - manager: 自分が管轄する施設 (主所属 ∪ manager_facilities) のいずれか。
+ *   requestedFacilityId が無ければ主所属、あれば検証のうえそれを使う（migration 130/131）
+ * - employee: 自分が所属する施設 (主所属 ∪ employee_facilities 兼任先) のいずれか。
+ *   requestedFacilityId が無ければ主所属、あれば検証のうえそれを使う
  *
  * 共通レスポンス: { error, status } を返した場合はそのまま NextResponse.json で返す。
  */
@@ -17,8 +19,12 @@ export interface ShiftAuthContext {
   employeeId: string;
   tenantId: string;
   role: 'admin' | 'manager' | 'employee';
-  // 解決された facility_id。manager は自 facility 固定、admin は requestedFacilityId そのまま
+  // 解決された facility_id。manager/employee は managed/belonging set に含まれることを検証済
   facilityId: string;
+  // manager: 管轄施設 ID 集合（主所属 ∪ manager_facilities）
+  // employee: 所属施設 ID 集合（主所属 ∪ employee_facilities 兼任先）
+  // admin: 空配列（制限なしを示す）
+  scopedFacilityIds: string[];
 }
 
 interface ResolveOptions {
@@ -68,17 +74,59 @@ export async function resolveShiftAuth(
     };
   }
 
+  // 自分のスコープ（管轄/所属）施設集合を解決
+  let scopedFacilityIds: string[] = [];
+  if (role === 'manager') {
+    // 主所属 + manager_facilities
+    const { data: managed } = await (supabase as unknown as SupabaseClient)
+      .from('manager_facilities')
+      .select('facility_id')
+      .eq('employee_id', me.id);
+    scopedFacilityIds = Array.from(
+      new Set(
+        [me.facility_id, ...(managed ?? []).map((r: { facility_id: string }) => r.facility_id)].filter(
+          (v): v is string => !!v
+        )
+      )
+    );
+  } else if (role === 'employee') {
+    // 主所属 + employee_facilities 兼任先
+    const { data: belonging } = await (supabase as unknown as SupabaseClient)
+      .from('employee_facilities')
+      .select('facility_id')
+      .eq('employee_id', me.id);
+    scopedFacilityIds = Array.from(
+      new Set(
+        [me.facility_id, ...(belonging ?? []).map((r: { facility_id: string }) => r.facility_id)].filter(
+          (v): v is string => !!v
+        )
+      )
+    );
+  }
+  // admin は scopedFacilityIds=[] で「制限なし」を示す
+
   // facility 解決
   let facilityId: string;
   if (role === 'manager' || role === 'employee') {
-    // 自 facility 固定
-    if (!me.facility_id) {
+    if (scopedFacilityIds.length === 0) {
       return {
         ok: false,
         response: NextResponse.json({ error: '所属事業所が未設定です' }, { status: 400 }),
       };
     }
-    facilityId = me.facility_id;
+    if (options.requestedFacilityId) {
+      // 指定がある場合: 自分の管轄/所属に含まれるかを検証
+      if (!scopedFacilityIds.includes(options.requestedFacilityId)) {
+        return {
+          ok: false,
+          response: NextResponse.json({ error: '指定の事業所への権限がありません' }, { status: 403 }),
+        };
+      }
+      facilityId = options.requestedFacilityId;
+    } else {
+      // 指定なし: 主所属（fallback）。主所属 NULL なら scope 集合の先頭
+      facilityId = me.facility_id ?? scopedFacilityIds[0];
+    }
   } else {
     // admin: 通常は facility_id 必須だが、allowAdminWithoutFacility=true で省略可
     if (!options.requestedFacilityId) {
@@ -104,6 +152,7 @@ export async function resolveShiftAuth(
       tenantId: me.tenant_id,
       role,
       facilityId,
+      scopedFacilityIds,
     },
   };
 }

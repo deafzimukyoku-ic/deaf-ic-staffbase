@@ -31,6 +31,8 @@
 | 114 | 114_employees_qualifications_array_fix.sql | employees.qualifications を text → text[] に変換（104 が `add column if not exists` で skip された型ズレを是正） | ✅ |
 | 115 | 115_remove_departments_and_position_role.sql | (A) departments / employee_departments / manager_departments 完全削除 + employees.department drop / (B) positions.system_role + 同期トリガー削除（役職→ロール自動連動を切断） | 🆕 未適用 |
 | 116 | 116_facility_core_time_and_meta.sql | (A) facility_shift_settings.core_start_time / core_end_time（コアタイム事業所別設定） / (B) facilities に display_order / shift_enabled / transport_enabled 追加（並び順 + シフト/送迎 ON/OFF） | 🆕 未適用 |
+| 130 | 130_employee_facilities.sql | **複数事業所所属（兼任）対応**。employee_facilities テーブル（兼任先のみ）+ ヘルパー関数 `get_my_facility_ids()` / `get_my_managed_facility_ids()` / `employee_belongs_to_facility(emp,fac)` + 主所属＝兼任の重複防止トリガ × 2 | 🆕 未適用 |
+| 131 | 131_multi_facility_rls.sql | RLS 大改修：facility-only テーブル (children/schedule_entries/events/billing/facility_shift_settings/transport_assignments) + employee-level cross-facility テーブル (shift_requests/shift_assignments/shift_change_requests) で兼任を考慮。manager の管轄施設は `get_my_managed_facility_ids()` ベース。`employee_in_my_managed_facilities()` 追加 + `get_manager_subordinate_ids()` 兼任対応に拡張 | 🆕 未適用 |
 
 ---
 
@@ -67,6 +69,55 @@
 ### シフトモード初期値の修正（①）
 - 旧: localStorage 値があればそれ、なければ `list[0]`
 - 新: 1) localStorage 値がアクセス可能リストに含まれるなら維持 / 2) `employees.facility_id` を優先 / 3) フォールバックで `list[0]`
+
+---
+
+## 0.10 複数事業所所属（兼任）対応 — Phase 67 (2026-04-30)
+
+### 背景
+NPO 4 事業所運用で複数施設をいったり来たりする職員が存在。`employees.facility_id` 単一前提では:
+- 兼任先のお知らせ / 遵守事項 / 研修 / マニュアルが届かない（受信側 facility_id 単一比較のため）
+- 兼任職員の休み希望を主所属でない側のマネージャーが見られない
+- 兼任職員のシフトが「もう片方の施設のシフト表」に表示されず、二重アサイン事故の温床
+
+### 設計
+- `employees.facility_id` = 主所属（既存・残置）。給与・通勤手当・職員一覧の主表示の基準
+- `employee_facilities (employee_id, facility_id)` = **兼任先のみ**（主所属は含めない）。重複は trigger で防ぐ
+- ヘルパー関数 2 種:
+  - `get_my_facility_ids()` = 主所属 ∪ 兼任先（employee 側コンテンツフィルタ・所属判定）
+  - `get_my_managed_facility_ids()` = 主所属 ∪ `manager_facilities` 管轄（manager 側 RLS）
+- `employee_in_my_managed_facilities(emp_id)` = 任意職員が自分の管轄施設に所属するか判定
+- 副次効果: 既存の shift RLS は `manager_facilities` を見ていなかった bug が解消（manager が複数管轄施設を持つときシフト関連を読めるようになる）
+
+### 「他施設勤務」表示 (UI のみ・スキーマ無変更)
+A 施設で勤務時間を登録 → B 施設のシフト表に「A 勤務」と自動表示。
+- 実装: ShiftFull が同 employee × 同月の `assignment_type='normal'` を他施設からも fetch → `crossFacilityWorkByCell` Map
+- ShiftGridFull が cell の type='off' かつ cross データがあれば config.label の代わりに「○○ 勤務」を表示
+- 兼任職員の名前横に「兼任」バッジ（primary_facility_id ≠ currentFacilityId のとき）
+
+### マイグレーション
+| 番号 | 内容 |
+|---|---|
+| 130 | `employee_facilities` テーブル + 3 ヘルパー関数 + 重複防止トリガ × 2（`employees.facility_id` 変更時に兼任側を delete / 兼任 INSERT 時に主と同じなら skip） |
+| 131 | RLS 大改修：children/schedule_entries/shift_requests/shift_assignments/transport_assignments/shift_change_requests/facility_shift_settings/events/billing_summaries/billing_event_participations の manager ポリシーを `get_my_managed_facility_ids()` に置換。shift_assignments には manager の cross-facility SELECT 追加（B のシフト表で X の A 勤務を表示するため）。`get_manager_subordinate_ids()` を employee_facilities 兼任考慮に拡張 |
+
+### 編集ファイル
+| ファイル | 変更 |
+|---|---|
+| `lib/types.ts` | `Employee.additional_facility_ids?: string[]`（合成 prop）+ `EmployeeFacilityRow` 型追加 |
+| `lib/multi-facility.ts` 🆕 | 4 ヘルパー: `fetchMyFacilityIds` / `facilityTargetsMatchMine` / `fetchFacilityMemberIds` / `fetchEmployeeIdsForFacilities` |
+| `lib/auth/shift-api-helpers.ts` | manager は requestedFacilityId を managed set で検証。`scopedFacilityIds` 追加で API 側ハンドラが「自分の管轄全施設」を取得可能 |
+| `app/(employee)/my/{compliance,announcements,trainings,manuals}/page.tsx` × 4 | フィルタを `target_facility_ids ∩ myFacilityIds` の有無に変更（兼任先の配信も届く） |
+| `app/(admin)/admin/employees/[id]/page.tsx` | 「所属設定」カードに「兼任先」チップ + 追加セレクタ。主所属変更時にローカル state も dedupe |
+| `app/(manager)/mgr/subordinates/page.tsx` | 部下取得を `fetchEmployeeIdsForFacilities` 経由に（兼任職員も部下として表示） |
+| `components/shift/AdminRequestsView.tsx` | employees / shift_requests 取得を `memberIds` ベースに（兼任職員の他施設希望も両管理者に表示） |
+| `components/shift/ShiftFull.tsx` | employees 取得を memberIds ベースに / 他施設の `normal` assignment を別 fetch して `crossFacilityWorkByCell` 構築 / 保存後に同職員・同日他施設重複を検出して toast 警告 (Phase 9) |
+| `components/shift/ShiftGridFull.tsx` | `currentFacilityId` / `crossFacilityWorkByCell` props 追加 / 「兼任」バッジ + 「○○ 勤務」表示の rendering |
+
+### スコープ外（決定）
+- 二重アサインは保存ブロックせず警告のみ（運用判断を尊重）
+- 応援マークの手動付与 UI は廃案（A 施設で勤務時間入力 → 自動的に B 表に表示の方が自然）
+- 兼任職員の主所属切替は既存 facility 編集 UI で実施（trigger が自動で兼任側を dedupe）
 
 ---
 
