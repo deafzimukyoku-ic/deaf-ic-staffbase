@@ -22,7 +22,7 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: `${window.location.origin}/reset-password/confirm`,
     });
 
     if (error) {
@@ -55,6 +55,9 @@ export default function ResetPasswordPage() {
             <div className="text-center space-y-4">
               <p className="text-sm text-muted-foreground">
                 リセット用のメールを送信しました。メール内のリンクからパスワードを再設定してください。
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ※ リンクは送信から約1時間で失効します。期限切れの場合は再度ご依頼ください。
               </p>
               <Link href="/login">
                 <Button variant="outline" className="w-full">ログインに戻る</Button>

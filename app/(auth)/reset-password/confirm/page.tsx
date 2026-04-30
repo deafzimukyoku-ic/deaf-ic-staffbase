@@ -11,7 +11,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 
-export default function InviteAcceptPage() {
+/**
+ * パスワードリセット完了ページ
+ *
+ * /reset-password でメール送信 → メール内リンクが Supabase verify を経由して
+ * このページに `?code=...` (PKCE) もしくは `#access_token=...` (implicit) で到達する。
+ * セッションを確立した後、新パスワードを設定する。
+ */
+export default function ResetPasswordConfirmPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,7 +30,7 @@ export default function InviteAcceptPage() {
 
   useEffect(() => {
     async function handleAuth() {
-      // 1. URLフラグメントから access_token を抽出（Supabase implicit flow）
+      // 1. URLフラグメントから access_token を抽出（implicit flow）
       const hash = window.location.hash;
       if (hash && hash.includes('access_token')) {
         const params = new URLSearchParams(hash.substring(1));
@@ -35,9 +42,7 @@ export default function InviteAcceptPage() {
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-
           if (!sessionErr) {
-            // フラグメントをURLから除去（トークン露出防止）
             window.history.replaceState(null, '', window.location.pathname);
             setAuthenticated(true);
             setChecking(false);
@@ -59,7 +64,7 @@ export default function InviteAcceptPage() {
         }
       }
 
-      // 3. 既存セッションがあるか確認（直接アクセスの場合）
+      // 3. 既存セッションがあるか確認（他経路で来た場合）
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setAuthenticated(true);
@@ -68,7 +73,7 @@ export default function InviteAcceptPage() {
       }
 
       // いずれもなければエラー
-      setError('招待リンクが無効または期限切れです。管理者に再招待を依頼してください。');
+      setError('リセットリンクが無効または期限切れです。再度パスワードリセットを依頼してください。');
       setChecking(false);
     }
 
@@ -93,14 +98,14 @@ export default function InviteAcceptPage() {
     const { error: updateErr } = await supabase.auth.updateUser({ password });
 
     if (updateErr) {
-      toast.error('パスワード設定に失敗しました', { description: updateErr.message });
+      toast.error('パスワード再設定に失敗しました', { description: updateErr.message });
       setLoading(false);
       return;
     }
 
-    toast.success('パスワードを設定しました。ログインしてください。');
+    toast.success('新しいパスワードを設定しました。ログインしてください。');
 
-    // ログアウトして改めてログインさせる（セッションをクリーンにする）
+    // ログアウトして改めてログインさせる
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
@@ -135,15 +140,24 @@ export default function InviteAcceptPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground mb-4">
-              招待リンクは送信から約1時間で失効します。期限切れの場合は管理者に再招待を依頼してください。
+              リセットリンクは送信から約1時間で失効します。期限切れの場合は再度パスワードリセットを依頼してください。
             </p>
-            <Button className="w-full" onClick={() => router.push('/login')}>
-              ログインページへ
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button className="w-full" onClick={() => router.push('/reset-password')}>
+                パスワードリセットを再依頼
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => router.push('/login')}>
+                ログインページへ
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
+  }
+
+  if (!authenticated) {
+    return null;
   }
 
   return (
@@ -159,12 +173,12 @@ export default function InviteAcceptPage() {
           <CardTitle className="text-base font-bold tracking-tight">
             認定NPO法人 名古屋ろう国際センター
           </CardTitle>
-          <CardDescription>職員ステーション — 初回パスワード設定</CardDescription>
+          <CardDescription>職員ステーション — 新しいパスワードを設定</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSetPassword} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">パスワード</Label>
+              <Label htmlFor="password">新しいパスワード</Label>
               <Input
                 id="password"
                 type="password"
@@ -188,7 +202,7 @@ export default function InviteAcceptPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? '設定中...' : 'パスワードを設定'}
+              {loading ? '設定中...' : 'パスワードを変更'}
             </Button>
           </form>
         </CardContent>

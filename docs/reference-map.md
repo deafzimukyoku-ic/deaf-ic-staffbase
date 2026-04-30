@@ -72,6 +72,44 @@
 
 ---
 
+## 0.11 認証フロー堅牢化 — Phase 68（2026-04-30）
+
+### 修正内容（招待 / ログイン / パスワードリセット）
+
+**新規ファイル:**
+- `app/(auth)/reset-password/confirm/page.tsx` — パスワードリセット完了 UI（PKCE code 交換 + 新パスワード入力）
+
+**編集ファイル:**
+- `app/(auth)/reset-password/page.tsx` — `redirectTo` を `/reset-password/confirm` に変更 + 1h 失効注記
+- `app/(auth)/login/page.tsx` — `/auth/callback` から渡される `?error=missing_code|invalid_code` を toast 表示し URL から削除
+- `app/(auth)/invite/accept/page.tsx` — 招待リンク失効時のエラー画面に「約1時間で失効」注記を追加
+- `app/(admin)/admin/employees/new/page.tsx` — アプリ権限（admin/manager/employee）セレクタ + manager 兼任先選択 chip UI を追加 / 招待リンク有効期限の注記を追加
+- `app/api/employees/invite/route.ts` — `position_id` を受け取り `positions.name` を `employees.position`(text) に保存 / employees insert 失敗時に新規 auth.users を rollback 削除（既存ユーザー再利用ケースは消さない）/ manager_facilities insert 失敗を warning として返す / `me` 取得を `.maybeSingle()` 化
+- `middleware.ts` — `DEV_SKIP_AUTH` を `NODE_ENV !== 'production'` でガード / employees.role 取得を `.single()` → `.maybeSingle()` 化（3 箇所）/ `/reset-password/confirm` を auto-redirect 除外に追加
+
+### 修正したバグ
+
+| 重要度 | 内容 |
+|---|---|
+| 🔥 致命 | パスワードリセット完了 UI が存在せず、メールリンクから `/login` に飛んでログイン状態になるだけでパスワード再設定不能だった |
+| 🔥 silent | 新規社員追加 UI で役職を選んでも API がフィールドを destructure しておらず保存されない（黙って消える） |
+| 🔥 UI 欠如 | 新規社員追加 UI に role 選択が無く、admin/manager 招待は access-matrix からしかできなかった |
+| ⚠ | `DEV_SKIP_AUTH=1` が本番に漏れた場合に全認証が無効化されるリスク |
+| ⚠ | middleware の `.single()` で RLS 不整合時に 500 を返すリスク |
+| ⚠ | manager_facilities insert 失敗が `console.error` のみで握り潰されていた |
+| ⚠ | employees insert 失敗時に orphan auth.users が残る非トランザクション性 |
+| 改善 | リンク有効期限（招待 / リセット = 約 1h）が UI に明記されておらず、期限切れ時にユーザーが混乱 |
+| 改善 | `/auth/callback` のエラーリダイレクト時に `?error=` の文言が表示されない |
+
+### スコープ外（今回触らない）
+
+- Supabase Auth メールテンプレート（Dashboard 側）— `docs/email-templates.md` に定義済 / `redirectTo` で十分制御可能
+- `auth.users` と `employees.email` の二重保護トリガ — migration 138 で撤廃済（アプリ層保護に統一）
+- 退職者の auth.users 無効化 — 別フェーズ
+- MFA / SSO — スコープ外（CLAUDE.md §13）
+
+---
+
 ## 0.10 複数事業所所属（兼任）対応 — Phase 67 (2026-04-30)
 
 ### 背景

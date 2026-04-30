@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     .from('employees')
     .select('role, tenant_id')
     .eq('auth_user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!me || (me.role !== 'admin')) {
     return NextResponse.json({ error: '権限がありません' }, { status: 403 });
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     has_car_commute,
     is_shuttle_driver,
     facility_id,
+    position_id,
     role: requestedRole,
     manager_facility_ids,
   } = body as {
@@ -49,6 +50,8 @@ export async function POST(request: NextRequest) {
     has_car_commute: boolean;
     is_shuttle_driver: boolean;
     facility_id: string | null;
+    /** positions テーブルの id。employees には text の `position` カラムしか無いため、ここから name を引いて保存する。 */
+    position_id?: string | null;
     role?: 'admin' | 'manager' | 'employee';
     /** 担当施設の追加 (manager_facilities)。manager の場合のみ意味を持つ。 */
     manager_facility_ids?: string[];
@@ -66,6 +69,19 @@ export async function POST(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
+
+  // position_id 指定がある場合は positions から name を引いて employees.position (text) に保存する。
+  // 同テナントでない id を弾く意味でも tenant_id 条件付きで取得。
+  let positionName = '';
+  if (position_id) {
+    const { data: pos } = await adminClient
+      .from('positions')
+      .select('name')
+      .eq('id', position_id)
+      .eq('tenant_id', me.tenant_id)
+      .maybeSingle();
+    positionName = pos?.name ?? '';
+  }
 
   // 既存employeeチェック（同じテナント+メールアドレス）
   const { data: existingEmp } = await adminClient
@@ -93,6 +109,9 @@ export async function POST(request: NextRequest) {
   });
 
   let authUserId: string;
+  // 今回このリクエストで新規作成した auth.users かどうか。
+  // 失敗時のロールバック対象を絞るために使う（既存ユーザーは消してはいけない）。
+  let createdNewAuthUser = false;
 
   if (createUserErr) {
     if (createUserErr.message?.includes('already been registered')) {
@@ -114,6 +133,7 @@ export async function POST(request: NextRequest) {
     }
   } else {
     authUserId = authUser.user.id;
+    createdNewAuthUser = true;
   }
 
   // 3. employeeレコード作成 + 招待メール送信
@@ -121,8 +141,9 @@ export async function POST(request: NextRequest) {
     adminClient,
     supabase,
     authUserId,
+    createdNewAuthUser,
     tenantId: me.tenant_id,
-    employeeData: { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, role: normalizedRole, manager_facility_ids: manager_facility_ids ?? [] },
+    employeeData: { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position: positionName, role: normalizedRole, manager_facility_ids: manager_facility_ids ?? [] },
   });
 }
 
@@ -200,6 +221,8 @@ interface CreateParams {
   adminClient: ServiceRoleClient;
   supabase: Awaited<ReturnType<typeof createClient>>;
   authUserId: string;
+  /** このリクエストで新規作成した auth.users かどうか（rollback 対象判定）。 */
+  createdNewAuthUser: boolean;
   tenantId: string;
   employeeData: {
     email: string;
@@ -212,6 +235,7 @@ interface CreateParams {
     has_car_commute: boolean;
     is_shuttle_driver: boolean;
     facility_id: string | null;
+    position: string;
     role: 'admin' | 'manager' | 'employee';
     manager_facility_ids: string[];
   };
@@ -221,10 +245,11 @@ async function createEmployeeAndSendInvite({
   adminClient,
   supabase,
   authUserId,
+  createdNewAuthUser,
   tenantId,
   employeeData,
 }: CreateParams) {
-  const { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, role, manager_facility_ids } = employeeData;
+  const { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position, role, manager_facility_ids } = employeeData;
 
   // employeeレコード作成（service roleでRLSバイパス）
   const { data: createdEmp, error: empErr } = await adminClient
@@ -247,12 +272,22 @@ async function createEmployeeAndSendInvite({
       has_car_commute,
       is_shuttle_driver,
       facility_id: facility_id || null,
+      position: position || '',
       invited_at: new Date().toISOString(),
     })
     .select('id')
     .single();
 
   if (empErr || !createdEmp) {
+    /* employees insert に失敗した場合、今回新規作成した auth.users を rollback で削除する。
+       既存 auth.users（別経路で作られていたユーザー）を再利用したケースは消さない。 */
+    if (createdNewAuthUser) {
+      const { error: delErr } = await adminClient.auth.admin.deleteUser(authUserId);
+      if (delErr) {
+        // rollback 失敗は致命ではないがログには残す（運用で見つけて手動掃除する）
+        console.error('rollback auth.admin.deleteUser failed:', delErr.message);
+      }
+    }
     return NextResponse.json(
       { error: '社員レコードの作成に失敗しました', detail: empErr?.message },
       { status: 500 },
@@ -261,6 +296,7 @@ async function createEmployeeAndSendInvite({
 
   /* manager の場合、所属以外の担当施設を manager_facilities に bulk insert。
      所属施設 (facility_id) は重複登録しない。 */
+  let managerFacilitiesWarning: string | null = null;
   if (role === 'manager' && manager_facility_ids.length > 0) {
     const rows = manager_facility_ids
       .filter((fid) => fid && fid !== facility_id)
@@ -270,6 +306,7 @@ async function createEmployeeAndSendInvite({
       if (mfErr) {
         /* 招待自体は成功扱いにし、警告として返す（後から /admin/access-matrix で再設定可能） */
         console.error('manager_facilities insert failed:', mfErr.message);
+        managerFacilitiesWarning = '招待は完了しましたが、追加担当施設の登録に失敗しました。アクセス権マトリクスから設定してください。';
       }
     }
   }
@@ -317,8 +354,14 @@ async function createEmployeeAndSendInvite({
     // メール送信失敗してもemployeeレコードは作成済み
     return NextResponse.json({
       success: true,
-      warning: '社員は作成されましたが、招待メールの送信に失敗しました',
+      warning: managerFacilitiesWarning
+        ? `社員は作成されましたが、招待メールの送信に失敗しました。${managerFacilitiesWarning}`
+        : '社員は作成されましたが、招待メールの送信に失敗しました',
     });
+  }
+
+  if (managerFacilitiesWarning) {
+    return NextResponse.json({ success: true, warning: managerFacilitiesWarning });
   }
 
   return NextResponse.json({ success: true });

@@ -5,8 +5,9 @@ export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   // DEV: ログイン検証スキップ（ローカル確認用）
-  // .env.local に DEV_SKIP_AUTH=1 を設定すると全ルートが素通し
-  if (process.env.DEV_SKIP_AUTH === '1') {
+  // .env.local に DEV_SKIP_AUTH=1 を設定すると全ルートが素通し。
+  // 本番環境（NODE_ENV=production）では絶対に有効化させない。
+  if (process.env.NODE_ENV !== 'production' && process.env.DEV_SKIP_AUTH === '1') {
     return supabaseResponse;
   }
 
@@ -46,12 +47,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublic && !pathname.startsWith('/invite')) {
+  // /invite/accept と /reset-password/confirm は code 交換で「認証済み」扱いになるが、
+  // パスワード設定 UI を表示する必要があるため auto-redirect から除外する。
+  if (
+    user &&
+    isPublic &&
+    !pathname.startsWith('/invite') &&
+    !pathname.startsWith('/reset-password/confirm')
+  ) {
     const { data: employee } = await supabase
       .from('employees')
       .select('role')
       .eq('auth_user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (employee) {
       const url = request.nextUrl.clone();
@@ -71,7 +79,7 @@ export async function middleware(request: NextRequest) {
       .from('employees')
       .select('role')
       .eq('auth_user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!employee) {
       const url = request.nextUrl.clone();

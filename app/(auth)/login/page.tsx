@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -19,6 +19,24 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  /* /auth/callback から code 不正等で蹴られた時のエラー表示。
+     URL クエリは即削除してリロード時の再表示を防ぐ。 */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('error');
+    if (!err) return;
+    const messages: Record<string, string> = {
+      missing_code: '認証コードが見つかりませんでした',
+      invalid_code: '認証リンクが無効または期限切れです',
+    };
+    toast.error(messages[err] || '認証に失敗しました', {
+      description: 'お手数ですが、もう一度ログインまたは招待メールの再送をご依頼ください。',
+    });
+    params.delete('error');
+    const qs = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();

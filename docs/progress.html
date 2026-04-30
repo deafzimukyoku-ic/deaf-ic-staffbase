@@ -47,7 +47,27 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-30（Phase 67 複数事業所所属 完了） / 全体完了率: 約 96%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-30（Phase 68 認証フロー堅牢化 完了） / 全体完了率: 約 96%</p>
+
+<!-- Phase 68: 認証フロー堅牢化（招待 / ログイン / パスワードリセット） -->
+<div class="phase">
+  <h2>Phase 68 — 認証フロー堅牢化（招待 / ログイン / パスワードリセット）<span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>パスワードリセット完了ページ新設（PKCE code 交換 + 新パスワード入力）</td><td class="files">app/(auth)/reset-password/confirm/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>従来 /login にリダイレクトされてリセット UI に到達できなかった致命的バグを修正</td></tr>
+      <tr><td>resetPasswordForEmail の redirectTo を /reset-password/confirm に変更 + 1h 失効注記</td><td class="files">app/(auth)/reset-password/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>middleware: NODE_ENV ガード / .single() → .maybeSingle() / /reset-password/confirm の auto-redirect 除外</td><td class="files">middleware.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>本番に DEV_SKIP_AUTH=1 が漏れても無効化される / RLS不整合時に 500 を返さない</td></tr>
+      <tr><td>招待 API: position_id を受け取り positions.name を employees.position(text) に保存</td><td class="files">app/api/employees/invite/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>UI で選んだ役職が黙って消える silent bug を修正</td></tr>
+      <tr><td>招待 API: employees insert 失敗時に新規 auth.users を rollback で削除</td><td class="files">app/api/employees/invite/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>orphan auth.users を防止 / 既存ユーザー再利用ケースは消さない</td></tr>
+      <tr><td>招待 API: manager_facilities insert 失敗時に warning レスポンスで通知</td><td class="files">app/api/employees/invite/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>従来 console.error のみで握り潰されていた</td></tr>
+      <tr><td>新規社員追加 UI: アプリ権限（admin/manager/employee）セレクタ + manager 兼任先選択</td><td class="files">app/(admin)/admin/employees/new/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>access-matrix の AddManagerDialog と同じパターン</td></tr>
+      <tr><td>招待リンク有効期限（約 1h）の UI 注記</td><td class="files">app/(admin)/admin/employees/new/page.tsx, app/(auth)/invite/accept/page.tsx, app/(auth)/reset-password/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>ログイン画面で /auth/callback の ?error=missing_code|invalid_code を toast 表示</td><td class="files">app/(auth)/login/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>表示後は URL から削除してリロードで再表示しない</td></tr>
+      <tr class="check"><td>別視点確認: 既存 access-matrix からの招待・既存 employees の email 変更 API・/admin/access-matrix のロール変更が壊れていないこと</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>invite API のリクエスト型は後方互換（position_id / role / manager_facility_ids 全て optional）</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- Phase 67: 複数事業所所属（兼任）対応 -->
 <div class="phase">

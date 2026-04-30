@@ -41,7 +41,21 @@ export default function NewEmployeePage() {
     is_shuttle_driver: false,
     facility_id: '',
     position_id: '',
+    role: 'employee' as 'admin' | 'manager' | 'employee',
+    manager_facility_ids: [] as string[],
   });
+
+  function toggleManagerFacility(id: string) {
+    setForm((prev) => {
+      const exists = prev.manager_facility_ids.includes(id);
+      return {
+        ...prev,
+        manager_facility_ids: exists
+          ? prev.manager_facility_ids.filter((x) => x !== id)
+          : [...prev.manager_facility_ids, id],
+      };
+    });
+  }
 
   useEffect(() => {
     async function load() {
@@ -82,6 +96,13 @@ export default function NewEmployeePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tenantId) return;
+
+    // manager は所属施設必須（manager_facilities 兼任設定の前提）
+    if (form.role === 'manager' && !form.facility_id) {
+      toast.error('マネージャーは所属施設の指定が必要です');
+      return;
+    }
+
     setLoading(true);
 
     const res = await fetch('/api/employees/invite', {
@@ -99,6 +120,8 @@ export default function NewEmployeePage() {
         is_shuttle_driver: form.is_shuttle_driver,
         facility_id: form.facility_id || null,
         position_id: form.position_id || null,
+        role: form.role,
+        manager_facility_ids: form.role === 'manager' ? form.manager_facility_ids : [],
       }),
     });
 
@@ -243,6 +266,57 @@ export default function NewEmployeePage() {
                   </select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="role">アプリ権限 *</Label>
+                  <select
+                    id="role"
+                    title="アプリ権限を選択"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/20"
+                    value={form.role}
+                    onChange={(e) => update('role', e.target.value as 'admin' | 'manager' | 'employee')}
+                  >
+                    <option value="employee">職員（自分の情報のみ）</option>
+                    <option value="manager">マネージャー（所属事業所の管理）</option>
+                    <option value="admin">管理者（全事業所の管理）</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    後から「アクセス権マトリクス」画面で変更できます。
+                  </p>
+                </div>
+
+                {form.role === 'manager' && (
+                  <div className="space-y-2">
+                    <Label>追加担当施設（任意）</Label>
+                    <p className="text-xs text-muted-foreground">
+                      所属施設に加えて管理できる事業所を選択。後からも変更できます。
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {facilities
+                        .filter((f) => f.id !== form.facility_id)
+                        .map((f) => {
+                          const checked = form.manager_facility_ids.includes(f.id);
+                          return (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => toggleManagerFacility(f.id)}
+                              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                                checked
+                                  ? 'bg-diletto-blue text-white border-diletto-blue'
+                                  : 'bg-white text-diletto-gray border-diletto-gray/20 hover:bg-diletto-beige'
+                              }`}
+                            >
+                              {f.name} {checked ? '✓' : ''}
+                            </button>
+                          );
+                        })}
+                      {facilities.filter((f) => f.id !== form.facility_id).length === 0 && (
+                        <span className="text-xs text-muted-foreground">他の事業所がありません</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
               </div>
             </div>
 
@@ -282,6 +356,9 @@ export default function NewEmployeePage() {
                 {loading ? '招待中...' : '招待メールを送信'}
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              ※ 招待リンクは送信から約1時間で失効します。期限切れになった場合は社員一覧から再送信できます。
+            </p>
           </form>
         </CardContent>
       </Card>
