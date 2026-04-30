@@ -42,10 +42,12 @@ export function brandedInviteHtml({
       <div style="text-align:center;margin:32px 0;">
         <a href="${inviteLink}" style="display:inline-block;background:#4169e1;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">招待を受け入れる</a>
       </div>
-      <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.6;">
-        ボタンが押せない場合は、以下の URL をブラウザに貼り付けてください：<br>
-        <span style="word-break:break-all;color:#4169e1;">${inviteLink}</span>
+      <p style="margin:0 0 8px;font-size:12px;color:#6b7280;line-height:1.6;">
+        ボタンが押せない場合は、以下の URL をブラウザに貼り付けてください：
       </p>
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-family:'SF Mono','Consolas','Menlo',monospace;font-size:11px;line-height:1.6;color:#4169e1;word-break:break-all;overflow-wrap:anywhere;">
+        ${inviteLink}
+      </div>
     </div>
     <p style="text-align:center;margin:24px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
       このメールに心当たりがない場合は破棄してください。<br>
