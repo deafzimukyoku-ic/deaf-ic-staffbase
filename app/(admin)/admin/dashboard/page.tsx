@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { ProgressDashboard } from '@/components/admin/ProgressDashboard';
+import { NotificationsAlertModal } from '@/components/notifications/NotificationsAlertModal';
 import { isEmployeeInAudience, loadTemplateAudience } from '@/lib/template-audience';
 import type { Employee, DocumentTemplate } from '@/lib/types';
 
@@ -102,6 +103,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div>
+      <NotificationsAlertModal />
       <h1 className="text-2xl font-bold mb-6">ダッシュボード</h1>
       <ProgressDashboard {...data} />
     </div>

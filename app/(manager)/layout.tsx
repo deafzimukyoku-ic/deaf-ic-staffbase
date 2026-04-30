@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
+import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useShiftFacilityId } from '@/lib/shift-facility';
@@ -486,6 +487,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
           </Link>
           <div className="ml-auto flex items-center gap-2 shrink-0">
             <FacilityHeaderSelector facilities={facilities} value={facilityId} onChange={setFacilityId} />
+            <NotificationsBell />
             <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0">
               社員画面
             </Link>
@@ -512,6 +514,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
           </div>
           <div className="flex items-center gap-3">
             <FacilityHeaderSelector facilities={facilities} value={facilityId} onChange={setFacilityId} />
+            <NotificationsBell />
             <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">
               社員画面
             </Link>

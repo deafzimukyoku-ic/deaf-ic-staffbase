@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
+import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { useShiftFacilityId, setStoredFacilityId } from '@/lib/shift-facility';
 import type { Facility } from '@/lib/types';
 
@@ -446,6 +447,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
               </select>
             )}
+            <NotificationsBell />
             <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0">
               社員画面
             </Link>
@@ -482,6 +484,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
               </select>
             )}
+            <NotificationsBell />
             <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">
               社員画面
             </Link>

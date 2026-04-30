@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useShiftFacilityId } from '@/lib/shift-facility';
+import { NotificationsAlertModal } from '@/components/notifications/NotificationsAlertModal';
 
 interface ProgressRow {
   employee_id: string;
@@ -216,6 +217,7 @@ export default function ManagerDashboardPage() {
 
   return (
     <div className="space-y-5 pb-8">
+      <NotificationsAlertModal />
       <div>
         <h1 className="text-2xl font-bold text-diletto-ink">ダッシュボード</h1>
         <p className="text-xs text-diletto-gray-light mt-1 italic">Managerial Overview</p>
