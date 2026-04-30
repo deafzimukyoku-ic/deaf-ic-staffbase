@@ -1,69 +1,50 @@
 -- 135_align_employee_columns_to_code.sql
--- migration 012 で追加した employees の以下カラム名がコード側 (lib/types.ts) と
--- 一致していなかった (migration 014 の注釈は誤り)。8 ファイル × 多数の参照が
--- code 側にあるため、DB 側をリネームして整合させる。
+-- migration 012 が一部環境で適用されておらず、コード (lib/types.ts) が期待する
+-- employees カラム群が DB に存在しなかった。
+-- - 012 は car_type / insurance_certificate_number / commute_distance_km / insurance_period_*
+--   という名前で作っていたがコード側は car_model / insurance_policy_number /
+--   commute_distance / insurance_expiry を使っており、整合してなかった
+-- - さらに 012 自体が未適用の環境もあり、「列が見つからない」エラーが発生していた
 --
--- 旧名 (DB)                          → 新名 (コードが使う名前)
---   car_type                           → car_model
---   insurance_certificate_number       → insurance_policy_number
---   commute_distance_km (numeric)      → commute_distance (text)
---   insurance_period_start/end (date)  → insurance_expiry (text)
---
--- 既存データは admin 1 名 + 値未入力（cleanup 直後）のため drop & add で安全。
--- データを残したい場合は手動でキャスト変換すること。
---
--- if exists ガードでマルチ環境（既に整合している場合）でも安全に実行可能。
+-- 本 migration は「コードが使う名前で全部 add column if not exists」する形で
+-- 何度実行しても安全 (idempotent) に整える。古い名前のカラムが残っていても
+-- 害はないが、今後コードからは新名前のみ使う。
 
-do $$
-begin
-  -- car_model: rename if old column exists
-  if exists (select 1 from information_schema.columns
-              where table_schema = 'public' and table_name = 'employees'
-                and column_name = 'car_type') then
-    if not exists (select 1 from information_schema.columns
-                    where table_schema = 'public' and table_name = 'employees'
-                      and column_name = 'car_model') then
-      alter table public.employees rename column car_type to car_model;
-    else
-      alter table public.employees drop column car_type;
-    end if;
-  end if;
-
-  -- insurance_policy_number: rename if old column exists
-  if exists (select 1 from information_schema.columns
-              where table_schema = 'public' and table_name = 'employees'
-                and column_name = 'insurance_certificate_number') then
-    if not exists (select 1 from information_schema.columns
-                    where table_schema = 'public' and table_name = 'employees'
-                      and column_name = 'insurance_policy_number') then
-      alter table public.employees rename column insurance_certificate_number to insurance_policy_number;
-    else
-      alter table public.employees drop column insurance_certificate_number;
-    end if;
-  end if;
-
-  -- commute_distance: drop old numeric, add text (型が違うので rename ではなく drop & add)
-  if exists (select 1 from information_schema.columns
-              where table_schema = 'public' and table_name = 'employees'
-                and column_name = 'commute_distance_km') then
-    alter table public.employees drop column commute_distance_km;
-  end if;
-
-  -- insurance_expiry: drop old date pair, add text
-  if exists (select 1 from information_schema.columns
-              where table_schema = 'public' and table_name = 'employees'
-                and column_name = 'insurance_period_start') then
-    alter table public.employees drop column insurance_period_start;
-  end if;
-  if exists (select 1 from information_schema.columns
-              where table_schema = 'public' and table_name = 'employees'
-                and column_name = 'insurance_period_end') then
-    alter table public.employees drop column insurance_period_end;
-  end if;
-end$$;
-
--- 新カラムを add column if not exists で確実に存在させる
+-- 車・運転免許関連
 alter table public.employees add column if not exists car_model              text;
+alter table public.employees add column if not exists car_plate_number       text;
+alter table public.employees add column if not exists license_type           text;
+alter table public.employees add column if not exists license_number         text;
+alter table public.employees add column if not exists insurance_company      text;
 alter table public.employees add column if not exists insurance_policy_number text;
-alter table public.employees add column if not exists commute_distance        text;
-alter table public.employees add column if not exists insurance_expiry        text;
+alter table public.employees add column if not exists insurance_expiry       text;
+alter table public.employees add column if not exists commute_distance       text;
+
+-- 送迎運転者関連
+alter table public.employees add column if not exists driving_experience    text;
+alter table public.employees add column if not exists accident_history      text;
+alter table public.employees add column if not exists training_attendance   text;
+
+-- 緊急連絡先 1
+alter table public.employees add column if not exists emergency1_name         text;
+alter table public.employees add column if not exists emergency1_relationship text;
+alter table public.employees add column if not exists emergency1_phone        text;
+alter table public.employees add column if not exists emergency1_mobile       text;
+alter table public.employees add column if not exists emergency1_postal_code  text;
+alter table public.employees add column if not exists emergency1_address      text;
+
+-- 緊急連絡先 2
+alter table public.employees add column if not exists emergency2_name         text;
+alter table public.employees add column if not exists emergency2_relationship text;
+alter table public.employees add column if not exists emergency2_phone        text;
+alter table public.employees add column if not exists emergency2_mobile       text;
+alter table public.employees add column if not exists emergency2_postal_code  text;
+alter table public.employees add column if not exists emergency2_address      text;
+
+-- 身元保証人
+alter table public.employees add column if not exists guarantor_name         text;
+alter table public.employees add column if not exists guarantor_birth_date   text;
+alter table public.employees add column if not exists guarantor_postal_code  text;
+alter table public.employees add column if not exists guarantor_address      text;
+alter table public.employees add column if not exists guarantor_phone        text;
+alter table public.employees add column if not exists guarantor_relationship text;
