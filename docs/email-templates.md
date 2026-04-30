@@ -57,10 +57,11 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
 <head><meta charset="UTF-8"><title>メール確認</title></head>
 <body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;color:#1a1a2e;">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
-    <div style="text-align:center;margin-bottom:24px;">
-      <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+      <div style="text-align:center;padding:32px 32px 0;">
+        <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
+      </div>
+      <div style="padding:24px 32px 40px;">
       <h1 style="margin:0 0 20px;font-size:20px;color:#1a1a2e;font-weight:700;">メールアドレスのご確認</h1>
       <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#374151;">
         職員ステーションへのご登録ありがとうございます。<br>
@@ -74,6 +75,7 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
       </p>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-family:'SF Mono','Consolas','Menlo',monospace;font-size:11px;line-height:1.6;color:#4169e1;word-break:break-all;overflow-wrap:anywhere;">
         {{ .ConfirmationURL }}
+      </div>
       </div>
     </div>
     <p style="text-align:center;margin:24px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
@@ -100,10 +102,11 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
 <head><meta charset="UTF-8"><title>招待</title></head>
 <body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;color:#1a1a2e;">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
-    <div style="text-align:center;margin-bottom:24px;">
-      <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+      <div style="text-align:center;padding:32px 32px 0;">
+        <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
+      </div>
+      <div style="padding:24px 32px 40px;">
       <h1 style="margin:0 0 20px;font-size:20px;color:#1a1a2e;font-weight:700;">職員ステーションへの招待</h1>
       <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#374151;">
         認定NPO法人 名古屋ろう国際センターの職員ステーションへ招待されました。<br>
@@ -117,6 +120,7 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
       </p>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-family:'SF Mono','Consolas','Menlo',monospace;font-size:11px;line-height:1.6;color:#4169e1;word-break:break-all;overflow-wrap:anywhere;">
         {{ .ConfirmationURL }}
+      </div>
       </div>
     </div>
     <p style="text-align:center;margin:24px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
@@ -141,10 +145,11 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
 <head><meta charset="UTF-8"><title>ログインリンク</title></head>
 <body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;color:#1a1a2e;">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
-    <div style="text-align:center;margin-bottom:24px;">
-      <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+      <div style="text-align:center;padding:32px 32px 0;">
+        <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
+      </div>
+      <div style="padding:24px 32px 40px;">
       <h1 style="margin:0 0 20px;font-size:20px;color:#1a1a2e;font-weight:700;">ログインリンク</h1>
       <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#374151;">
         以下のボタンをクリックすると、パスワードを入力せずにログインできます。<br>
@@ -158,6 +163,7 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
       </p>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-family:'SF Mono','Consolas','Menlo',monospace;font-size:11px;line-height:1.6;color:#4169e1;word-break:break-all;overflow-wrap:anywhere;">
         {{ .ConfirmationURL }}
+      </div>
       </div>
     </div>
     <p style="text-align:center;margin:24px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
@@ -181,10 +187,11 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
 <head><meta charset="UTF-8"><title>メールアドレス変更確認</title></head>
 <body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;color:#1a1a2e;">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
-    <div style="text-align:center;margin-bottom:24px;">
-      <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+      <div style="text-align:center;padding:32px 32px 0;">
+        <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
+      </div>
+      <div style="padding:24px 32px 40px;">
       <h1 style="margin:0 0 20px;font-size:20px;color:#1a1a2e;font-weight:700;">メールアドレス変更のご確認</h1>
       <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#374151;">
         ログイン用のメールアドレスを以下に変更するリクエストを受け付けました。
@@ -204,6 +211,7 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
       </p>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;font-family:'SF Mono','Consolas','Menlo',monospace;font-size:11px;line-height:1.6;color:#4169e1;word-break:break-all;overflow-wrap:anywhere;">
         {{ .ConfirmationURL }}
+      </div>
       </div>
     </div>
     <p style="text-align:center;margin:24px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
@@ -227,10 +235,11 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
 <head><meta charset="UTF-8"><title>パスワード再設定</title></head>
 <body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;color:#1a1a2e;">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
-    <div style="text-align:center;margin-bottom:24px;">
-      <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+      <div style="text-align:center;padding:32px 32px 0;">
+        <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
+      </div>
+      <div style="padding:24px 32px 40px;">
       <h1 style="margin:0 0 20px;font-size:20px;color:#1a1a2e;font-weight:700;">パスワードの再設定</h1>
       <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#374151;">
         パスワード再設定のリクエストを受け付けました。<br>
@@ -248,6 +257,7 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
       <p style="margin:0;font-size:12px;color:#dc2626;line-height:1.6;font-weight:600;">
         ※ このリンクは 1 時間で失効します。
       </p>
+      </div>
     </div>
     <p style="text-align:center;margin:24px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
       心当たりがない場合は破棄してください（パスワードは変更されません）。<br>
@@ -270,10 +280,11 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
 <head><meta charset="UTF-8"><title>認証コード</title></head>
 <body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;color:#1a1a2e;">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
-    <div style="text-align:center;margin-bottom:24px;">
-      <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+      <div style="text-align:center;padding:32px 32px 0;">
+        <img src="https://deaf-ic-nagoya.org/logo.jpg" alt="名古屋ろう国際センター" style="height:60px;width:auto;border:0;" />
+      </div>
+      <div style="padding:24px 32px 40px;">
       <h1 style="margin:0 0 20px;font-size:20px;color:#1a1a2e;font-weight:700;">認証コード</h1>
       <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#374151;">
         重要な操作の確認のため、以下の認証コードを画面に入力してください。
@@ -286,6 +297,7 @@ Supabase 標準 SMTP は **3通/時 × 100通/日** 制限。本番運用前に 
       <p style="margin:0;font-size:12px;color:#dc2626;line-height:1.6;font-weight:600;text-align:center;">
         このコードは 60 秒で失効します。
       </p>
+      </div>
     </div>
     <p style="text-align:center;margin:24px 0 0;font-size:11px;color:#9ca3af;line-height:1.6;">
       心当たりがない場合は破棄してください。<br>
