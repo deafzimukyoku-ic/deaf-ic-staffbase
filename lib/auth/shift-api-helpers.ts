@@ -19,7 +19,7 @@ export interface ShiftAuthContext {
   employeeId: string;
   tenantId: string;
   role: 'admin' | 'manager' | 'employee';
-  // 解決された facility_id。manager/employee は managed/belonging set に含まれることを検証済
+  // 解決された facility_id。manager は自 facility 固定、admin は requestedFacilityId そのまま
   facilityId: string;
   // manager: 管轄施設 ID 集合（主所属 ∪ manager_facilities）
   // employee: 所属施設 ID 集合（主所属 ∪ employee_facilities 兼任先）

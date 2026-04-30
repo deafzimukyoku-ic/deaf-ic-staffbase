@@ -63,9 +63,27 @@ function formatDateJP(value: string): string {
  * employees テーブルの値を表示用に整形。
  * - 日付カラム: YYYY-MM-DD → 年月日表記
  * - enum カラム: 英語識別子 → 日本語表示
+ * - 通勤手段（合成）: has_car_commute と commute_method を両方見て「マイカー」「公共交通機関」を組合せ
  * - それ以外: 文字列化のみ
+ *
+ * @param fieldName employees テーブルのカラム名
+ * @param rawValue  そのカラムの値
+ * @param employee  （任意）他カラムも参照する合成出力のためのフルレコード
  */
-export function formatEmployeeFieldValue(fieldName: string, rawValue: unknown): string {
+export function formatEmployeeFieldValue(
+  fieldName: string,
+  rawValue: unknown,
+  employee?: Record<string, unknown>
+): string {
+  /* 通勤手段は has_car_commute（マイカー） + commute_method（公共交通）の合成。
+     送迎運転者 (is_shuttle_driver) は「業務担当」であって通勤手段ではないため含めない。 */
+  if (fieldName === 'commute_method' && employee) {
+    const labels: string[] = [];
+    if (employee.has_car_commute === true) labels.push('マイカー');
+    if (employee.commute_method === 'public_transport') labels.push('公共交通機関');
+    return labels.join('・');
+  }
+
   if (rawValue === null || rawValue === undefined || rawValue === '') return '';
 
   /* 配列カラム（qualifications 等）は「、」で結合。

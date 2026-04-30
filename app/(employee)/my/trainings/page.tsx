@@ -18,7 +18,8 @@ import type { Training, TrainingSubmission, Category } from '@/lib/types';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { BlockRenderer } from '@/components/admin/BlockRenderer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { logView } from '@/lib/view-log';
+import { fetchMyViewSummary, logView, type ViewSummary } from '@/lib/view-log';
+import { ViewConfirmButton } from '@/components/employee/ViewConfirmButton';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
 import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
 
@@ -36,6 +37,8 @@ export default function MyTrainingsPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
+  /* 確認ボタンクリック数の集計 (item_id → ViewSummary)。 */
+  const [viewSummaries, setViewSummaries] = useState<Map<string, ViewSummary>>(new Map());
   const supabase = createClient();
 
   useEffect(() => {
@@ -94,6 +97,10 @@ export default function MyTrainingsPage() {
         setItems(result);
         setSummaryTexts(texts);
 
+        /* 自分の確認ボタン履歴を集計（モーダル内の「N 回目確認」表示用） */
+        const summaries = await fetchMyViewSummary(supabase, 'training_view_logs', me.id);
+        setViewSummaries(summaries);
+
         try {
           const catRes = await fetch('/api/categories?type=training');
           if (catRes.ok) setCategories(await catRes.json());
@@ -124,7 +131,7 @@ export default function MyTrainingsPage() {
 
     const { data: me } = await supabase
       .from('employees')
-      .select('id')
+      .select('id, tenant_id')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -145,6 +152,15 @@ export default function MyTrainingsPage() {
     setItems((prev) =>
       prev.map((i) => i.training.id === trainingId ? { ...i, submission: data as TrainingSubmission } : i)
     );
+
+    /* 提出 = 1 回目の確認とカウント。view_logs にも 1 行追加。 */
+    await logView(supabase, 'training_view_logs', { tenant_id: me.tenant_id, employee_id: me.id, item_id: trainingId });
+    setViewSummaries((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(trainingId);
+      next.set(trainingId, { count: (existing?.count ?? 0) + 1, lastAt: new Date().toISOString() });
+      return next;
+    });
 
     toast.success('感想を提出しました');
     setSubmittingId(null);
@@ -326,6 +342,8 @@ export default function MyTrainingsPage() {
     onSubmit: (id: string) => void;
   }) {
     const [openId, setOpenId] = useState<string | null>(null);
+    /* モーダルを開いた瞬間の submission 有無を記録（同セッション中は変化しない） */
+    const [wasSubmittedAtOpen, setWasSubmittedAtOpen] = useState<boolean>(false);
     const open = openId ? items.find((i) => i.training.id === openId) : null;
 
     if (items.length === 0) {
@@ -349,10 +367,8 @@ export default function MyTrainingsPage() {
                 pendingLabel={label}
                 hasMedia={blocksHaveMedia((training as any).content_blocks) || !!training.youtube_url || !!training.pdf_storage_path}
                 onClick={() => {
+                  setWasSubmittedAtOpen(!!submission);
                   setOpenId(training.id);
-                  if (tenantId && employeeId) {
-                    logView(supabase, 'training_view_logs', { tenant_id: tenantId, employee_id: employeeId, item_id: training.id });
-                  }
                 }}
               />
             );
@@ -434,6 +450,28 @@ export default function MyTrainingsPage() {
                           </Button>
                         </CardContent>
                       </Card>
+                    )}
+
+                    {/* 「✓ 確認しました」ボタン: 開いた瞬間 提出済だったときだけ表示。
+                        1 回目（未受講 → 提出 → カウント 1）は同セッション中ボタン非表示、
+                        閉じて再度開くと「2 回目」として表示される。 */}
+                    {tenantId && employeeId && wasSubmittedAtOpen && (
+                      <div className="pt-3 border-t border-diletto-gray/10">
+                        <ViewConfirmButton
+                          table="training_view_logs"
+                          tenantId={tenantId}
+                          employeeId={employeeId}
+                          itemId={training.id}
+                          initialSummary={viewSummaries.get(training.id)}
+                          onConfirmed={(count, viewedAt) => {
+                            setViewSummaries((prev) => {
+                              const next = new Map(prev);
+                              next.set(training.id, { count, lastAt: viewedAt });
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
                     )}
                   </div>
                 </>

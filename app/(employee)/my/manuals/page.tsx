@@ -12,7 +12,8 @@ import { NewBadge } from '@/components/admin/NewBadge';
 import { BlockRenderer } from '@/components/admin/BlockRenderer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
-import { logView } from '@/lib/view-log';
+import { fetchMyViewSummary, logView, type ViewSummary } from '@/lib/view-log';
+import { ViewConfirmButton } from '@/components/employee/ViewConfirmButton';
 import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
 
 interface ManualWithRead extends Manual {
@@ -26,6 +27,7 @@ export default function MyManualsPage() {
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [viewSummaries, setViewSummaries] = useState<Map<string, ViewSummary>>(new Map());
   const supabase = createClient();
 
   useEffect(() => {
@@ -74,6 +76,10 @@ export default function MyManualsPage() {
 
         setItems(docList.map((m) => ({ ...m, isRead: readSet.has(m.id) })));
 
+        /* 確認ボタン履歴の集計 */
+        const vs = await fetchMyViewSummary(supabase, 'manual_view_logs', me.id);
+        setViewSummaries(vs);
+
         try {
           const catRes = await fetch('/api/categories?type=manual');
           if (catRes.ok) setCategories(await catRes.json());
@@ -90,10 +96,19 @@ export default function MyManualsPage() {
   async function markRead(manualId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: me } = await supabase.from('employees').select('id').eq('auth_user_id', user.id).single();
+    const { data: me } = await supabase.from('employees').select('id, tenant_id').eq('auth_user_id', user.id).single();
     if (!me) return;
     await supabase.from('manual_reads').insert({ manual_id: manualId, employee_id: me.id });
     setItems((prev) => prev.map((i) => i.id === manualId ? { ...i, isRead: true } : i));
+    /* 既読化 = 1 回目の確認とカウント。view_logs にも 1 行追加。
+       同セッション中は ViewConfirmButton 非表示なので「2 重ボタン」問題は起きない。 */
+    await logView(supabase, 'manual_view_logs', { tenant_id: me.tenant_id, employee_id: me.id, item_id: manualId });
+    setViewSummaries((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(manualId);
+      next.set(manualId, { count: (existing?.count ?? 0) + 1, lastAt: new Date().toISOString() });
+      return next;
+    });
   }
 
   async function openPdf(path: string) {
@@ -234,22 +249,37 @@ export default function MyManualsPage() {
         </div>
       </div>
 
-      <ManualsGridView items={visible} onMarkRead={markRead} onView={(id) => {
-        if (tenantId && employeeId) {
-          logView(supabase, 'manual_view_logs', { tenant_id: tenantId, employee_id: employeeId, item_id: id });
-        }
-      }} onOpenPdf={openPdf} />
+      <ManualsGridView
+        items={visible}
+        onMarkRead={markRead}
+        onOpenPdf={openPdf}
+        tenantId={tenantId}
+        employeeId={employeeId}
+        viewSummaries={viewSummaries}
+        onViewConfirmed={(id, count, viewedAt) => {
+          setViewSummaries((prev) => {
+            const next = new Map(prev);
+            next.set(id, { count, lastAt: viewedAt });
+            return next;
+          });
+        }}
+      />
     </div>
   );
 }
 
-function ManualsGridView({ items, onMarkRead, onView, onOpenPdf }: {
+function ManualsGridView({ items, onMarkRead, onOpenPdf, tenantId, employeeId, viewSummaries, onViewConfirmed }: {
   items: ManualWithRead[];
   onMarkRead: (id: string) => void;
-  onView: (id: string) => void;
   onOpenPdf: (path: string) => void;
+  tenantId: string | null;
+  employeeId: string | null;
+  viewSummaries: Map<string, ViewSummary>;
+  onViewConfirmed: (id: string, count: number, viewedAt: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  /* モーダルを開いた瞬間の isRead 状態を記録（同セッション中は変化しない） */
+  const [wasReadAtOpen, setWasReadAtOpen] = useState<boolean>(false);
   const open = openId ? items.find((i) => i.id === openId) : null;
 
   if (items.length === 0) {
@@ -269,7 +299,11 @@ function ManualsGridView({ items, onMarkRead, onView, onOpenPdf }: {
             ackLabel="既読"
             pendingLabel="未読"
             hasMedia={blocksHaveMedia(m.content_blocks) || !!m.pdf_storage_path}
-            onClick={() => { setOpenId(m.id); onView(m.id); /* 既読は明示ボタンのみ、自動既読は廃止 */ }}
+            onClick={() => {
+              setWasReadAtOpen(m.isRead);
+              setOpenId(m.id);
+              /* 既読 / 確認カウント は明示ボタンのみ、自動カウントは廃止 */
+            }}
           />
         ))}
       </div>
@@ -357,6 +391,21 @@ function ManualsGridView({ items, onMarkRead, onView, onOpenPdf }: {
                   )}
                 </div>
               </div>
+              {/* 「✓ 確認しました（N 回目）」: 開いた瞬間 既読済みだったときだけ表示。
+                  1 回目（未読 → 既読化 → カウント 1）は同セッション中ボタン非表示、
+                  閉じて再度開くと「2 回目」として表示される。 */}
+              {tenantId && employeeId && wasReadAtOpen && (
+                <div className="pt-3 border-t border-diletto-gray/10 mt-3">
+                  <ViewConfirmButton
+                    table="manual_view_logs"
+                    tenantId={tenantId}
+                    employeeId={employeeId}
+                    itemId={open.id}
+                    initialSummary={viewSummaries.get(open.id)}
+                    onConfirmed={(count, viewedAt) => onViewConfirmed(open.id, count, viewedAt)}
+                  />
+                </div>
+              )}
             </>
           )}
         </DialogContent>

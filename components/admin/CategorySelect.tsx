@@ -84,13 +84,13 @@ export function CategorySelect({
 
 // バッジ表示（社員画面・一覧カードで使用）
 // 視認性向上: テキストを少し大きく、影付き、フォント太め
+//
+// カテゴリは作成時に必須（コンテンツはカテゴリ内に作る運用）のため、
+// category が null になるケースはほぼ存在しない。万一 null だったら
+// バッジ自体を非表示（旧仕様の「未分類」バッジは見栄え上削除）。
 export function CategoryBadge({ category }: { category: Category | null | undefined }) {
   if (!category) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-diletto-gray/10 px-2 py-0.5 text-[11px] text-diletto-gray-light">
-        未分類
-      </span>
-    );
+    return null;
   }
   return (
     <span

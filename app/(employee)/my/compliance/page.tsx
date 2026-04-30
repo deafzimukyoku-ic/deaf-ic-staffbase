@@ -13,7 +13,8 @@ import { applyScopeFilter } from '@/components/admin/FacilityScopeSelector';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { BlockRenderer } from '@/components/admin/BlockRenderer';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
-import { logView } from '@/lib/view-log';
+import { fetchMyViewSummary, logView, type ViewSummary } from '@/lib/view-log';
+import { ViewConfirmButton } from '@/components/employee/ViewConfirmButton';
 import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
 import { toast } from 'sonner';
 import type { Category, TargetType } from '@/lib/types';
@@ -41,6 +42,7 @@ export default function MyCompliancePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [employeeInfo, setEmployeeInfo] = useState<{ facility_id: string | null, position_id: string | null } | null>(null);
+  const [viewSummaries, setViewSummaries] = useState<Map<string, ViewSummary>>(new Map());
   const supabase = createClient();
 
   const loadData = useCallback(async () => {
@@ -111,6 +113,10 @@ export default function MyCompliancePage() {
       }
       setAckMap(newAckMap);
 
+      /* 自分の確認ボタン履歴を集計（モーダル内 N 回目表示用） */
+      const vs = await fetchMyViewSummary(supabase, 'compliance_view_logs', me.id);
+      setViewSummaries(vs);
+
       try {
         const catRes = await fetch('/api/categories?type=compliance');
         if (catRes.ok) setCategories(await catRes.json());
@@ -128,7 +134,7 @@ export default function MyCompliancePage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   async function handleAcknowledge(doc: ComplianceDoc) {
-    if (!employeeId) return;
+    if (!employeeId || !tenantId) return;
     setAckLoading(doc.id);
 
     const { error } = await supabase
@@ -146,6 +152,15 @@ export default function MyCompliancePage() {
     }
 
     setAckMap((prev) => ({ ...prev, [doc.id]: true }));
+    /* 同意 = 1 回目の確認とカウント。view_logs にも 1 行追加して以降のカウントを正しく開始させる。
+       同セッション中は ViewConfirmButton を非表示にしているので「2 重ボタン」問題は起きない。 */
+    await logView(supabase, 'compliance_view_logs', { tenant_id: tenantId, employee_id: employeeId, item_id: doc.id });
+    setViewSummaries((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(doc.id);
+      next.set(doc.id, { count: (existing?.count ?? 0) + 1, lastAt: new Date().toISOString() });
+      return next;
+    });
     toast.success('遵守事項を確認しました');
     setAckLoading(null);
   }
@@ -312,28 +327,40 @@ export default function MyCompliancePage() {
 
       <GridView
         docs={categoryDocs}
-        onView={(id) => {
-          if (tenantId && employeeId) {
-            logView(supabase, 'compliance_view_logs', { tenant_id: tenantId, employee_id: employeeId, item_id: id });
-          }
-        }}
         ackMap={ackMap}
         ackLoading={ackLoading}
         onAcknowledge={handleAcknowledge}
+        tenantId={tenantId}
+        employeeId={employeeId}
+        viewSummaries={viewSummaries}
+        onViewConfirmed={(id, count, viewedAt) => {
+          setViewSummaries((prev) => {
+            const next = new Map(prev);
+            next.set(id, { count, lastAt: viewedAt });
+            return next;
+          });
+        }}
       />
     </div>
   );
 }
 
 // ===== Plan C: カードグリッド + 詳細モーダル =====
-function GridView({ docs, ackMap, ackLoading, onAcknowledge, onView }: {
+function GridView({ docs, ackMap, ackLoading, onAcknowledge, tenantId, employeeId, viewSummaries, onViewConfirmed }: {
   docs: ComplianceDoc[];
   ackMap: Record<string, boolean>;
   ackLoading: string | null;
   onAcknowledge: (doc: ComplianceDoc) => void;
-  onView: (id: string) => void;
+  tenantId: string | null;
+  employeeId: string | null;
+  viewSummaries: Map<string, ViewSummary>;
+  onViewConfirmed: (id: string, count: number, viewedAt: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  /* モーダルを開いた瞬間の ack 状態を記録。同セッション中は変化しない。
+     1 回目（未同意で開く）→ 同意ボタンだけ表示、確認ボタンは非表示。
+     2 回目以降（同意済みで開く）→ 確認ボタンを表示。 */
+  const [wasAckedAtOpen, setWasAckedAtOpen] = useState<boolean>(false);
 
   if (docs.length === 0) {
     return <p className="text-center py-20 text-diletto-gray-light">このカテゴリのドキュメントはありません</p>;
@@ -355,8 +382,8 @@ function GridView({ docs, ackMap, ackLoading, onAcknowledge, onView }: {
             pendingLabel="未同意"
             hasMedia={blocksHaveMedia((doc as any).content_blocks)}
             onClick={() => {
+              setWasAckedAtOpen(!!ackMap[doc.id]);
               setOpenId(doc.id);
-              onView(doc.id);
             }}
           />
         ))}
@@ -404,6 +431,22 @@ function GridView({ docs, ackMap, ackLoading, onAcknowledge, onView }: {
                     >
                       {ackLoading === openDoc.id ? '処理中...' : '✓ 内容を確認し、遵守して勤務に取り組むことに同意します'}
                     </Button>
+                  </div>
+                )}
+
+                {/* 「✓ 確認しました（N 回目）」ボタン: 開いた瞬間 ack 済みだったときだけ表示。
+                    1 回目（未同意 → 同意 → カウント 1）は同セッション中ボタンを出さず、
+                    閉じて再度開くと「2 回目」として表示される。 */}
+                {tenantId && employeeId && wasAckedAtOpen && (
+                  <div className="pt-3 border-t border-diletto-gray/10">
+                    <ViewConfirmButton
+                      table="compliance_view_logs"
+                      tenantId={tenantId}
+                      employeeId={employeeId}
+                      itemId={openDoc.id}
+                      initialSummary={viewSummaries.get(openDoc.id)}
+                      onConfirmed={(count, viewedAt) => onViewConfirmed(openDoc.id, count, viewedAt)}
+                    />
                   </div>
                 )}
               </div>

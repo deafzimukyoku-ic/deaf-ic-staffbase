@@ -44,10 +44,11 @@ function resolvePdfTagValue(
       if (sourceField.includes('+')) {
         return sourceField
           .split('+')
-          .map((f) => formatEmployeeFieldValue(f.trim(), ctx.employee[f.trim()]))
+          .map((f) => formatEmployeeFieldValue(f.trim(), ctx.employee[f.trim()], ctx.employee))
           .join('');
       }
-      return formatEmployeeFieldValue(sourceField, ctx.employee[sourceField]);
+      /* 第3引数 employee を渡すことで commute_method 等の合成出力に対応 */
+      return formatEmployeeFieldValue(sourceField, ctx.employee[sourceField], ctx.employee);
     }
     case 'tenant': {
       if (sourceField === 'bank_name') return ctx.bankName || '';

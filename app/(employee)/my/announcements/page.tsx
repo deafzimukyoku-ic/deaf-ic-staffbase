@@ -14,7 +14,8 @@ import { NewBadge } from '@/components/admin/NewBadge';
 import { BlockRenderer } from '@/components/admin/BlockRenderer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
-import { logView } from '@/lib/view-log';
+import { fetchMyViewSummary, type ViewSummary } from '@/lib/view-log';
+import { ViewConfirmButton } from '@/components/employee/ViewConfirmButton';
 import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
 
 interface AnnouncementWithRead extends Announcement {
@@ -28,6 +29,7 @@ export default function MyAnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [viewSummaries, setViewSummaries] = useState<Map<string, ViewSummary>>(new Map());
   const supabase = createClient();
 
   useEffect(() => {
@@ -77,6 +79,10 @@ export default function MyAnnouncementsPage() {
         }) as Announcement[];
 
         setItems(docList.map((a) => ({ ...a, isRead: readSet.has(a.id) })));
+
+        /* 確認ボタン履歴の集計 */
+        const vs = await fetchMyViewSummary(supabase, 'announcement_view_logs', me.id);
+        setViewSummaries(vs);
 
         try {
           const catRes = await fetch('/api/categories?type=announcement');
@@ -267,17 +273,34 @@ export default function MyAnnouncementsPage() {
         </div>
       </div>
 
-      <GridView items={visible} onOpen={(id) => {
-        const it = visible.find((v) => v.id === id);
-        if (it && !it.isRead) markRead(id);
-        if (tenantId && employeeId) {
-          logView(supabase, 'announcement_view_logs', { tenant_id: tenantId, employee_id: employeeId, item_id: id });
-        }
-      }} />
+      <GridView
+        items={visible}
+        onOpen={(id) => {
+          const it = visible.find((v) => v.id === id);
+          if (it && !it.isRead) markRead(id);
+        }}
+        tenantId={tenantId}
+        employeeId={employeeId}
+        viewSummaries={viewSummaries}
+        onViewConfirmed={(id, count, viewedAt) => {
+          setViewSummaries((prev) => {
+            const next = new Map(prev);
+            next.set(id, { count, lastAt: viewedAt });
+            return next;
+          });
+        }}
+      />
     </div>
   );
 
-  function GridView({ items, onOpen }: { items: AnnouncementWithRead[]; onOpen: (id: string) => void }) {
+  function GridView({ items, onOpen, tenantId, employeeId, viewSummaries, onViewConfirmed }: {
+    items: AnnouncementWithRead[];
+    onOpen: (id: string) => void;
+    tenantId: string | null;
+    employeeId: string | null;
+    viewSummaries: Map<string, ViewSummary>;
+    onViewConfirmed: (id: string, count: number, viewedAt: string) => void;
+  }) {
     const [openId, setOpenId] = useState<string | null>(null);
     const open = openId ? items.find((i) => i.id === openId) : null;
 
@@ -326,6 +349,20 @@ export default function MyAnnouncementsPage() {
                 <p className="text-[10px] text-diletto-gray-light mt-4 pt-3 border-t border-diletto-gray/5">
                   {new Date(open.created_at).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
                 </p>
+                {/* お知らせは「既読にする」ボタンを持たず開いた瞬間に既読化されるため、
+                    重複ボタンの問題は無い。常に「✓ 確認しました（N 回目）」を表示。 */}
+                {tenantId && employeeId && (
+                  <div className="pt-3 border-t border-diletto-gray/10 mt-3">
+                    <ViewConfirmButton
+                      table="announcement_view_logs"
+                      tenantId={tenantId}
+                      employeeId={employeeId}
+                      itemId={open.id}
+                      initialSummary={viewSummaries.get(open.id)}
+                      onConfirmed={(count, viewedAt) => onViewConfirmed(open.id, count, viewedAt)}
+                    />
+                  </div>
+                )}
               </>
             )}
           </DialogContent>

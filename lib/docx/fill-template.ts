@@ -38,10 +38,11 @@ function resolveValues(
           // 結合フィールド（例: last_name+first_name）
           const parts = m.source_field.split('+');
           value = parts
-            .map((f) => formatEmployeeFieldValue(f.trim(), empRec[f.trim()]))
+            .map((f) => formatEmployeeFieldValue(f.trim(), empRec[f.trim()], empRec))
             .join('');
         } else {
-          value = formatEmployeeFieldValue(m.source_field, empRec[m.source_field]);
+          /* 第3引数 empRec を渡すことで commute_method 等の合成出力に対応 */
+          value = formatEmployeeFieldValue(m.source_field, empRec[m.source_field], empRec);
         }
         break;
       }
