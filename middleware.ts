@@ -67,6 +67,8 @@ export async function middleware(request: NextRequest) {
         url.pathname = '/admin/dashboard';
       } else if (employee.role === 'manager') {
         url.pathname = '/mgr/dashboard';
+      } else if (employee.role === 'shift_manager') {
+        url.pathname = '/admin/shifts/dashboard';
       } else {
         url.pathname = '/my/dashboard';
       }
@@ -85,6 +87,22 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';
       return NextResponse.redirect(url);
+    }
+
+    /* shift_manager: 事業所共用のシフト・送迎専用アカウント (migration 140)。
+       許可: /admin/shifts/*, /admin/children, /admin/requests のみ。
+       それ以外は /admin/shifts/dashboard にリダイレクト。 */
+    if (employee.role === 'shift_manager') {
+      const allowed =
+        pathname.startsWith('/admin/shifts') ||
+        pathname.startsWith('/admin/children') ||
+        pathname.startsWith('/admin/requests');
+      if (!allowed) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/admin/shifts/dashboard';
+        return NextResponse.redirect(url);
+      }
+      return supabaseResponse;
     }
 
     if ((pathname.startsWith('/admin') || pathname.startsWith('/setup')) && employee.role !== 'admin') {

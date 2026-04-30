@@ -52,13 +52,22 @@ export async function POST(request: NextRequest) {
     facility_id: string | null;
     /** positions テーブルの id。employees には text の `position` カラムしか無いため、ここから name を引いて保存する。 */
     position_id?: string | null;
-    role?: 'admin' | 'manager' | 'employee';
+    role?: 'admin' | 'manager' | 'shift_manager' | 'employee';
     /** 担当施設の追加 (manager_facilities)。manager の場合のみ意味を持つ。 */
     manager_facility_ids?: string[];
   };
-  /* 不正値ガード: 未指定/未知の値は employee に正規化 */
-  const normalizedRole: 'admin' | 'manager' | 'employee' =
-    requestedRole === 'admin' || requestedRole === 'manager' ? requestedRole : 'employee';
+  /* 不正値ガード: 未指定/未知の値は employee に正規化。
+     migration 140: shift_manager は事業所共用 → facility_id 必須。 */
+  const normalizedRole: 'admin' | 'manager' | 'shift_manager' | 'employee' =
+    requestedRole === 'admin' || requestedRole === 'manager' || requestedRole === 'shift_manager'
+      ? requestedRole
+      : 'employee';
+  if (normalizedRole === 'shift_manager' && !facility_id) {
+    return NextResponse.json(
+      { error: 'シフト統括アカウントには所属事業所 (facility_id) が必須です' },
+      { status: 400 }
+    );
+  }
 
   if (!email || !employee_number || !last_name || !first_name) {
     return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 });
@@ -236,7 +245,7 @@ interface CreateParams {
     is_shuttle_driver: boolean;
     facility_id: string | null;
     position: string;
-    role: 'admin' | 'manager' | 'employee';
+    role: 'admin' | 'manager' | 'shift_manager' | 'employee';
     manager_facility_ids: string[];
   };
 }

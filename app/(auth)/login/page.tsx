@@ -75,6 +75,9 @@ export default function LoginPage() {
       router.push('/admin/dashboard');
     } else if (employee.role === 'manager') {
       router.push('/mgr/dashboard');
+    } else if (employee.role === 'shift_manager') {
+      /* シフト統括: 事業所共用 / migration 140 */
+      router.push('/admin/shifts/dashboard');
     } else {
       router.push('/my/dashboard');
     }

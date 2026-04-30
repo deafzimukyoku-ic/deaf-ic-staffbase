@@ -20,8 +20,17 @@ export type InputType = (typeof INPUT_TYPES)[number];
    タグの required + source_field から自動判定（lib/document-applicability）。
    旧定数 VISIBILITY_CONDITIONS / VisibilityCondition は削除。 */
 
-export const EMPLOYEE_ROLES = ['employee', 'manager', 'admin'] as const;
+/* migration 140 で 'shift_manager' を追加（事業所共用のシフト・送迎操作端末アカウント）。
+   manager 不在時の現場運用を回すためのロール。事業所追加時に admin が自動発行可。 */
+export const EMPLOYEE_ROLES = ['employee', 'manager', 'admin', 'shift_manager'] as const;
 export type EmployeeRole = (typeof EMPLOYEE_ROLES)[number];
+
+export const ROLE_LABELS: Record<EmployeeRole, string> = {
+  admin: '管理者',
+  manager: 'マネージャー',
+  shift_manager: 'シフト統括',
+  employee: '一般社員',
+};
 
 export const EMPLOYEE_STATUS = ['active', 'retired'] as const;
 export type EmployeeStatus = (typeof EMPLOYEE_STATUS)[number];

@@ -302,6 +302,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [mobileOpen, setMobileOpen] = useState(false);
   const [greeting, setGreeting] = useState({ companyName: '', userName: '' });
   const [mode, setMode] = useState<Mode>('staff');
+  /* migration 140: shift_manager は admin layout を流用するが shift モード固定。
+     ModeFab + 社員系メニューを完全に非表示にする。 */
+  const [userRole, setUserRole] = useState<'admin' | 'manager' | 'shift_manager' | 'employee' | null>(null);
+  const isShiftManager = userRole === 'shift_manager';
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [shiftFacilityId] = useShiftFacilityId();
   /* migration 116: 選択中事業所の transport_enabled が false なら nav から送迎関連を非表示 */
@@ -340,10 +344,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       const { data: emp } = await supabase
         .from('employees')
-        .select('last_name, first_name, tenant_id, facility_id')
+        .select('last_name, first_name, tenant_id, facility_id, role')
         .eq('auth_user_id', user.id)
         .single();
       if (!emp) return;
+      setUserRole(emp.role as 'admin' | 'manager' | 'shift_manager' | 'employee');
+      if (emp.role === 'shift_manager') {
+        setMode('shift');
+        try { localStorage.setItem('admin-mode', 'shift'); } catch { /* noop */ }
+      }
 
       const { data: tenant } = await supabase
         .from('tenants')
@@ -502,8 +511,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
 
-      {/* モバイル Sheet を開いている間は FAB を隠す（z-50 同士で被るため） */}
-      {!mobileOpen && <ModeFab mode={mode} onSwitch={switchMode} />}
+      {/* モバイル Sheet 表示中は FAB を隠す。shift_manager はモード切替不可 (migration 140) */}
+      {!mobileOpen && !isShiftManager && <ModeFab mode={mode} onSwitch={switchMode} />}
     </div>
   );
 }

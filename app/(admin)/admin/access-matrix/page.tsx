@@ -43,7 +43,7 @@ type EmpRow = {
   last_name: string;
   first_name: string;
   email: string | null;
-  role: 'admin' | 'manager' | 'employee';
+  role: 'admin' | 'manager' | 'shift_manager' | 'employee';
   facility_id: string | null;
   /** manager_facilities に紐付く facility_id 集合 */
   managedFacilityIds: Set<string>;
@@ -52,6 +52,7 @@ type EmpRow = {
 const ROLE_LABELS: Record<string, string> = {
   admin: '管理者',
   manager: 'マネージャー',
+  shift_manager: 'シフト統括',
   employee: '一般社員',
 };
 
@@ -65,7 +66,7 @@ export default function AccessMatrixPage() {
   /* ロール変更モーダル */
   const [roleChangeTarget, setRoleChangeTarget] = useState<{
     emp: EmpRow;
-    next: 'admin' | 'manager' | 'employee';
+    next: 'admin' | 'manager' | 'shift_manager' | 'employee';
   } | null>(null);
 
   /* セル変更モーダル */
@@ -103,7 +104,7 @@ export default function AccessMatrixPage() {
           .select('id, employee_number, last_name, first_name, email, role, facility_id')
           .eq('tenant_id', me.tenant_id)
           .eq('status', 'active')
-          .in('role', ['admin', 'manager'])
+          .in('role', ['admin', 'manager', 'shift_manager'])
           .order('employee_number'),
         supabase.from('manager_facilities').select('employee_id, facility_id'),
       ]);
@@ -126,7 +127,7 @@ export default function AccessMatrixPage() {
         last_name: (e.last_name as string) ?? '',
         first_name: (e.first_name as string) ?? '',
         email: (e.email as string | null) ?? null,
-        role: (e.role as 'admin' | 'manager' | 'employee') ?? 'employee',
+        role: (e.role as 'admin' | 'manager' | 'shift_manager' | 'employee') ?? 'employee',
         facility_id: (e.facility_id as string | null) ?? null,
         managedFacilityIds: mfMap.get(e.id as string) ?? new Set(),
       }));
@@ -299,7 +300,7 @@ export default function AccessMatrixPage() {
                     <select
                       value={emp.role}
                       onChange={(e) => {
-                        const next = e.target.value as 'admin' | 'manager' | 'employee';
+                        const next = e.target.value as 'admin' | 'manager' | 'shift_manager' | 'employee';
                         if (next === emp.role) return;
                         setRoleChangeTarget({ emp, next });
                       }}
@@ -308,6 +309,7 @@ export default function AccessMatrixPage() {
                     >
                       <option value="admin">管理者</option>
                       <option value="manager">マネージャー</option>
+                      <option value="shift_manager">シフト統括</option>
                       <option value="employee">一般社員</option>
                     </select>
                   </td>
@@ -459,7 +461,7 @@ function AddManagerDialog({
     employee_number: '',
     last_name: '',
     first_name: '',
-    role: 'manager' as 'admin' | 'manager',
+    role: 'manager' as 'admin' | 'manager' | 'shift_manager',
     facility_id: '',
     manager_facility_ids: [] as string[],
   });
@@ -486,6 +488,10 @@ function AddManagerDialog({
     }
     if (form.role === 'manager' && !form.facility_id) {
       toast.error('マネージャーは所属施設の指定が必要です');
+      return;
+    }
+    if (form.role === 'shift_manager' && !form.facility_id) {
+      toast.error('シフト統括は所属施設の指定が必要です');
       return;
     }
     setSubmitting(true);
@@ -543,12 +549,18 @@ function AddManagerDialog({
             <Label className="text-xs">ロール *</Label>
             <select
               value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value as 'admin' | 'manager' })}
+              onChange={(e) => setForm({ ...form, role: e.target.value as 'admin' | 'manager' | 'shift_manager' })}
               className="w-full h-9 rounded-lg border border-diletto-gray/20 bg-white px-2 text-sm mt-1"
             >
               <option value="manager">マネージャー</option>
               <option value="admin">管理者</option>
+              <option value="shift_manager">シフト統括（事業所共用 / 送迎・シフト専用）</option>
             </select>
+            {form.role === 'shift_manager' && (
+              <p className="text-[10px] text-diletto-gray-light mt-1 leading-tight">
+                ※ 事業所の操作端末用アカウント。シフト・送迎・日次出力などのみ操作可能。書類・お知らせ等にはアクセス不可。
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

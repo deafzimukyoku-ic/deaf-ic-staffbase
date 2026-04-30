@@ -89,6 +89,9 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
                     {emp.role === 'manager' && (
                       <Badge variant="outline" className="text-[10px] border-diletto-blue/30 text-diletto-blue w-[6.5em] justify-center whitespace-nowrap">マネージャー</Badge>
                     )}
+                    {emp.role === 'shift_manager' && (
+                      <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 w-[6.5em] justify-center whitespace-nowrap">シフト統括</Badge>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-diletto-gray">{emp.email}</TableCell>

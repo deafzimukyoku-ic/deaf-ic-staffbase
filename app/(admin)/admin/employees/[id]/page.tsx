@@ -29,6 +29,7 @@ import type { Employee, DocumentTemplate, DocumentSubmission, Facility } from '@
 const ROLE_LABELS: Record<string, string> = {
   employee: '一般社員',
   manager: 'マネージャー',
+  shift_manager: 'シフト統括',
   admin: '管理者',
 };
 

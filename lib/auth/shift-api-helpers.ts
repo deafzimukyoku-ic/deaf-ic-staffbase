@@ -13,26 +13,22 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+export type ShiftAuthRole = 'admin' | 'manager' | 'shift_manager' | 'employee';
+
 export interface ShiftAuthContext {
   supabase: SupabaseClient;
   authUserId: string;
   employeeId: string;
   tenantId: string;
-  role: 'admin' | 'manager' | 'employee';
-  // 解決された facility_id。manager は自 facility 固定、admin は requestedFacilityId そのまま
+  role: ShiftAuthRole;
   facilityId: string;
-  // manager: 管轄施設 ID 集合（主所属 ∪ manager_facilities）
-  // employee: 所属施設 ID 集合（主所属 ∪ employee_facilities 兼任先）
-  // admin: 空配列（制限なしを示す）
+  // manager: 主所属 ∪ manager_facilities / shift_manager: 主所属の 1 件 / employee: 主所属 ∪ 兼任先 / admin: []
   scopedFacilityIds: string[];
 }
 
 interface ResolveOptions {
-  // 要求された facility_id。admin は通常必須だが allowAdminWithoutFacility=true で省略可。
   requestedFacilityId?: string | null;
-  // 許可するロール。デフォルトは admin / manager。
-  allowedRoles?: Array<'admin' | 'manager' | 'employee'>;
-  // admin に対して facility_id 指定を必須にしない（承認APIなど、facility が申請から決まる場合）
+  allowedRoles?: ShiftAuthRole[];
   allowAdminWithoutFacility?: boolean;
 }
 
@@ -42,7 +38,7 @@ export async function resolveShiftAuth(
   | { ok: true; ctx: ShiftAuthContext }
   | { ok: false; response: NextResponse }
 > {
-  const allowedRoles = options.allowedRoles ?? ['admin', 'manager'];
+  const allowedRoles = options.allowedRoles ?? ['admin', 'manager', 'shift_manager'];
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -66,7 +62,7 @@ export async function resolveShiftAuth(
     };
   }
 
-  const role = me.role as 'admin' | 'manager' | 'employee';
+  const role = me.role as ShiftAuthRole;
   if (!allowedRoles.includes(role)) {
     return {
       ok: false,
@@ -89,6 +85,10 @@ export async function resolveShiftAuth(
         )
       )
     );
+
+  } else if (role === 'shift_manager') {
+    /* シフト統括: 事業所共用アカウント (migration 140)。主所属の 1 facility のみ。 */
+    scopedFacilityIds = me.facility_id ? [me.facility_id] : [];
   } else if (role === 'employee') {
     // 主所属 + employee_facilities 兼任先
     const { data: belonging } = await (supabase as unknown as SupabaseClient)
@@ -107,7 +107,7 @@ export async function resolveShiftAuth(
 
   // facility 解決
   let facilityId: string;
-  if (role === 'manager' || role === 'employee') {
+  if (role === 'manager' || role === 'shift_manager' || role === 'employee') {
     if (scopedFacilityIds.length === 0) {
       return {
         ok: false,

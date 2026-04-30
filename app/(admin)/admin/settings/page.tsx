@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MAX_PAYROLL_BANKS_PER_TENANT, PROFILE_SECTION_KEYS, PROFILE_SECTION_LABELS } from '@/lib/constants';
 import type { ProfileSectionKey } from '@/lib/constants';
@@ -847,10 +848,123 @@ function FacilityRowItem({
           label="シフトのみ"
         />
       </div>
+      {/* シフト統括アカウント発行ボタン (migration 140)。
+          保存済 facility (facility.id あり) のみ表示。同じ事業所で 2 度押すと API 側で 409。 */}
+      {facility.id && <ShiftManagerIssueButton facilityId={facility.id} facilityName={facility.name} />}
       <Button size="sm" variant="ghost" className="text-diletto-red" onClick={onDelete}>
         削除
       </Button>
     </div>
+  );
+}
+
+/* ===== シフト統括アカウント発行ボタン + パスワード表示モーダル ===== */
+function ShiftManagerIssueButton({ facilityId, facilityName }: { facilityId: string; facilityName: string }) {
+  const [issuing, setIssuing] = useState(false);
+  const [result, setResult] = useState<{ email: string; password: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<'email' | 'password' | null>(null);
+
+  async function handleIssue() {
+    setIssuing(true);
+    try {
+      const res = await fetch('/api/facilities/issue-shift-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ facility_id: facilityId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        if (json.existingEmail) {
+          toast.error('既に発行済みです', { description: `既存: ${json.existingEmail}` });
+        } else {
+          toast.error('発行に失敗しました', { description: json.error || json.detail });
+        }
+        return;
+      }
+      setResult({ email: json.email, password: json.password });
+    } finally {
+      setIssuing(false);
+    }
+  }
+
+  async function copyTo(field: 'email' | 'password', text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      toast.error('クリップボードへのコピーに失敗しました');
+    }
+  }
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleIssue}
+        disabled={issuing}
+        className="text-[10px] border-amber-300 text-amber-700 hover:bg-amber-50 whitespace-nowrap"
+        title="この事業所のシフト・送迎・日次出力等を操作できる共用アカウントを発行"
+      >
+        {issuing ? '発行中...' : '🔑 シフト統括 発行'}
+      </Button>
+
+      <Dialog open={!!result} onOpenChange={(o) => !o && setResult(null)}>
+        <DialogContent className="!max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              ✓ シフト統括アカウントを発行しました
+            </DialogTitle>
+            <DialogDescription className="text-diletto-red font-bold pt-2">
+              ⚠ パスワードはこの画面でしか表示されません。必ずコピーして控えてください。
+            </DialogDescription>
+          </DialogHeader>
+
+          {result && (
+            <div className="space-y-3 pt-2">
+              <div>
+                <Label className="text-xs">事業所</Label>
+                <p className="text-sm font-bold mt-1">{facilityName}</p>
+              </div>
+              <div>
+                <Label className="text-xs">ログイン用メールアドレス</Label>
+                <div className="flex gap-2 mt-1">
+                  <code className="flex-1 bg-diletto-gray/5 px-3 py-2 rounded text-xs font-mono break-all">
+                    {result.email}
+                  </code>
+                  <Button size="sm" variant="outline" onClick={() => copyTo('email', result.email)}>
+                    {copiedField === 'email' ? '✓' : 'コピー'}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">パスワード（一度きり表示）</Label>
+                <div className="flex gap-2 mt-1">
+                  <code className="flex-1 bg-amber-50 border border-amber-200 px-3 py-2 rounded text-sm font-mono break-all font-bold">
+                    {result.password}
+                  </code>
+                  <Button size="sm" variant="outline" onClick={() => copyTo('password', result.password)}>
+                    {copiedField === 'password' ? '✓' : 'コピー'}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[10px] text-diletto-gray-light leading-relaxed">
+                このアカウントは事業所の操作端末でログインしっぱなしで使う想定です。
+                マネージャー不在時でも シフト・送迎・日次出力 などの日常業務が可能になります。
+                書類・お知らせ等の Staffbase 側にはアクセスできません。
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => setResult(null)} className="w-full">
+              コピー済み・閉じる
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
