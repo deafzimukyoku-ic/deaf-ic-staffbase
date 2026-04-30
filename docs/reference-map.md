@@ -105,8 +105,44 @@
 
 - Supabase Auth メールテンプレート（Dashboard 側）— `docs/email-templates.md` に定義済 / `redirectTo` で十分制御可能
 - `auth.users` と `employees.email` の二重保護トリガ — migration 138 で撤廃済（アプリ層保護に統一）
-- 退職者の auth.users 無効化 — 別フェーズ
+- ~~退職者の auth.users 無効化 — 別フェーズ~~ → **2026-04-30 実装済**（下記 Phase D 参照）
 - MFA / SSO — スコープ外（CLAUDE.md §13）
+
+---
+
+## 0.10.5 在職/退職切替 + 退職者ログイン遮断 — Phase D (2026-04-30)
+
+### 目的
+- 退職処理は片道だった（`status='retired'` にする UI のみ）→ 在職に戻すボタンを追加
+- 退職者は `employees` 一覧クエリから外れるだけで、Auth セッションが生きていれば本人の `/my/*` を触れる状態 → 完全遮断
+
+### 実装
+- 新規: [`app/api/employees/[id]/status/route.ts`](../app/api/employees/[id]/status/route.ts)
+  - admin のみ。同テナントのみ。自分自身を retire 不可
+  - `action='retire'` → `employees.status='retired'` + `auth.admin.updateUserById(authId, { ban_duration: '876000h' })`
+  - `action='reactivate'` → `status='active'`, `retirement_date=null`, `retirement_reason=null` + `ban_duration: 'none'`
+  - Auth BAN 失敗は warning で返す（middleware が二重防御するため運用続行可）
+- 更新: [`app/(admin)/admin/employees/[id]/page.tsx`](../app/(admin)/admin/employees/[id]/page.tsx)
+  - `handleRetire` を API 経由に置換、`handleReactivate` 追加
+  - status==='retired' のとき「在職に戻す」ボタン + ダイアログ
+- 更新: [`middleware.ts`](../middleware.ts)
+  - `employees.status` も SELECT。`retired` なら `supabase.auth.signOut()` + `/login?error=retired` リダイレクト（public path 自動 redirect ブロック + 保護ルート両方で）
+- 更新: [`app/(auth)/login/page.tsx`](../app/(auth)/login/page.tsx)
+  - `?error=retired` 時のトーストメッセージ追加
+  - `signInWithPassword` 成功直後に `employees.status` を確認、retired なら即 `signOut` + エラー表示（Auth BAN レース対策）
+
+### 三層防御
+| 層 | 効果 |
+|---|---|
+| Supabase Auth `ban_duration` | ログイン自体が Supabase 側で 401。既存 access token も refresh 時に失効 |
+| middleware retired チェック | 既存セッションの保護ルート侵入を遮断（API ルートは matcher 外なので注意） |
+| login ページ status チェック | BAN 適用に失敗していた場合の最終防御 |
+
+### 注意
+- 既存の `status='retired'` 社員は **Auth BAN されていない**。reactivate→retire を踏むか、本人が一度 `/login` を踏んだ時点で middleware が signOut + redirect する
+- middleware の matcher は `api/` を除外しているため、API 経路は各 API ハンドラ側で必要に応じて status チェックを追加する余地あり（現状は `lib/auth/shift-api-helpers.ts` に未実装、別フェーズで検討）
+
+---
 
 ---
 

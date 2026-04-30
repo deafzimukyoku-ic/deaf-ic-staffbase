@@ -29,9 +29,13 @@ export default function LoginPage() {
     const messages: Record<string, string> = {
       missing_code: '認証コードが見つかりませんでした',
       invalid_code: '認証リンクが無効または期限切れです',
+      retired: '退職処理されたアカウントです',
     };
     toast.error(messages[err] || '認証に失敗しました', {
-      description: 'お手数ですが、もう一度ログインまたは招待メールの再送をご依頼ください。',
+      description:
+        err === 'retired'
+          ? 'このアカウントはログインできません。管理者にお問い合わせください。'
+          : 'お手数ですが、もう一度ログインまたは招待メールの再送をご依頼ください。',
     });
     params.delete('error');
     const qs = params.toString();
@@ -59,13 +63,24 @@ export default function LoginPage() {
 
     const { data: employee } = await supabase
       .from('employees')
-      .select('role')
+      .select('role, status')
       .eq('auth_user_id', user.id)
       .single();
 
     if (!employee) {
       toast.error('社員情報が見つかりません', {
         description: 'アカウントに紐づく社員情報がありません。管理者にお問い合わせください。',
+      });
+      setLoading(false);
+      return;
+    }
+
+    /* 退職者ガード: Supabase Auth 側でも BAN しているがレース対策で UI 側でも弾く。
+       BAN 失敗時の保険として必須。 */
+    if (employee.status === 'retired') {
+      await supabase.auth.signOut();
+      toast.error('退職処理されたアカウントです', {
+        description: 'このアカウントはログインできません。管理者にお問い合わせください。',
       });
       setLoading(false);
       return;

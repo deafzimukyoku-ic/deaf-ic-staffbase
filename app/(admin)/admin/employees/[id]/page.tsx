@@ -71,6 +71,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [retireReason, setRetireReason] = useState('');
   const [retireDate, setRetireDate] = useState(new Date().toISOString().split('T')[0]);
   const [retireLoading, setRetireLoading] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reactivateLoading, setReactivateLoading] = useState(false);
   // ロール管理
   const [roleValue, setRoleValue] = useState('');
   const [roleSaving, setRoleSaving] = useState(false);
@@ -311,25 +313,58 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     if (!employee) return;
     setRetireLoading(true);
 
-    const { error } = await supabase
-      .from('employees')
-      .update({
-        status: 'retired',
+    /* /api/employees/[id]/status 経由で退職処理 + auth.users BAN を一気に行う。
+       admin が直接 employees を update する経路は残しているが、Auth BAN を効かせるには API 経由が必須。 */
+    const res = await fetch(`/api/employees/${employee.id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'retire',
         retirement_date: retireDate,
         retirement_reason: retireReason || null,
-      })
-      .eq('id', employee.id);
+      }),
+    });
+    const json = await res.json();
 
-    if (error) {
-      toast.error('退職処理に失敗しました', { description: error.message });
+    if (!res.ok) {
+      toast.error('退職処理に失敗しました', { description: json.error });
       setRetireLoading(false);
       return;
     }
-
-    toast.success('退職処理が完了しました');
+    if (json.warning) {
+      toast.warning(json.warning);
+    } else {
+      toast.success('退職処理が完了しました');
+    }
     setRetireOpen(false);
     setEmployee({ ...employee, status: 'retired' as const, retirement_date: retireDate, retirement_reason: retireReason });
     setRetireLoading(false);
+  }
+
+  async function handleReactivate() {
+    if (!employee) return;
+    setReactivateLoading(true);
+
+    const res = await fetch(`/api/employees/${employee.id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reactivate' }),
+    });
+    const json = await res.json();
+
+    if (!res.ok) {
+      toast.error('在職への切り替えに失敗しました', { description: json.error });
+      setReactivateLoading(false);
+      return;
+    }
+    if (json.warning) {
+      toast.warning(json.warning);
+    } else {
+      toast.success('在職に戻しました');
+    }
+    setReactivateOpen(false);
+    setEmployee({ ...employee, status: 'active' as const, retirement_date: null, retirement_reason: null });
+    setReactivateLoading(false);
   }
 
   /* 基本情報の編集モード切替 + 保存処理 */
@@ -601,13 +636,21 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           <Button variant="outline" onClick={() => router.push('/admin/employees')}>
             一覧に戻る
           </Button>
-          {employee.status === 'active' && (
+          {employee.status === 'active' ? (
             <Button
               variant="outline"
               className="text-diletto-red border-diletto-red/30"
               onClick={() => setRetireOpen(true)}
             >
               退職処理
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="text-diletto-green border-diletto-green/30"
+              onClick={() => setReactivateOpen(true)}
+            >
+              在職に戻す
             </Button>
           )}
         </div>
@@ -1233,6 +1276,38 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               className="bg-diletto-red hover:bg-[#7a2828] text-white"
             >
               {retireLoading ? '処理中...' : '退職処理を実行'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 在職に戻すダイアログ */}
+      <Dialog open={reactivateOpen} onOpenChange={setReactivateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>在職に戻す</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-diletto-gray">
+              {employee.last_name} {employee.first_name} さんを在職に戻します。
+            </p>
+            <p className="text-xs text-diletto-gray-light leading-relaxed">
+              退職日・退職理由はクリアされ、ログインも再び可能になります。
+              {employee.retirement_date && (
+                <>
+                  <br />（現在の退職日: {employee.retirement_date}）
+                </>
+              )}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReactivateOpen(false)}>キャンセル</Button>
+            <Button
+              onClick={handleReactivate}
+              disabled={reactivateLoading}
+              className="bg-diletto-green hover:bg-diletto-green/85 text-white"
+            >
+              {reactivateLoading ? '処理中...' : '在職に戻す'}
             </Button>
           </DialogFooter>
         </DialogContent>

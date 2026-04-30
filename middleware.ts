@@ -57,9 +57,19 @@ export async function middleware(request: NextRequest) {
   ) {
     const { data: employee } = await supabase
       .from('employees')
-      .select('role')
+      .select('role, status')
       .eq('auth_user_id', user.id)
       .maybeSingle();
+
+    /* 退職者は admin が誤って /login を踏ませても入れない（API/Auth BAN と二重に防ぐ）。
+       既存セッションがあっても retired ならここで signOut + ?error=retired で通知。 */
+    if (employee?.status === 'retired') {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.search = '?error=retired';
+      return NextResponse.redirect(url);
+    }
 
     if (employee) {
       const url = request.nextUrl.clone();
@@ -79,13 +89,23 @@ export async function middleware(request: NextRequest) {
   if (user && (pathname.startsWith('/admin') || pathname.startsWith('/setup') || pathname.startsWith('/mgr') || pathname.startsWith('/my'))) {
     const { data: employee } = await supabase
       .from('employees')
-      .select('role')
+      .select('role, status')
       .eq('auth_user_id', user.id)
       .maybeSingle();
 
     if (!employee) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';
+      return NextResponse.redirect(url);
+    }
+
+    /* 退職者は保護ルートに入れない。Auth BAN が効いていれば session refresh で蹴られるが、
+       既存 access token が生きている短時間でもアクセスさせないための保険。 */
+    if (employee.status === 'retired') {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.search = '?error=retired';
       return NextResponse.redirect(url);
     }
 

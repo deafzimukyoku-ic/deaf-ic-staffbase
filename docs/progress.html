@@ -47,7 +47,22 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-30（Phase 68 認証フロー堅牢化 完了） / 全体完了率: 約 96%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-30（Phase D 在職/退職切替 + 退職者ログイン遮断 完了） / 全体完了率: 約 96%</p>
+
+<!-- Phase D: 在職/退職切替 + 退職者ログイン遮断 -->
+<div class="phase">
+  <h2>Phase D — 在職/退職切替 + 退職者ログイン遮断 <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>新規 API: /api/employees/[id]/status（retire / reactivate + auth.users BAN）</td><td class="files">app/api/employees/[id]/status/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>admin 専用 / 同テナントのみ / 自分自身を retire 不可 / ban_duration 876000h で BAN, none で解除</td></tr>
+      <tr><td>employee 詳細: 「在職に戻す」ボタン + reactivate ダイアログ。退職処理も新 API 経由に置換</td><td class="files">app/(admin)/admin/employees/[id]/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>middleware: employees.status='retired' で signOut + /login?error=retired リダイレクト（public path / 保護ルート両方）</td><td class="files">middleware.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>matcher が api/ を除外している点は既存挙動のまま</td></tr>
+      <tr><td>login: ?error=retired のメッセージ + ログイン直後の status チェック（Auth BAN レース対策の保険）</td><td class="files">app/(auth)/login/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr class="check"><td colspan="5">別視点確認: ① admin が社員を退職 → 本人ブラウザに残ったセッションで /my/dashboard へ → middleware が signOut + /login?error=retired にリダイレクト ② 同 admin が同社員を「在職に戻す」 → BAN 解除されログイン可 ③ 自分自身を退職にしようとしても API で 400</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- Phase 68: 認証フロー堅牢化（招待 / ログイン / パスワードリセット） -->
 <div class="phase">
