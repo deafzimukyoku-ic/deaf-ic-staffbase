@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { SubordinateTable } from '@/components/manager/SubordinateTable';
 import { Card, CardContent } from '@/components/ui/card';
-import { fetchEmployeeIdsForFacilities } from '@/lib/multi-facility';
+import { useShiftFacilityId } from '@/lib/shift-facility';
 
 interface SubordinateRow {
   id: string;
@@ -21,67 +21,51 @@ interface SubordinateRow {
 
 export default function SubordinatesPage() {
   const [employees, setEmployees] = useState<SubordinateRow[]>([]);
-  const [facilities, setFacilities] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  /* /mgr 共通ヘッダーの FacilityHeaderSelector で選択中の事業所。
+     これに連動して該当施設の社員のみ表示する。 */
+  const [selectedFacilityId] = useShiftFacilityId();
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: me } = await supabase
-        .from('employees')
-        .select('id, tenant_id')
-        .eq('auth_user_id', user.id)
-        .single();
-      if (!me) return;
-
-      // 担当施設取得
-      const { data: facs } = await supabase
-        .from('manager_facilities')
-        .select('facility:facilities(id, name), facility_id')
-        .eq('employee_id', me.id);
-
-      const mfs = (facs || []).map((f: any) => ({ id: f.facility_id, name: f.facility?.name })).filter((f: any) => f.name);
-      const facilityIds = mfs.map((f) => f.id);
-
-      // 所属施設を自動含行
-      const { data: meFull } = await supabase.from('employees').select('facility_id').eq('id', me.id).single();
-      if (meFull?.facility_id && !facilityIds.includes(meFull.facility_id)) {
-        const { data: affFac } = await supabase.from('facilities').select('id, name').eq('id', meFull.facility_id).single();
-        if (affFac) {
-          mfs.unshift({ id: affFac.id, name: affFac.name });
-          facilityIds.unshift(affFac.id);
-        }
-      }
-      setFacilities(mfs.map(f => f.name));
-
-      if (facilityIds.length === 0) {
+      /* 部下取得は SECURITY DEFINER RPC 経由（migration 146 / 148）。
+         employees 直アクセスは RLS で manager に開放されていないため、
+         RPC で必要項目のみ取り出す。p_facility_id にヘッダー選択値を渡して絞り込む。 */
+      const { data: subs, error } = await supabase.rpc('get_my_subordinates', {
+        p_facility_id: selectedFacilityId ?? null,
+      });
+      if (error) {
+        console.error('get_my_subordinates failed', error);
         setLoading(false);
         return;
       }
-
-      // 部下取得（migration 130: 兼任職員も含めるため employee_facilities も考慮）
-      const memberIds = await fetchEmployeeIdsForFacilities(supabase, facilityIds);
-      const { data: subs } = memberIds.length === 0 ? { data: [] } : await supabase
-        .from('employees')
-        .select('id, employee_number, last_name, first_name, position, status, join_date, facility:facilities(name)')
-        .eq('tenant_id', me.tenant_id)
-        .in('id', memberIds)
-        .neq('id', me.id)
-        .order('employee_number');
-
-      const formattedSubs = (subs || []).map(s => ({
-        ...s,
-        facility: Array.isArray(s.facility) ? s.facility[0] : s.facility
+      type RpcRow = {
+        id: string; employee_number: string;
+        last_name: string; first_name: string;
+        /* position は PostgreSQL 予約語のため RPC 戻り値では employee_position 名 */
+        employee_position: string | null; status: string; join_date: string;
+        facility_id: string | null; facility_name: string | null;
+      };
+      const formattedSubs: SubordinateRow[] = ((subs ?? []) as RpcRow[]).map((s) => ({
+        id: s.id,
+        employee_number: s.employee_number,
+        last_name: s.last_name,
+        first_name: s.first_name,
+        position: s.employee_position,
+        status: s.status,
+        join_date: s.join_date,
+        facility: s.facility_name ? { name: s.facility_name } : null,
       }));
-
-      setEmployees(formattedSubs as any);
+      setEmployees(formattedSubs);
       setLoading(false);
     }
     load();
-  }, []);
+  }, [selectedFacilityId]);
 
   if (loading) {
     return (
@@ -94,26 +78,26 @@ export default function SubordinatesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <h1 className="text-2xl font-bold">部下管理</h1>
-        <div className="flex flex-wrap gap-2">
-          {facilities.map((f) => (
-            <span key={f} className="inline-flex items-center rounded-full bg-diletto-blue/10 px-3 py-1 text-xs font-medium text-diletto-blue">
-              {f}
-            </span>
-          ))}
-        </div>
+        <p className="text-xs text-diletto-gray-light">
+          {selectedFacilityId
+            ? `選択中の事業所の社員 ${employees.length} 名`
+            : `全管轄事業所の社員 ${employees.length} 名（事業所セレクタで絞り込み可）`}
+        </p>
       </div>
 
-      {facilities.length === 0 ? (
+      {employees.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-diletto-gray">担当施設が設定されていません。</p>
-            <p className="text-sm text-diletto-gray-light mt-1">管理者に担当施設の割当を依頼してください。</p>
+            <p className="text-diletto-gray">該当する社員がいません</p>
+            <p className="text-sm text-diletto-gray-light mt-1">
+              事業所セレクタを切り替えるか、管理者にお問い合わせください。
+            </p>
           </CardContent>
         </Card>
       ) : (
-        <SubordinateTable employees={employees as any} />
+        <SubordinateTable employees={employees as SubordinateRow[]} />
       )}
     </div>
   );
