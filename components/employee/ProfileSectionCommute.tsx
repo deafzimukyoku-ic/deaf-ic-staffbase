@@ -205,6 +205,16 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
 
               <div className="space-y-2">
                 <Label>通勤経路（詳細）</Label>
+                <div className="rounded-md border-2 border-amber-400 bg-amber-50 p-3 text-sm font-bold text-amber-900 flex gap-2 items-start">
+                  <span className="text-lg leading-none shrink-0" aria-hidden>⚠️</span>
+                  <span>
+                    区間が <span className="text-amber-700 underline decoration-2">2つ以上</span> ある方は、必ずこの欄に経路を記入してください。
+                    <br />
+                    <span className="font-normal text-amber-800">
+                      （例：自宅 → 名古屋駅 → 栄駅 → 徒歩 → 会社）
+                    </span>
+                  </span>
+                </div>
                 <Textarea value={data.commute_route_detail || ''} onChange={(e) => update('commute_route_detail', e.target.value || null)} placeholder="自宅→○○駅→△△駅→徒歩→会社" rows={2} />
               </div>
             </div>
