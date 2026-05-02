@@ -217,4 +217,28 @@
   - migration 適用直後は PostgREST スキーマキャッシュが古いことがある。新規 RPC を追加する migration は末尾に `NOTIFY pgrst, 'reload schema';` を入れておく
 
 ---
+## get_my_subordinates が 400 で失敗 → 部下一覧が表示されない (2 段重ね)
+
+- **発生日**: 2026-05-02
+- **発生箇所**: supabase/migrations/147 + 148 → 152/153 で修正
+- **フェーズ**: マネージャー部下管理（149/151 で詳細ページを RPC 化した直後の二次故障）
+- **エラー内容**:
+  - 1 段目: 400 Bad Request、エラー内容空（PostgREST がオーバーロード解決できず）
+  - 2 段目: `column reference "facility_id" is ambiguous` (SQLSTATE 42702)
+- **原因**:
+  1. **オーバーロード重複**: 147 で `get_my_subordinates()` (no-arg)、148 で `get_my_subordinates(p_facility_id uuid DEFAULT NULL)` (1-arg) を `CREATE OR REPLACE` のみで追加し、no-arg 版を DROP していなかった。両シグネチャが DB に共存し、PostgREST のスキーマキャッシュが両方を認識した時点で `supabase.rpc('get_my_subordinates', { p_facility_id })` の解決に失敗 → 400
+  2. **ambiguous column**: 1-arg 版の `RETURNS TABLE (... facility_id uuid ...)` で宣言した OUT パラメータ名 `facility_id` が、関数本体の CTE / SELECT 内の bare `facility_id` 参照（`SELECT facility_id FROM employees`、`SELECT facility_id FROM managed_fids` 等）と衝突。これは 148 時点から潜在していた latent bug だが、no-arg 版がオーバーロードとして残っている間は PostgREST がそちらを呼んでいたため発覚していなかった
+- **解決方法**:
+  1. migration 152: `DROP FUNCTION IF EXISTS public.get_my_subordinates();` で no-arg 版を削除（1-arg 版だけ残す）
+  2. migration 153: 1-arg 版を `CREATE OR REPLACE`、CTE / SELECT 内の bare `facility_id` を全て qualifier 付きに書き換え:
+     - `employees` 列 → `e2.facility_id`
+     - `manager_facilities` 列 → `mf2.facility_id`
+     - CTE 列 → `managed_fids.fid`（CTE 出力列名自体も `facility_id` 衝突回避のため `fid` にリネーム）
+  3. 両 migration 末尾に `NOTIFY pgrst, 'reload schema';` を入れて即座にスキーマキャッシュを再構築
+- **再発防止**:
+  - **`CREATE OR REPLACE FUNCTION` は同一シグネチャしか上書きしない**。引数を追加/変更する場合は `DROP FUNCTION ... (旧シグネチャ); CREATE FUNCTION ... (新シグネチャ);` の順で書く。さもなくばオーバーロードが増殖する
+  - **`RETURNS TABLE (...)` で宣言した出力列名は関数本体の OUT パラメータ**になり、bare 参照と衝突する。RETURNS TABLE を使うなら本体内の SQL は **必ず table.col 形式で qualify する**。CTE 名も出力列名と被らないように
+  - **PostgREST スキーマキャッシュは必ず NOTIFY で再ロードする**（`NOTIFY pgrst, 'reload schema';`）。新規 RPC 追加・関数削除時は migration 末尾に常に入れる
+
+---
 *(以降、新規エラーがあれば追記)*
