@@ -183,6 +183,16 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
                 <Field label="通勤距離（km）" value={data.commute_distance || ''} onChange={(v) => update('commute_distance', v || null)} />
               </div>
 
+              <div className="rounded-md border-2 border-amber-400 bg-amber-50 p-3 text-sm font-bold text-amber-900 flex gap-2 items-start mt-2">
+                <span className="text-lg leading-none shrink-0" aria-hidden>💴</span>
+                <span>
+                  各区間の <span className="text-amber-700 underline decoration-2">交通費（金額）</span> も必ず記入してください。
+                  <br />
+                  <span className="font-normal text-amber-800">
+                    （定期代・1回あたり運賃・1ヶ月分の往復費用など、計算根拠が分かるように）
+                  </span>
+                </span>
+              </div>
               <p className="text-xs font-medium text-diletto-ink mt-2">区間 1</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field label="乗車区間" value={data.route_section1_route || ''} onChange={(v) => update('route_section1_route', v || null)} placeholder="名古屋 → 栄" />
