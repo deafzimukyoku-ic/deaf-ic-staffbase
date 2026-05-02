@@ -426,24 +426,32 @@ export default function BillingFull({ scope }: Props) {
               @page { size: A4 landscape; margin: 8mm; }
               .billing-print-root { overflow: visible !important; height: auto !important; padding: 0 !important; margin: 0 !important; }
               .billing-print-root .print-hide { display: none !important; }
-              /* table 自体は A4 幅にフィット、列幅は内容に応じて自動配分 */
-              .billing-print-root table { width: 100% !important; table-layout: fixed !important; }
+              /* スクロール用ラッパーの clip を解除しないとはみ出した部分が切れる */
+              .billing-print-root .overflow-x-auto { overflow: visible !important; }
+              /* table 自体は A4 幅にフィット。インライン min-width / 列幅の px 指定を全て無効化し、
+                 table-layout: auto + word-break で内容に応じて 1 ページ幅に収める。 */
+              .billing-print-root table { width: 100% !important; min-width: 0 !important; table-layout: auto !important; }
+              .billing-print-root thead th,
+              .billing-print-root tbody td { width: auto !important; min-width: 0 !important; max-width: none !important; }
               .billing-print-root th, .billing-print-root td { line-height: 1.15 !important; word-break: break-word; overflow-wrap: anywhere; }
+              /* whitespace-nowrap が効いていると幅が足りない時に列がはみ出すので、印刷時は折り返し許容 */
+              .billing-print-root .whitespace-nowrap { white-space: normal !important; }
               .billing-print-root thead { display: table-header-group !important; }
               .billing-print-root tr { page-break-inside: avoid !important; break-inside: avoid !important; }
-              /* イベント増加に応じてフォント・パディングを段階縮小（A4 横を維持するため） */
+              /* イベント増加に応じてフォント・横パディングを段階縮小（A4 横を維持するため）。
+                 縦パディングはセル高を確保するため広めに設定。 */
               .billing-print-root[data-density="lg"] table { font-size: 9pt !important; }
               .billing-print-root[data-density="lg"] th,
-              .billing-print-root[data-density="lg"] td { padding: 3px 4px !important; }
+              .billing-print-root[data-density="lg"] td { padding: 8px 4px !important; }
               .billing-print-root[data-density="md"] table { font-size: 8pt !important; }
               .billing-print-root[data-density="md"] th,
-              .billing-print-root[data-density="md"] td { padding: 2px 3px !important; }
+              .billing-print-root[data-density="md"] td { padding: 7px 3px !important; }
               .billing-print-root[data-density="sm"] table { font-size: 7pt !important; }
               .billing-print-root[data-density="sm"] th,
-              .billing-print-root[data-density="sm"] td { padding: 1.5px 2px !important; }
+              .billing-print-root[data-density="sm"] td { padding: 6px 2px !important; }
               .billing-print-root[data-density="xs"] table { font-size: 6pt !important; }
               .billing-print-root[data-density="xs"] th,
-              .billing-print-root[data-density="xs"] td { padding: 1px 1.5px !important; }
+              .billing-print-root[data-density="xs"] td { padding: 5px 1.5px !important; }
               /* 印刷時もグリッド線を維持（black に切替で印刷時くっきり） */
               .billing-grid th, .billing-grid td { border: 0.5pt solid #000 !important; }
               .billing-grid thead th { border-bottom: 1.2pt solid #000 !important; border-top: 1pt solid #000 !important; }
@@ -502,12 +510,12 @@ export default function BillingFull({ scope }: Props) {
             <thead>
               <tr style={{ background: 'var(--bg)' }}>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '40px' }}>#</th>
-                <th className="px-2 py-2 text-left font-semibold whitespace-nowrap" style={{ width: '90px' }}>市町村</th>
-                <th className="px-2 py-2 text-left font-semibold whitespace-nowrap" style={{ width: '140px' }}>氏名</th>
-                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
-                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
-                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '90px' }}>おやつ消耗品代</th>
-                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '90px' }}>公文代</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '90px' }}>市町村</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '140px' }}>氏名</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>おやつ等</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '90px' }}>公文代</th>
                 {events.map((ev) => {
                   /* イベント名が長いと列幅で折り返してしまうので、文字数に応じて自動縮小して 1 行に収める。
                      scaleX 系よりフォントサイズ縮小 + 微妙なトラッキング詰めの方が読みやすい。 */
@@ -533,8 +541,7 @@ export default function BillingFull({ scope }: Props) {
                     </th>
                   );
                 })}
-                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '110px' }}>請求額</th>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '120px' }}>受取（入金）日</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>請求額</th>
               </tr>
             </thead>
             <tbody>
@@ -604,18 +611,6 @@ export default function BillingFull({ scope }: Props) {
                     <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {c ? fmtYen(c.total) : ''}
                     </td>
-                    <td className="px-2 py-2 text-center">
-                      <input
-                        type="date"
-                        value={r.receivedAt ?? ''}
-                        onChange={(e) => updateRow(r.childId, { receivedAt: e.target.value || null })}
-                        className="outline-none w-full px-2 py-1 rounded print-hide"
-                        style={{ background: 'var(--white)', border: '1px solid var(--rule)' }}
-                      />
-                      <span className="hidden print:inline">
-                        {r.receivedAt ?? ''}
-                      </span>
-                    </td>
                   </tr>
                 );
               })}
@@ -632,7 +627,6 @@ export default function BillingFull({ scope }: Props) {
                   </td>
                 ))}
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.grand)}</td>
-                <td />
               </tr>
             </tbody>
           </table>
