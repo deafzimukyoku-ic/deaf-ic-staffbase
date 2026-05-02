@@ -8,7 +8,6 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SubordinateDetail } from '@/components/manager/SubordinateDetail';
-import { MANAGER_VISIBLE_SELECT } from '@/lib/manager-visible-fields';
 
 export default function SubordinateDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -23,37 +22,26 @@ export default function SubordinateDetailPage({ params }: { params: Promise<{ id
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: me } = await supabase
-        .from('employees')
-        .select('id, tenant_id')
-        .eq('auth_user_id', user.id)
-        .single();
-      if (!me) return;
-
-      // 担当施設取得
-      const { data: facs } = await supabase
-        .from('manager_facilities')
-        .select('facility_id')
-        .eq('employee_id', me.id);
-
-      const facilityIds = (facs || []).map((f) => f.facility_id);
-
-      if (facilityIds.length === 0) {
+      /* 一覧と同じく SECURITY DEFINER RPC（migration 149）経由で詳細取得。
+         employees 直アクセスは RLS で manager に SELECT が開放されておらず、
+         直接クエリでは manager / shift_manager 全員が「閲覧する権限がありません」になる。
+         RPC 内で admin / manager / shift_manager の認可判定を行い、
+         認可外なら NULL を返す。返却フィールドは MANAGER_VISIBLE_FIELDS に限定。 */
+      const { data: emp, error } = await supabase.rpc('get_subordinate_detail', {
+        p_id: id,
+      });
+      if (error) {
+        /* PostgrestError は console.error では中身が空に見えがちなので個別フィールドで出す */
+        console.error('get_subordinate_detail failed', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
         setUnauthorized(true);
         setLoading(false);
         return;
       }
-
-      // 部下を制限フィールドのみ取得
-      const { data: emp } = await supabase
-        .from('employees')
-        .select(`${MANAGER_VISIBLE_SELECT}, facility:facilities(name)`)
-        .eq('id', id)
-        .eq('tenant_id', me.tenant_id)
-        .in('facility_id', facilityIds)
-        .neq('id', me.id)
-        .single();
-
       if (!emp) {
         setUnauthorized(true);
         setLoading(false);

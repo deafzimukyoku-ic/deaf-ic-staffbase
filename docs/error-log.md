@@ -195,4 +195,26 @@
 - **再発防止**: 「明示マーク必須」型の運用は現場（放デイ）に合わない。"自動で出席、欠席連絡だけマーク" の方が運用負荷が小さく、忘れによる集計ミスも起きない。出席判定はこの 1 行ロジックに統一（CLAUDE.md §10 出欠記録に明記）
 
 ---
+## 部下プロフィール詳細ページが manager で「閲覧する権限がありません」になる
+
+- **発生日**: 2026-05-02
+- **発生箇所**: app/(manager)/mgr/subordinates/[id]/page.tsx + supabase/migrations/149-151
+- **フェーズ**: マネージャー部下管理（148 で一覧 RPC 化した後の追従漏れ）
+- **エラー内容**: マネージャーで部下管理一覧から社員行をクリック → 「この社員の情報を閲覧する権限がありません」。最終的に発覚した PostgreSQL エラーは `cannot pass more than 100 arguments to a function (SQLSTATE 54023)`
+- **原因**:
+  1. (一次) 一覧は migration 148 の SECURITY DEFINER RPC `get_my_subordinates` 経由に切り替わっていたが、詳細ページ `[id]/page.tsx` は `from('employees').select(...)` の直接クエリのまま残っていた。`employees` の RLS は manager に SELECT を許可していない（144 で許可しようとしたら全員ログアウト現象 → 145 で即ロールバックされた経緯）ため、詳細ページだけ無言で空返却 → 「権限がありません」
+  2. (二次) 詳細用 RPC `get_subordinate_detail` を migration 149 で追加したが、`jsonb_build_object` の引数上限 (100) を超えていた。`MANAGER_VISIBLE_FIELDS` が 62 ペア = 124 引数になり PostgreSQL が拒否
+  3. (三次) デバッグ用 EXCEPTION ハンドラで `PG_EXCEPTION_CONTEXT` を式中で直接参照したが、これは `GET STACKED DIAGNOSTICS` 経由でしか取得できないため、ハンドラ自身が `column "pg_exception_context" does not exist (42703)` で落ち、原因が長く隠れた
+- **解決方法**:
+  1. 一覧と同様に `employees` 直クエリ → SECURITY DEFINER RPC へ切替（149 で `get_subordinate_detail(p_id uuid)` を追加。admin/manager/shift_manager の認可判定込み、返却フィールドは `MANAGER_VISIBLE_FIELDS` 限定）
+  2. `jsonb_build_object` を 2 ブロック（49 ペア + 13 ペア）に分割し `||` 演算子で連結（migration 151）
+  3. 例外コンテキスト取得は `GET STACKED DIAGNOSTICS v_context = PG_EXCEPTION_CONTEXT;` を使う。式中の直接参照は不可（migration 150 修正版）
+- **再発防止**:
+  - **`employees` テーブルに対する manager の SELECT は SECURITY DEFINER RPC 経由が原則**。RLS を直接いじると 144 のような全員ログアウト級の事故が起きる（前科あり）。manager 専用の取得点を増やす時は同じパターンで RPC を追加する
+  - **`jsonb_build_object` は 100 引数 (= 50 ペア) 上限**。多列の jsonb 化は 2 ブロックに分けて `||` で連結するか、`row_to_json(e)::jsonb` ベースで作って不要列を削る方が安全
+  - **PostgrestError は `console.error('text', err)` で `{}` に潰れる**。デバッグ時は `{ message, code, details, hint }` の形で個別フィールドを出す（PostgrestError のプロパティが non-enumerable のため）
+  - **plpgsql の特殊変数の使い分け**: `SQLERRM` / `SQLSTATE` は式中で直接使える。`PG_EXCEPTION_CONTEXT` / `PG_EXCEPTION_DETAIL` / `PG_EXCEPTION_HINT` は `GET STACKED DIAGNOSTICS` 経由必須
+  - migration 適用直後は PostgREST スキーマキャッシュが古いことがある。新規 RPC を追加する migration は末尾に `NOTIFY pgrst, 'reload schema';` を入れておく
+
+---
 *(以降、新規エラーがあれば追記)*
