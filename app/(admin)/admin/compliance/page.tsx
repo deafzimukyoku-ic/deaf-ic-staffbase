@@ -22,7 +22,7 @@ import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
-import { ReorderButtons } from '@/components/admin/ReorderButtons';
+import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
@@ -348,14 +348,21 @@ export default function AdminCompliancePage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {filteredDocs.map((doc) => {
+        <DragSortList
+          className="space-y-4"
+          onReorder={(from, to) =>
+            reorderViaSortColumn('compliance_documents', filteredDocs, from, to, loadDocs)
+          }
+        >
+          {filteredDocs.map((doc, idx) => {
             const catMap = new Map(categories.map(c => [c.id, c]));
             return (
-              <Card key={doc.id} className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden">
+              <DragSortItem key={doc.id} index={idx}>
+                {(handle) => (
+              <Card className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
                 <CardHeader className="py-4 bg-gray-50/50">
                   <div className="flex flex-wrap items-center gap-3">
-                    <ReorderButtons table="compliance_documents" itemId={doc.id} items={filteredDocs} onReordered={loadDocs} />
+                    <DragHandleIcon {...handle} />
                     <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
                       <CardTitle className="text-base text-diletto-ink break-words md:truncate">{doc.title || '（無題）'}</CardTitle>
                       <PersonInline label="作成者" person={doc.creator} />
@@ -407,9 +414,11 @@ export default function AdminCompliancePage() {
                   </div>
                 </CardContent>
               </Card>
+                )}
+              </DragSortItem>
             );
           })}
-        </div>
+        </DragSortList>
       )}
 
       {/* 編集ダイアログ */}

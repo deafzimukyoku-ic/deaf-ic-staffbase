@@ -175,7 +175,9 @@ export default function DailyOutputFull({ role: _role }: Props) {
             'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
           )
           .eq('facility_id', facilityId)
-          .eq('status', 'active'),
+          .eq('status', 'active')
+          .order('shift_display_order', { ascending: true, nullsFirst: false })
+          .order('last_name', { ascending: true }),
         supabase.from('children').select('*').eq('facility_id', facilityId),
         supabase
           .from('schedule_entries')

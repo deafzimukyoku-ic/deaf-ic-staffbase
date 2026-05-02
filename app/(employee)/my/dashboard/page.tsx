@@ -68,34 +68,102 @@ export default function EmployeeDashboardPage() {
 
       // 入力チェック
       const isFilled = (v: unknown) => v != null && String(v).trim() !== '';
+      const isArrayFilled = (v: unknown) => Array.isArray(v) && v.length > 0;
 
-      // 基本情報（基本 + 通勤 + 連絡先）
+      /* 基本情報（/my/profile の 3 タブ: basic / commute / contacts の全項目）
+         ProfileSection1Basic + ProfileSectionCommute + ProfileSectionContacts に
+         レンダされる全フィールドをカバーする。条件付きフィールドは
+         lib/field-applicability.ts の CORE_FIELD_GATES と同じ条件で必要時だけ計上。 */
       const basicFields: unknown[] = [
+        // 個人情報
         me.last_name, me.first_name, me.last_name_kana, me.first_name_kana,
-        me.birth_date, me.postal_code, me.address, me.phone,
-        me.position, me.join_date, me.gender, me.job_type,
+        me.birth_date, me.gender, me.postal_code, me.address, me.phone,
+        // 雇用情報
+        me.position, me.years_of_service, me.job_type, me.work_location,
+        me.facility_id, me.join_date,
+        // マイナンバー / 前職
+        me.my_number, me.previous_employer,
+        // 銀行
+        me.bank_name, me.bank_branch_name, me.bank_account_type,
+        me.bank_account_number, me.bank_account_holder,
+        // 通勤手段選択 + 通勤経路画像
+        me.commute_method, me.commute_route_image_path,
+        // 緊急連絡先1
+        me.emergency1_name, me.emergency1_relationship, me.emergency1_phone,
+        me.emergency1_mobile, me.emergency1_postal_code, me.emergency1_address,
+        // 緊急連絡先2（任意、未入力でも計上対象）
+        me.emergency2_name, me.emergency2_relationship, me.emergency2_phone,
+        me.emergency2_mobile, me.emergency2_postal_code, me.emergency2_address,
+        // 保証人
+        me.guarantor_name, me.guarantor_relationship, me.guarantor_phone,
+        me.guarantor_postal_code, me.guarantor_address, me.guarantor_birth_date,
       ];
-      const basicFilled = basicFields.filter(isFilled).length;
+      // qualifications: 配列で 1 件以上あれば 1 カウント
+      const qualFilled = isArrayFilled(me.qualifications) ? 1 : 0;
+      const qualTotal = 1;
 
-      // 自己紹介（紹介 + 働き方 + コミュ + 強み + 価値観 + チーム）
+      // 通勤詳細（公共交通機関を選んだ人のみ計上）
+      const publicTransportFields: unknown[] = me.commute_method === 'public_transport'
+        ? [
+            me.commute_time_minutes, me.commute_distance,
+            me.route_section1_route, me.route_section1_transport, me.route_section1_cost,
+            me.commute_route_detail,
+          ]
+        : [];
+
+      // 免許情報（マイカー OR 送迎運転者）
+      const needsLicense = !!(me.has_car_commute || me.is_shuttle_driver);
+      const licenseFields: unknown[] = needsLicense
+        ? [me.license_type, me.license_number, me.license_expiry, me.license_image_path]
+        : [];
+
+      // マイカー車両情報
+      const carFields: unknown[] = me.has_car_commute
+        ? [
+            me.car_model, me.car_plate_number,
+            me.insurance_company, me.insurance_policy_number, me.insurance_expiry,
+            me.vehicle_inspection_expiry,
+          ]
+        : [];
+
+      // 送迎運転者の運転情報
+      const shuttleFields: unknown[] = me.is_shuttle_driver
+        ? [me.driving_experience, me.accident_history, me.training_attendance]
+        : [];
+
+      const allBasicFlat = [...basicFields, ...publicTransportFields, ...licenseFields, ...carFields, ...shuttleFields];
+      const basicFilled = allBasicFlat.filter(isFilled).length + qualFilled;
+      const basicTotal = allBasicFlat.length + qualTotal;
+
+      /* 自己紹介（/my/about の 6 セクション全フィールド: 6+6+6+12+8+4 = 42 項目） */
       const aboutFields: unknown[] = [
+        // Section2 (intro)
         me.self_introduction, me.current_duties, me.past_duties,
         me.efforts_focused_on, me.how_others_describe, me.values_and_motivation,
+        // Section3 (workstyle)
         me.work_style_solo_vs_team, me.work_style_clear_vs_autonomy,
         me.work_style_stable_vs_change, me.work_style_think_vs_act,
         me.multitask_ability, me.detail_orientation,
+        // Section4 (comm)
         me.comm_conclusion_vs_context, me.comm_consult_timing,
         me.comm_feedback_preference, me.comm_channel_preference,
         me.meeting_behavior, me.relationship_notes,
+        // Section5 (strengths) — 12 項目すべて
         me.strength_1, me.strength_2, me.strength_3,
         me.weakness_1, me.weakness_2, me.weakness_3,
-        me.success_experience, me.struggle_experience,
+        me.success_experience, me.success_reason,
+        me.struggle_experience, me.struggle_reason,
+        me.suited_tasks, me.burden_tasks,
+        // Section6 (values) — 8 項目すべて
         me.workplace_values, me.ideal_boss_colleague, me.disliked_atmosphere,
         me.growth_goal, me.preferred_evaluation, me.safe_environment,
+        me.strengths_self_reported, me.work_style_preference,
+        // Section7 (team)
         me.team_role_preference, me.easy_to_work_with,
         me.hard_to_work_with, me.team_mindset,
       ];
       const aboutFilled = aboutFields.filter(isFilled).length;
+      const aboutTotal = aboutFields.length;
 
       // 来月の YYYY-MM
       const now = new Date();
@@ -105,13 +173,14 @@ export default function EmployeeDashboardPage() {
       const [templates, submissions, compliance, compAcks, trainings, trainSubs, announcements, annReads, manuals, manualReads, shiftReqs] = await Promise.all([
         supabase.from('document_templates').select('id').eq('tenant_id', tid),
         supabase.from('document_submissions').select('id').eq('employee_id', eid).eq('status', 'submitted'),
-        supabase.from('compliance_documents').select('id').eq('tenant_id', tid),
+        // is_published=true のみ進捗カウント対象に。非公開分はダッシュボードにも反映しない（migration 141）
+        supabase.from('compliance_documents').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('compliance_acknowledgments').select('compliance_document_id').eq('employee_id', eid),
-        supabase.from('trainings').select('id').eq('tenant_id', tid),
+        supabase.from('trainings').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('training_submissions').select('training_id').eq('employee_id', eid).eq('result', 'passed'),
-        supabase.from('announcements').select('id').eq('tenant_id', tid),
+        supabase.from('announcements').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('announcement_reads').select('announcement_id').eq('employee_id', eid),
-        supabase.from('manuals').select('id').eq('tenant_id', tid),
+        supabase.from('manuals').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('manual_reads').select('manual_id').eq('employee_id', eid),
         supabase.from('shift_requests').select('id').eq('employee_id', eid).eq('month', nextMonth),
       ]);
@@ -136,18 +205,22 @@ export default function EmployeeDashboardPage() {
         supabase.from('announcements')
           .select('id, title, created_at, target_type, target_facility_ids')
           .eq('tenant_id', tid)
+          .eq('is_published', true)
           .gte('created_at', sinceIso),
         supabase.from('compliance_documents')
           .select('id, title, created_at, target_type, target_facility_ids')
           .eq('tenant_id', tid)
+          .eq('is_published', true)
           .gte('created_at', sinceIso),
         supabase.from('trainings')
           .select('id, title, created_at, target_type, target_facility_ids')
           .eq('tenant_id', tid)
+          .eq('is_published', true)
           .gte('created_at', sinceIso),
         supabase.from('manuals')
           .select('id, title, created_at, target_type, target_facility_ids')
           .eq('tenant_id', tid)
+          .eq('is_published', true)
           .gte('created_at', sinceIso),
       ]);
 

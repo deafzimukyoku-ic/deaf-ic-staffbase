@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import Button from '@/components/shift-compat/Button';
 import Badge from '@/components/shift-compat/Badge';
 import Modal from '@/components/shift-compat/Modal';
+import { DragSortList, DragSortItem, DragHandleIcon } from '@/components/admin/DragSortList';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import { fetchFacilityMemberIds } from '@/lib/multi-facility';
@@ -625,26 +626,33 @@ export default function StaffSettingsFull({ scope }: Props) {
       </div>
 
       {/* モバイル */}
-      <div className="md:hidden flex flex-col gap-3">
+      <DragSortList
+        className="md:hidden flex flex-col gap-3"
+        onReorder={(from, to) => handleReorderStaff(from, to)}
+      >
         {staffList.length === 0 && (
           <div className="px-3 py-6 text-center rounded-lg" style={{ background: 'var(--bg)', color: 'var(--ink-3)' }}>
             職員が登録されていません
           </div>
         )}
-        {staffList.map((s) => (
+        {staffList.map((s, idx) => (
+          <DragSortItem key={s.id} index={idx}>
+            {(handle) => (
           <div
-            key={s.id}
             onClick={() => handleEdit(s)}
             className="p-3 rounded-lg cursor-pointer transition-colors hover:bg-[var(--accent-pale)]"
-            style={{ background: 'var(--white)', border: '1px solid var(--rule)' }}
+            style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : 'var(--white)', border: '1px solid var(--rule)' }}
           >
             <div className="flex items-start justify-between gap-2 mb-2">
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-base" style={{ color: 'var(--ink)' }}>
-                  {staffDisplayName(s)}
-                </div>
-                <div className="text-xs mt-0.5 break-all" style={{ color: 'var(--ink-3)' }}>
-                  {s.email ?? '（メール未設定）'}
+              <div className="flex items-start gap-2 flex-1 min-w-0">
+                <DragHandleIcon {...handle} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-base" style={{ color: 'var(--ink)' }}>
+                    {staffDisplayName(s)}
+                  </div>
+                  <div className="text-xs mt-0.5 break-all" style={{ color: 'var(--ink-3)' }}>
+                    {s.email ?? '（メール未設定）'}
+                  </div>
                 </div>
               </div>
               <div className="flex flex-col gap-1 items-end shrink-0">
@@ -691,8 +699,10 @@ export default function StaffSettingsFull({ scope }: Props) {
               ) : null;
             })()}
           </div>
+            )}
+          </DragSortItem>
         ))}
-      </div>
+      </DragSortList>
 
       <Modal
         isOpen={!!editing}

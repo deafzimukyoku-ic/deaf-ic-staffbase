@@ -24,8 +24,13 @@ const LABELS: Record<string, { label: string; icon: string }> = {
   '/admin/shifts/schedule': { label: '利用表', icon: '📅' },
   '/admin/shifts/transport': { label: '送迎表', icon: '🚗' },
   '/admin/shifts/output/daily': { label: '日次出力', icon: '📄' },
+  '/admin/shifts/output/daily-report': { label: '業務日報', icon: '📋' },
+  '/admin/shifts/output/billing': { label: '利用料金表', icon: '💰' },
+  '/admin/shifts/output/weekly-transport': { label: '週次送迎表', icon: '🚌' },
+  '/admin/shifts/output/staff-child-overlap': { label: '同席日数', icon: '👥' },
   '/admin/shifts/staff-settings': { label: '職員管理', icon: '👔' },
   '/admin/shifts/facility-settings': { label: '事業所設定', icon: '🗺️' },
+  '/admin/shifts/events': { label: 'イベント設定', icon: '🎉' },
   '/admin/requests': { label: '休み希望', icon: '📝' },
   // mgr
   '/mgr/dashboard': { label: 'ダッシュボード', icon: '🏠' },
@@ -40,8 +45,13 @@ const LABELS: Record<string, { label: string; icon: string }> = {
   '/mgr/shifts/schedule': { label: '利用表', icon: '📅' },
   '/mgr/shifts/transport': { label: '送迎表', icon: '🚗' },
   '/mgr/shifts/output/daily': { label: '日次出力', icon: '📄' },
+  '/mgr/shifts/output/daily-report': { label: '業務日報', icon: '📋' },
+  '/mgr/shifts/output/billing': { label: '利用料金表', icon: '💰' },
+  '/mgr/shifts/output/weekly-transport': { label: '週次送迎表', icon: '🚌' },
+  '/mgr/shifts/output/staff-child-overlap': { label: '同席日数', icon: '👥' },
   '/mgr/shifts/staff-settings': { label: '職員管理', icon: '👔' },
   '/mgr/shifts/facility-settings': { label: '事業所設定', icon: '🗺️' },
+  '/mgr/shifts/events': { label: 'イベント設定', icon: '🎉' },
   '/mgr/requests': { label: '休み希望', icon: '📝' },
   // my
   '/my/dashboard': { label: 'ホーム', icon: '🏠' },
@@ -119,6 +129,10 @@ export function Breadcrumb() {
          UUID 形式 (8-4-4-4-12 hex) は中間として扱い、パンくずに含めない。 */
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg);
       if (isUuid) continue;
+      /* 中間パス（最後のセグメントでない）でラベル未定義 = 通常はグルーピング用ディレクトリ
+         （例: /admin/shifts/output, /admin/employees/[id]）でページ実体が無いので
+         「詳細」リンクを出すと 404 になる。スキップして親→子を直接結ぶ。 */
+      if (i < segments.length - 1) continue;
       crumbs.push({ href: acc, label: '詳細', icon: '📎' });
     }
   }

@@ -129,7 +129,9 @@ export default function DailyReportFull({ role: _role }: Props) {
           .from('employees')
           .select('id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status')
           .eq('facility_id', facilityId)
-          .eq('status', 'active'),
+          .eq('status', 'active')
+          .order('shift_display_order', { ascending: true, nullsFirst: false })
+          .order('last_name', { ascending: true }),
         supabase.from('children').select('*').eq('facility_id', facilityId),
         supabase
           .from('schedule_entries')
@@ -460,18 +462,19 @@ function ChildrenTable({
             {renderCells(right[i] ?? null)}
           </tr>
         ))}
+        {/* 人数は出さず「名」だけ右揃えで表示する（業務日報は手書き想定）*/}
         <tr>
           <td className="name" style={{ background: '#fafafa' }}>児童発達支援</td>
           <td className="center" colSpan={1} style={{ background: '#fafafa' }}>計</td>
-          <td className="center" style={{ background: '#fafafa' }}>{preschool.length}</td>
+          <td style={{ background: '#fafafa', textAlign: 'right', paddingRight: '0.5em' }}>名</td>
           <td className="name" style={{ background: '#fafafa' }}>放課後等デイサービス</td>
           <td className="center" style={{ background: '#fafafa' }}>計</td>
-          <td className="center" style={{ background: '#fafafa' }}>{afterSchool.length}</td>
+          <td style={{ background: '#fafafa', textAlign: 'right', paddingRight: '0.5em' }}>名</td>
         </tr>
         <tr>
           <td colSpan={3} style={{ background: '#fafafa' }}></td>
           <td className="name" style={{ background: '#fafafa' }}>合計</td>
-          <td className="center" colSpan={2} style={{ background: '#fafafa' }}>{preschool.length + afterSchool.length}</td>
+          <td colSpan={2} style={{ background: '#fafafa', textAlign: 'right', paddingRight: '0.5em' }}>名</td>
         </tr>
       </tbody>
     </table>

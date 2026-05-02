@@ -10,7 +10,7 @@ import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
 import type { TargetType } from '@/lib/types';
 
-type UnreadKey = 'compliance' | 'training' | 'announcement' | 'manual';
+type UnreadKey = 'compliance' | 'training' | 'announcement' | 'manual' | 'message';
 
 const tabs: { href: string; label: string; unreadKey?: UnreadKey }[] = [
   { href: '/my/dashboard', label: 'ホーム' },
@@ -21,6 +21,7 @@ const tabs: { href: string; label: string; unreadKey?: UnreadKey }[] = [
   { href: '/my/trainings', label: '研修', unreadKey: 'training' },
   { href: '/my/announcements', label: 'お知らせ', unreadKey: 'announcement' },
   { href: '/my/manuals', label: '業務マニュアル', unreadKey: 'manual' },
+  { href: '/my/messages', label: '個別連絡', unreadKey: 'message' },
   { href: '/my/requests', label: '休み希望' },
 ];
 
@@ -28,7 +29,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const router = useRouter();
   const [userRole, setUserRole] = useState<string>('employee');
-  const [unread, setUnread] = useState<Record<UnreadKey, number>>({ compliance: 0, training: 0, announcement: 0, manual: 0 });
+  const [unread, setUnread] = useState<Record<UnreadKey, number>>({ compliance: 0, training: 0, announcement: 0, manual: 0, message: 0 });
 
   useEffect(() => {
     async function loadCompany() {
@@ -41,15 +42,20 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
 
       // 未確認/未読/未合格のカウント計算（施設スコープ考慮）
       type Row = { id: string; updated_at?: string; target_type: TargetType; target_facility_ids: string[] };
-      const [compRes, trainRes, annRes, manRes, ackRes, subRes, readRes, manReadRes] = await Promise.all([
-        supabase.from('compliance_documents').select('id, updated_at, target_type, target_facility_ids').eq('tenant_id', me.tenant_id),
-        supabase.from('trainings').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id),
-        supabase.from('announcements').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id),
-        supabase.from('manuals').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id),
+      const [compRes, trainRes, annRes, manRes, ackRes, subRes, readRes, manReadRes, threadRes, msgReadRes] = await Promise.all([
+        // 非公開分はバッジ件数からも除外（admin/manager が社員画面を閲覧した際にも正しく動かすため明示フィルタ。employee は RLS でも除外される）
+        supabase.from('compliance_documents').select('id, updated_at, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('trainings').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('announcements').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('manuals').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
         supabase.from('compliance_acknowledgments').select('compliance_document_id, document_updated_at').eq('employee_id', me.id),
         supabase.from('training_submissions').select('training_id, result').eq('employee_id', me.id),
         supabase.from('announcement_reads').select('announcement_id').eq('employee_id', me.id),
         supabase.from('manual_reads').select('manual_id').eq('employee_id', me.id),
+        /* 個別連絡の未読件数 (Phase G / migration 142) — 自分が参加するスレッドのメッセージのうち、
+           自分以外が送信し、まだ message_reads に記録が無いもの */
+        supabase.from('message_thread_members').select('thread_id').eq('employee_id', me.id),
+        supabase.from('message_reads').select('message_id').eq('employee_id', me.id),
       ]);
 
       const scopedComp = applyScopeFilter((compRes.data || []) as Row[], me.facility_id);
@@ -70,11 +76,26 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
       const readAnnIds = new Set((readRes.data || []).map((r: { announcement_id: string }) => r.announcement_id));
       const readManIds = new Set((manReadRes.data || []).map((r: { manual_id: string }) => r.manual_id));
 
+      /* 個別連絡 未読件数 */
+      const myThreadIds = ((threadRes.data || []) as { thread_id: string }[]).map((r) => r.thread_id);
+      const myReadMsgIds = new Set(((msgReadRes.data || []) as { message_id: string }[]).map((r) => r.message_id));
+      let messageUnread = 0;
+      if (myThreadIds.length > 0) {
+        const { data: pending } = await supabase
+          .from('messages')
+          .select('id, sender_employee_id')
+          .in('thread_id', myThreadIds)
+          .neq('sender_employee_id', me.id)
+          .is('deleted_at', null);
+        messageUnread = ((pending || []) as { id: string }[]).filter((m) => !myReadMsgIds.has(m.id)).length;
+      }
+
       setUnread({
         compliance: scopedComp.filter((c) => c.updated_at && !confirmedSet.has(`${c.id}::${c.updated_at}`)).length,
         training: scopedTrain.filter((t) => !passedTrainIds.has(t.id)).length,
         announcement: scopedAnn.filter((a) => !readAnnIds.has(a.id)).length,
         manual: scopedMan.filter((m) => !readManIds.has(m.id)).length,
+        message: messageUnread,
       });
     }
     loadCompany();

@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
-import { ReorderButtons } from '@/components/admin/ReorderButtons';
+import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
@@ -358,15 +358,22 @@ export default function ManagerCompliancePage() {
         </div>
       </div>
 
-      <div className="space-y-4">
-        {visible.map((doc) => {
+      <DragSortList
+        className="space-y-4"
+        onReorder={(from, to) =>
+          reorderViaSortColumn('compliance_documents', visible, from, to, () => me && loadDocs(me.tenant_id))
+        }
+      >
+        {visible.map((doc, idx) => {
           const allowed = new Set(managedFacilities.map((f) => f.id));
           const canEdit = (doc.target_facility_ids || []).some((id) => allowed.has(id));
           return (
-            <Card key={doc.id} className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden">
+            <DragSortItem key={doc.id} index={idx}>
+              {(handle) => (
+            <Card className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
               <CardHeader className="py-4">
                 <div className="flex flex-wrap items-center gap-3">
-                  <ReorderButtons table="compliance_documents" itemId={doc.id} items={visible} onReordered={() => me && loadDocs(me.tenant_id)} />
+                  <DragHandleIcon {...handle} />
                   <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
                     <CardTitle className="text-base font-bold text-diletto-ink break-words md:truncate">{doc.title || '（無題）'}</CardTitle>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -426,12 +433,14 @@ export default function ManagerCompliancePage() {
                 </div>
               </CardContent>
             </Card>
+              )}
+            </DragSortItem>
           );
         })}
         {visible.length === 0 && (
           <Card><CardContent className="py-12 text-center text-diletto-gray-light">該当する遵守事項はありません</CardContent></Card>
         )}
-      </div>
+      </DragSortList>
 
       {/* 編集ダイアログ */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

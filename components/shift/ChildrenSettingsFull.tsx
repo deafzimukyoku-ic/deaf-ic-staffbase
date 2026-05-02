@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client';
 import Button from '@/components/shift-compat/Button';
 import Badge from '@/components/shift-compat/Badge';
 import Modal from '@/components/shift-compat/Modal';
+import { DragSortList, DragSortItem, DragHandleIcon } from '@/components/admin/DragSortList';
 import { staffDisplayName, GRADE_LABELS } from '@/lib/shift-utils';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import type { GradeType } from '@/lib/constants';
@@ -638,7 +639,11 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       </div>
 
       {/* md 未満: カード一覧 */}
-      <ul className="md:hidden flex flex-col gap-2">
+      <DragSortList
+        as="ul"
+        className="md:hidden flex flex-col gap-2"
+        onReorder={(from, to) => handleReorderChildren(from, to)}
+      >
         {visibleChildren.length === 0 && (
           <li
             className="rounded-md p-4 text-center text-sm"
@@ -657,41 +662,23 @@ export default function ChildrenSettingsFull({ scope }: Props) {
           const tier = (c.copay_tier ?? 'zero') as CopayTier;
           const cap = resolveCopayCap({ copayTier: tier, copayFreeformAmount: c.copay_freeform_amount ?? null });
           return (
-            <li key={c.id}>
+            <DragSortItem key={c.id} as="li" index={idx}>
+              {(handle) => (
               <div
                 onClick={() => handleEdit(c)}
                 className="rounded-md p-3 transition-colors active:bg-[var(--accent-pale)] cursor-pointer"
                 style={{
-                  background: getGradeRowBg(c.grade_type),
+                  background: handle.isDropTarget ? 'var(--accent-pale)' : getGradeRowBg(c.grade_type),
                   border: '1px solid var(--rule)',
                 }}
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2 min-w-0">
+                    <DragHandleIcon {...handle} />
                     <span className="font-bold text-sm truncate" style={{ color: 'var(--ink)' }}>{c.name}</span>
                     <Badge variant="info">{GRADE_LABELS[c.grade_type]}</Badge>
                   </div>
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => idx > 0 && handleReorderChildren(idx, idx - 1)}
-                      disabled={idx === 0}
-                      className="px-2 py-1 rounded text-xs font-bold disabled:opacity-30"
-                      style={{ border: '1px solid var(--rule)', background: 'var(--white)' }}
-                      aria-label="上へ移動"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => idx < visibleChildren.length - 1 && handleReorderChildren(idx, idx + 1)}
-                      disabled={idx === visibleChildren.length - 1}
-                      className="px-2 py-1 rounded text-xs font-bold disabled:opacity-30"
-                      style={{ border: '1px solid var(--rule)', background: 'var(--white)' }}
-                      aria-label="下へ移動"
-                    >
-                      ↓
-                    </button>
                     <Badge variant={c.is_active ? 'success' : 'neutral'}>{c.is_active ? '在籍' : '退籍'}</Badge>
                   </div>
                 </div>
@@ -730,10 +717,11 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   </div>
                 </div>
               </div>
-            </li>
+              )}
+            </DragSortItem>
           );
         })}
-      </ul>
+      </DragSortList>
 
       <Modal
         isOpen={!!editing}

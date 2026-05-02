@@ -372,6 +372,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     if (!employee) return;
     /* 編集対象フィールドだけ draft に複製。ここに無いフィールドは update されない */
     setBasicDraft({
+      employee_number: employee.employee_number,
       last_name: employee.last_name, first_name: employee.first_name,
       last_name_kana: employee.last_name_kana, first_name_kana: employee.first_name_kana,
       birth_date: employee.birth_date, gender: employee.gender,
@@ -403,9 +404,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   }
   /* employees テーブルで NOT NULL 制約のあるカラム。空文字を null 化すると DB エラーになるので、保存前にバリデーション。 */
   const REQUIRED_BASIC_KEYS: ReadonlyArray<keyof Employee> = [
+    'employee_number',
     'last_name', 'first_name', 'last_name_kana', 'first_name_kana',
   ];
   const REQUIRED_BASIC_LABELS: Record<string, string> = {
+    employee_number: '従業員番号',
     last_name: '姓', first_name: '名', last_name_kana: '姓カナ', first_name_kana: '名カナ',
   };
 
@@ -721,6 +724,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <Card>
               <CardHeader><CardTitle className="text-base font-bold">本人情報</CardTitle></CardHeader>
               <CardContent className="space-y-1.5 text-sm">
+                <EditableRow label="従業員番号" editing={basicEditing} value={basicEditing ? basicDraft.employee_number : employee.employee_number} onChange={(v) => updBasic('employee_number', String(v))} />
                 <EditableRow label="姓" editing={basicEditing} value={basicEditing ? basicDraft.last_name : employee.last_name} onChange={(v) => updBasic('last_name', String(v))} />
                 <EditableRow label="名" editing={basicEditing} value={basicEditing ? basicDraft.first_name : employee.first_name} onChange={(v) => updBasic('first_name', String(v))} />
                 <EditableRow label="姓カナ" editing={basicEditing} value={basicEditing ? basicDraft.last_name_kana : employee.last_name_kana} onChange={(v) => updBasic('last_name_kana', String(v))} />

@@ -15,7 +15,7 @@ import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
-import { ReorderButtons } from '@/components/admin/ReorderButtons';
+import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
@@ -307,14 +307,21 @@ export default function ManagerTrainingsPage() {
         </div>
       </div>
 
-      <div className="space-y-3">
-        {visible.map((t) => {
+      <DragSortList
+        className="space-y-3"
+        onReorder={(from, to) =>
+          reorderViaSortColumn('trainings', visible, from, to, () => me && reloadTrainings(me.tenant_id))
+        }
+      >
+        {visible.map((t, idx) => {
           const allowed = new Set(managedFacilities.map((f) => f.id));
           const canEdit = (t.target_facility_ids || []).some((id) => allowed.has(id));
           return (
-            <Card key={t.id} className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden">
+            <DragSortItem key={t.id} index={idx}>
+              {(handle) => (
+            <Card className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
               <CardContent className="flex flex-wrap items-center gap-3 py-4">
-                <ReorderButtons table="trainings" itemId={t.id} items={visible} onReordered={() => me && reloadTrainings(me.tenant_id)} />
+                <DragHandleIcon {...handle} />
                 <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
                   <p className="font-bold text-diletto-ink break-words md:truncate">{t.title}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -354,12 +361,14 @@ export default function ManagerTrainingsPage() {
                 </div>
               </CardContent>
             </Card>
+              )}
+            </DragSortItem>
           );
         })}
         {visible.length === 0 && (
           <Card><CardContent className="py-12 text-center text-diletto-gray-light">該当する研修はありません</CardContent></Card>
         )}
-      </div>
+      </DragSortList>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl">

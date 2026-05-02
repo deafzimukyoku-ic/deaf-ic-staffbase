@@ -43,7 +43,7 @@ export function SubordinateDetail({ employee: e }: Props) {
           <InfoRow label="役職" value={e.position || '-'} />
           <InfoRow label="職種" value={e.job_type || '-'} />
           <InfoRow label="勤務地" value={e.work_location || '-'} />
-          <InfoRow label="入社日" value={e.join_date} />
+          <InfoRow label="入社日" value={e.join_date ?? '-'} />
           <InfoRow label="勤続年数" value={e.years_of_service != null ? `${e.years_of_service}年` : '-'} />
         </CardContent>
       </Card>

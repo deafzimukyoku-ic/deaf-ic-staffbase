@@ -53,11 +53,12 @@ export interface Employee {
   first_name: string;
   last_name_kana: string;
   first_name_kana: string;
-  birth_date: string;
+  /* migration 143 で NOT NULL を解除。null 許容 */
+  birth_date: string | null;
   gender: string | null;
-  postal_code: string;
-  address: string;
-  phone: string;
+  postal_code: string | null;
+  address: string | null;
+  phone: string | null;
   position: string | null;
   position_id: string | null;
   years_of_service: number | null;
@@ -69,7 +70,8 @@ export interface Employee {
      DB 行そのものには存在しない（employees テーブルには facility_id 単一しか無い）。
      primary を含む全所属施設は [facility_id, ...additional_facility_ids] で取得可能。 */
   additional_facility_ids?: string[];
-  join_date: string;
+  /* migration 143 で NOT NULL を解除 */
+  join_date: string | null;
   retirement_date: string | null;
   retirement_reason: string | null;
   // 振込先口座
@@ -832,6 +834,57 @@ export interface ShiftChangeRequestRow {
   admin_note: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// --- Direct Messages (Phase G / migration 142) ---
+export interface MessageThreadRow {
+  id: string;
+  tenant_id: string;
+  last_message_at: string;
+  created_at: string;
+}
+
+export interface MessageThreadMemberRow {
+  thread_id: string;
+  employee_id: string;
+  joined_at: string;
+}
+
+export interface MessageRow {
+  id: string;
+  thread_id: string;
+  sender_employee_id: string;
+  body: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+}
+
+export interface MessageAttachmentRow {
+  id: string;
+  message_id: string;
+  file_name: string;
+  mime_type: string;
+  storage_path: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface MessageReadRow {
+  message_id: string;
+  employee_id: string;
+  read_at: string;
+}
+
+/* UI 用: スレッド一覧で使う複合型 */
+export interface MessageThreadSummary {
+  thread: MessageThreadRow;
+  members: { id: string; name: string }[];
+  /** 自分から見た「相手」表示用に、自分以外の参加者名 */
+  counterpartLabel: string;
+  lastMessageBody: string | null;
+  lastMessageAt: string;
+  unreadCount: number;
 }
 
 // --- AI Diagnosis ---

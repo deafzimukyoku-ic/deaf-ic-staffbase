@@ -111,15 +111,26 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
                   )}
                 </TableCell>
                 <TableCell>
-                  {needsInviteResend(emp) && (
-                    <button
-                      onClick={() => handleResendInvite(emp)}
-                      disabled={resending === emp.id}
-                      className="text-xs px-2 py-1 rounded-md border border-diletto-blue/30 text-diletto-blue hover:bg-diletto-blue/5 transition-all disabled:opacity-50"
-                    >
-                      {resending === emp.id ? '送信中...' : '招待再送'}
-                    </button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {needsInviteResend(emp) && (
+                      <button
+                        onClick={() => handleResendInvite(emp)}
+                        disabled={resending === emp.id}
+                        className="text-xs px-2 py-1 rounded-md border border-diletto-blue/30 text-diletto-blue hover:bg-diletto-blue/5 transition-all disabled:opacity-50"
+                      >
+                        {resending === emp.id ? '送信中...' : '招待再送'}
+                      </button>
+                    )}
+                    {emp.status === 'active' && (
+                      <Link
+                        href={`/admin/messages?to=${emp.id}`}
+                        className="text-xs px-2 py-1 rounded-md border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-all whitespace-nowrap"
+                        title={`${emp.last_name} ${emp.first_name} さんに個別連絡`}
+                      >
+                        💬 個別連絡
+                      </Link>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))

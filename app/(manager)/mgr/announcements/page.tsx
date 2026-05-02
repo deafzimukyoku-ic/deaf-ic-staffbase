@@ -14,7 +14,7 @@ import { CategoryBadge, CategorySelect } from '@/components/admin/CategorySelect
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
-import { ReorderButtons } from '@/components/admin/ReorderButtons';
+import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
@@ -323,15 +323,22 @@ export default function ManagerAnnouncementsPage() {
                 </div>
             </div>
 
-            <div className="space-y-4">
-                {visible.map((a) => {
+            <DragSortList
+                className="space-y-4"
+                onReorder={(from, to) =>
+                    reorderViaSortColumn('announcements', visible, from, to, () => me && reloadAnnouncements(me.tenant_id))
+                }
+            >
+                {visible.map((a, idx) => {
                     const allowed = new Set(managedFacilities.map((f) => f.id));
                     const canEdit = (a.target_facility_ids || []).some((id) => allowed.has(id));
                     return (
-                        <Card key={a.id} className="border-diletto-gray/5 shadow-sm rounded-xl overflow-hidden hover:border-diletto-blue/20 transition-all bg-white">
+                        <DragSortItem key={a.id} index={idx}>
+                            {(handle) => (
+                        <Card className="border-diletto-gray/5 shadow-sm rounded-xl overflow-hidden hover:border-diletto-blue/20 transition-all bg-white" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
                             <CardContent className="py-6">
                                 <div className="flex flex-wrap items-center gap-3 mb-2">
-                                    <ReorderButtons table="announcements" itemId={a.id} items={visible} onReordered={() => me && reloadAnnouncements(me.tenant_id)} />
+                                    <DragHandleIcon {...handle} />
                                     <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
                                         <p className="font-bold text-diletto-ink text-lg break-words md:truncate">{a.title}</p>
                                         <div className="flex items-center gap-2 flex-wrap">
@@ -373,6 +380,8 @@ export default function ManagerAnnouncementsPage() {
                                 </div>
                             </CardContent>
                         </Card>
+                            )}
+                        </DragSortItem>
                     );
                 })}
                 {visible.length === 0 && (
@@ -382,7 +391,7 @@ export default function ManagerAnnouncementsPage() {
                         </CardContent>
                     </Card>
                 )}
-            </div>
+            </DragSortList>
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogContent className="sm:max-w-2xl">

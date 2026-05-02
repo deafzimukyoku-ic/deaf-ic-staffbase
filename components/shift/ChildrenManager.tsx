@@ -16,7 +16,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { ReorderButtons } from '@/components/admin/ReorderButtons';
+import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
 import { AreaEditor } from '@/components/shift/AreaEditor';
 import { GRADE_LABELS, GRADE_TYPES, GRADE_GROUPS, type GradeType, type GradeGroupKey } from '@/lib/constants';
 import type { ChildRow, Facility, AreaLabel } from '@/lib/types';
@@ -296,22 +296,30 @@ export function ChildrenManager({ scope }: Props) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
-          {visibleChildren.map((c) => {
+        <DragSortList
+          className="grid gap-3"
+          onReorder={(from, to) =>
+            reorderViaSortColumn(
+              'children',
+              visibleChildren.map((x) => ({ id: x.id, display_order: x.display_order })),
+              from,
+              to,
+              loadAll,
+            )
+          }
+        >
+          {visibleChildren.map((c, idx) => {
             const facility = facilityMap.get(c.facility_id);
             const pickupActive = (c.custom_pickup_areas || []).filter((a) => (c.pickup_area_labels || []).includes(a.id));
             const dropoffActive = (c.custom_dropoff_areas || []).filter((a) => (c.dropoff_area_labels || []).includes(a.id));
             return (
-              <Card key={c.id} className="border-diletto-gray/5 shadow-sm rounded-md overflow-hidden bg-white">
+              <DragSortItem key={c.id} index={idx}>
+                {(handle) => (
+              <Card className="border-diletto-gray/5 shadow-sm rounded-md overflow-hidden bg-white" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <ReorderButtons
-                        table="children"
-                        itemId={c.id}
-                        items={visibleChildren.map((x) => ({ id: x.id, display_order: x.display_order }))}
-                        onReordered={loadAll}
-                      />
+                      <DragHandleIcon {...handle} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-bold text-diletto-ink text-base">{c.name}</p>
@@ -367,9 +375,11 @@ export function ChildrenManager({ scope }: Props) {
                   </div>
                 </CardContent>
               </Card>
+                )}
+              </DragSortItem>
             );
           })}
-        </div>
+        </DragSortList>
       )}
 
       {/* 編集ダイアログ */}

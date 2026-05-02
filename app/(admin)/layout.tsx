@@ -28,6 +28,7 @@ const staffNav: NavItem[] = [
   { kind: 'link', href: '/admin/trainings', label: '研修', icon: '📚' },
   { kind: 'link', href: '/admin/announcements', label: 'お知らせ', icon: '📢' },
   { kind: 'link', href: '/admin/manuals', label: '業務マニュアル', icon: '📖' },
+  { kind: 'link', href: '/admin/messages', label: '個別連絡', icon: '💬' },
   { kind: 'link', href: '/admin/reports', label: '閲覧レポート', icon: '📊' },
   /* チーム診断は /admin/employees の社員一覧画面から起動 */
   { kind: 'link', href: '/admin/access-matrix', label: 'アプリ権限管理', icon: '🔐' },
@@ -43,6 +44,7 @@ const shiftNav: NavItem[] = [
   { kind: 'link', href: '/admin/shifts/output/daily', label: '日次出力', icon: '📄' },
   { kind: 'link', href: '/admin/shifts/output/daily-report', label: '業務日報', icon: '📋' },
   { kind: 'link', href: '/admin/shifts/output/billing', label: '利用料金表', icon: '💰' },
+  { kind: 'link', href: '/admin/shifts/output/staff-child-overlap', label: '同席日数', icon: '👥' },
   /* 週次送迎は送迎表ページの出力ボタンに統合（サイドバーからは除外） */
   { kind: 'link', href: '/admin/requests', label: '休み希望', icon: '✋' },
   {

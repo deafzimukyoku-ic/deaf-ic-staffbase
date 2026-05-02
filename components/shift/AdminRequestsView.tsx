@@ -170,99 +170,50 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
           職員がいません
         </div>
       ) : (
-        <>
-          {/* md 以上: テーブル */}
-          <div className="hidden md:block overflow-auto rounded-md border border-diletto-gray/10 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-diletto-beige border-b border-diletto-gray/10">
-                <tr>
-                  <th className="text-left px-3 py-2 font-bold">職員名</th>
-                  <th className="text-center px-2 py-2 font-bold whitespace-nowrap">雇用</th>
-                  <th className="text-center px-2 py-2 font-bold whitespace-nowrap">提出</th>
-                  <th className="text-center px-2 py-2 font-bold whitespace-nowrap">公休</th>
-                  <th className="text-center px-2 py-2 font-bold whitespace-nowrap">有給</th>
-                  <th className="text-center px-2 py-2 font-bold whitespace-nowrap">出勤可</th>
-                  <th className="text-center px-2 py-2 font-bold whitespace-nowrap">AM休</th>
-                  <th className="text-center px-2 py-2 font-bold whitespace-nowrap">PM休</th>
-                  <th className="text-right px-3 py-2 font-bold">提出日時</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((e, i) => {
-                  const sum = summaryByEmployee.get(e.id)!;
-                  return (
-                    <tr
-                      key={e.id}
-                      onClick={() => setDetailEmployeeId(e.id)}
-                      className={`cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-diletto-beige/30'} hover:bg-diletto-blue/5`}
-                    >
-                      <td className="px-3 py-2 font-medium">{e.name}</td>
-                      <td className="text-center px-2 py-2 text-xs text-diletto-gray">
+        /* PC でもカード表示（モバイル UI 流用、大画面では中央寄せで読みやすく） */
+        <ul className="space-y-2 max-w-4xl mx-auto w-full">
+          {employees.map((e) => {
+            const sum = summaryByEmployee.get(e.id)!;
+            return (
+              <li key={e.id}>
+                <button
+                  type="button"
+                  onClick={() => setDetailEmployeeId(e.id)}
+                  className="w-full text-left rounded-md border border-diletto-gray/10 bg-white p-3 active:bg-diletto-blue/5 hover:bg-diletto-blue/[0.02] transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <span className="font-bold text-sm md:text-base truncate">{e.name}</span>
+                      <span className="text-[11px] md:text-xs text-diletto-gray">
                         {e.employment_type === 'full_time' ? '常勤' : e.employment_type === 'part_time' ? 'パート' : '-'}
-                      </td>
-                      <td className="text-center px-2 py-2">
-                        {sum.submitted ? <Badge variant="success">済</Badge> : <Badge variant="neutral">未</Badge>}
-                      </td>
-                      <td className="text-center px-2 py-2 tabular-nums">{sum.counts.public_holiday || ''}</td>
-                      <td className="text-center px-2 py-2 tabular-nums">{sum.counts.paid_leave || ''}</td>
-                      <td className="text-center px-2 py-2 tabular-nums">{sum.counts.full_day_available || ''}</td>
-                      <td className="text-center px-2 py-2 tabular-nums">{sum.counts.am_off || ''}</td>
-                      <td className="text-center px-2 py-2 tabular-nums">{sum.counts.pm_off || ''}</td>
-                      <td className="text-right px-3 py-2 text-xs text-diletto-gray-light tabular-nums">
-                        {sum.submittedAt ? format(new Date(sum.submittedAt), 'M/d HH:mm') : '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* md 未満: カード一覧 */}
-          <ul className="md:hidden space-y-2">
-            {employees.map((e) => {
-              const sum = summaryByEmployee.get(e.id)!;
-              return (
-                <li key={e.id}>
-                  <button
-                    type="button"
-                    onClick={() => setDetailEmployeeId(e.id)}
-                    className="w-full text-left rounded-md border border-diletto-gray/10 bg-white p-3 active:bg-diletto-blue/5 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className="font-bold text-sm truncate">{e.name}</span>
-                        <span className="text-[11px] text-diletto-gray">
-                          {e.employment_type === 'full_time' ? '常勤' : e.employment_type === 'part_time' ? 'パート' : '-'}
-                        </span>
-                      </div>
-                      {sum.submitted ? <Badge variant="success">提出済</Badge> : <Badge variant="neutral">未提出</Badge>}
+                      </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1 text-center">
-                      {([
-                        ['公休', sum.counts.public_holiday, 'bg-purple-50 text-purple-700'],
-                        ['有給', sum.counts.paid_leave, 'bg-emerald-50 text-emerald-700'],
-                        ['出勤可', sum.counts.full_day_available, 'bg-amber-50 text-amber-700'],
-                        ['AM休', sum.counts.am_off, 'bg-blue-50 text-blue-700'],
-                        ['PM休', sum.counts.pm_off, 'bg-indigo-50 text-indigo-700'],
-                      ] as const).map(([label, count, cls]) => (
-                        <div key={label} className={`rounded px-1 py-1 ${cls}`}>
-                          <div className="text-[10px] font-bold leading-tight">{label}</div>
-                          <div className="text-sm font-bold tabular-nums leading-tight">{count}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {sum.submittedAt && (
-                      <div className="mt-2 text-[10px] text-diletto-gray-light tabular-nums text-right">
-                        提出: {format(new Date(sum.submittedAt), 'M/d HH:mm')}
+                    {sum.submitted ? <Badge variant="success">提出済</Badge> : <Badge variant="neutral">未提出</Badge>}
+                  </div>
+                  <div className="grid grid-cols-5 gap-1 md:gap-2 text-center">
+                    {([
+                      ['公休', sum.counts.public_holiday, 'bg-purple-50 text-purple-700'],
+                      ['有給', sum.counts.paid_leave, 'bg-emerald-50 text-emerald-700'],
+                      ['出勤可', sum.counts.full_day_available, 'bg-amber-50 text-amber-700'],
+                      ['AM休', sum.counts.am_off, 'bg-blue-50 text-blue-700'],
+                      ['PM休', sum.counts.pm_off, 'bg-indigo-50 text-indigo-700'],
+                    ] as const).map(([label, count, cls]) => (
+                      <div key={label} className={`rounded px-1 py-1 md:py-1.5 ${cls}`}>
+                        <div className="text-[10px] md:text-xs font-bold leading-tight">{label}</div>
+                        <div className="text-sm md:text-base font-bold tabular-nums leading-tight">{count}</div>
                       </div>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </>
+                    ))}
+                  </div>
+                  {sum.submittedAt && (
+                    <div className="mt-2 text-[10px] md:text-xs text-diletto-gray-light tabular-nums text-right">
+                      提出: {format(new Date(sum.submittedAt), 'M/d HH:mm')}
+                    </div>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {/* 詳細モーダル */}

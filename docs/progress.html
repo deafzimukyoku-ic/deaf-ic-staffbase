@@ -529,6 +529,56 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- Phase G: 個別メッセージ機能 -->
+<div class="phase">
+  <h2>Phase G: 個別メッセージ機能（admin/mgr → 社員 双方向） <span class="phase-pct">実装完了（migration 142 適用待ち）</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">仕様（確定）</td></tr>
+      <tr><td colspan="5">
+        <strong>方式</strong>: チャット風スレッド（双方向）。スレッドタイトル無し、参加者で識別。<br>
+        <strong>送信元</strong>: admin / manager（自施設の社員のみ）両方。<br>
+        <strong>宛先</strong>: 1名 または 複数選択。<br>
+        <strong>添付</strong>: 画像 + PDF のみ、各 10MB 上限。Excel/Word は不可。<br>
+        <strong>編集 / 削除</strong>: 送信者のみ可（ソフト削除）。<br>
+        <strong>通知</strong>: 既存🔔ベルに統合（direct_message タイプ追加）。
+      </td></tr>
+      <tr><td>migration 142</td><td class="files">supabase/migrations/142_direct_messages.sql</td><td><span class="status prog">進行中</span></td><td class="pct">0%</td><td>message_threads / message_thread_members / messages / message_attachments / message_reads + RLS + storage bucket "message-attachments"</td></tr>
+      <tr><td>型追加</td><td class="files">lib/types.ts</td><td><span class="status prog">進行中</span></td><td class="pct">0%</td><td>MessageThread / Message / MessageAttachment / MessageRead 型</td></tr>
+      <tr><td>共通コンポーネント</td><td class="files">components/messages/*.tsx</td><td><span class="status prog">進行中</span></td><td class="pct">0%</td><td>ThreadList / ThreadDetail / ComposeForm / AttachmentUpload</td></tr>
+      <tr><td>admin/mgr/employee ページ</td><td class="files">app/(admin)/admin/messages/page.tsx, app/(manager)/mgr/messages/page.tsx, app/(employee)/my/messages/page.tsx</td><td><span class="status prog">進行中</span></td><td class="pct">0%</td><td>左ペイン: スレッド一覧、右ペイン: メッセージ詳細</td></tr>
+      <tr><td>サイドバー導線</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx, app/(employee)/layout.tsx</td><td><span class="status prog">進行中</span></td><td class="pct">0%</td><td>「💬 個別連絡」リンク追加</td></tr>
+      <tr><td>🔔 ベル通知統合</td><td class="files">lib/notifications/types.ts, components/notifications/NotificationsBell.tsx</td><td><span class="status prog">進行中</span></td><td class="pct">0%</td><td>direct_message タイプ追加 + 未読時バッジ表示</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">①admin/mgr の権限範囲 RLS 厳密化 ②添付の MIME / サイズチェック（フロント+バックエンド両方） ③ソフト削除メッセージは閲覧時 "[削除されました]" 表示 ④manager は自管轄施設の社員にしか送れない ⑤通知音は出さない（CLAUDE.md §9 ろう者向け） ⑥複数宛先のスレッドはグループ扱い（参加者全員が読める）</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Phase F: 職員×児童 同席日数カウント -->
+<div class="phase">
+  <h2>Phase F: 職員×児童 同席日数カウント（月次） <span class="phase-pct">進行中</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">仕様（確定）</td></tr>
+      <tr><td colspan="5">
+        <strong>目的</strong>: 任意の月で「各職員 × 各児童」が施設に同時にいた日数を集計。<br>
+        <strong>出勤判定</strong>: shift_assignments の start_time/end_time が両方あり、assignment_type が実勤務シフト（早番/中番/遅番など、休暇は除外）。<br>
+        <strong>児童利用判定</strong>: schedule_entries で pickup_time または dropoff_time あり、attendance_status ∉ {absent, leave, waitlist}。<br>
+        <strong>重複判定</strong>: 同日かつ時間帯が重なる（max(staff_start, child_pickup) &lt; min(staff_end, child_dropoff)）。<br>
+        <strong>UI</strong>: 行=児童、列=職員、セル=同席日数。月切替・印刷ボタン・A4 横レイアウト。<br>
+        <strong>アクセス権</strong>: admin / manager 両方。1事業所単位で集計。
+      </td></tr>
+      <tr><td>StaffChildOverlapView コンポーネント</td><td class="files">components/shift/StaffChildOverlapView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>月選択 + 集計ロジック + 表 + 印刷スタイル + 0回行/列フィルタ</td></tr>
+      <tr><td>admin ページ</td><td class="files">app/(admin)/admin/shifts/output/staff-child-overlap/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>scope="admin" の薄いラッパー</td></tr>
+      <tr><td>manager ページ</td><td class="files">app/(manager)/mgr/shifts/output/staff-child-overlap/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>scope="manager" の薄いラッパー</td></tr>
+      <tr><td>サイドバー導線追加</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>シフトモード サイドバー「💰 利用料金表」の下に「👥 同席日数」を追加</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">①シフト・送迎モード両方で動作 ②時間が重なっていない日はカウントされない ③0回の行/列も表示するか（印刷で全員一覧したい場合の要件） ④printscope css で A4 横余白調整 ⑤兼任職員（employee_facilities）も対象施設で出勤していれば対象に含める</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- Phase E: モバイル対応 + 公開非公開フラグ -->
 <div class="phase">
   <h2>Phase E: モバイル対応 + 4機能の公開/非公開フラグ <span class="phase-pct">進行中</span></h2>

@@ -86,7 +86,7 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>生年月日 *</Label>
-              <Input type="date" value={data.birth_date} onChange={(e) => update('birth_date', e.target.value)} />
+              <Input type="date" value={data.birth_date ?? ''} onChange={(e) => update('birth_date', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>性別</Label>
@@ -102,17 +102,17 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
             <PostalCodeField
               label="郵便番号"
               required
-              value={data.postal_code}
+              value={data.postal_code ?? ''}
               onChange={(v) => update('postal_code', v)}
-              currentAddress={data.address}
+              currentAddress={data.address ?? ''}
               onAddressFound={(addr) => update('address', addr)}
             />
             <div className="col-span-2 space-y-2">
               <Label>住所 *</Label>
-              <Input value={data.address} onChange={(e) => update('address', e.target.value)} />
+              <Input value={data.address ?? ''} onChange={(e) => update('address', e.target.value)} />
             </div>
           </div>
-          <Field label="電話番号 *" value={data.phone} onChange={(v) => update('phone', v)} placeholder="090-0000-0000" />
+          <Field label="電話番号 *" value={data.phone ?? ''} onChange={(v) => update('phone', v)} placeholder="090-0000-0000" />
 
           {showExtended && <>
             {/* 施設 → グループ → 役職 */}
@@ -140,7 +140,7 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>入社日 *</Label>
-                <Input type="date" value={data.join_date} onChange={(e) => update('join_date', e.target.value)} />
+                <Input type="date" value={data.join_date ?? ''} onChange={(e) => update('join_date', e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>勤続年数</Label>

@@ -37,12 +37,13 @@ export function SubordinateTable({ employees }: Props) {
               <TableHead className="w-28">役職</TableHead>
               <TableHead className="w-24">入社日</TableHead>
               <TableHead className="w-20">ステータス</TableHead>
+              <TableHead className="w-32">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {employees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-diletto-gray-light">
+                <TableCell colSpan={6} className="h-24 text-center text-diletto-gray-light">
                   担当施設に所属する社員がいません
                 </TableCell>
               </TableRow>
@@ -69,6 +70,17 @@ export function SubordinateTable({ employees }: Props) {
                       <Badge className="bg-diletto-red/[0.06] text-diletto-red border-diletto-red/15">
                         退職
                       </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {emp.status === 'active' && (
+                      <Link
+                        href={`/mgr/messages?to=${emp.id}`}
+                        className="text-xs px-2 py-1 rounded-md border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-all whitespace-nowrap inline-block"
+                        title={`${emp.last_name} ${emp.first_name} さんに個別連絡`}
+                      >
+                        💬 個別連絡
+                      </Link>
                     )}
                   </TableCell>
                 </TableRow>

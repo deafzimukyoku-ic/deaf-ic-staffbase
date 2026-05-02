@@ -9,7 +9,9 @@ export type NotificationEventType =
   | 'compliance_ack'
   | 'training_submission'
   | 'announcement_read'
-  | 'manual_read';
+  | 'manual_read'
+  /* Phase G / migration 142: 個別メッセージを受信したとき、受信者に向けて挿入される */
+  | 'direct_message';
 
 export interface NotificationRow {
   id: string;
@@ -59,5 +61,13 @@ export const EVENT_META: Record<
     icon: '📖',
     verb: 'を既読にしました',
     href: (id) => (id ? `/admin/manuals/${id}` : '/admin/manuals'),
+  },
+  direct_message: {
+    label: '個別連絡',
+    icon: '💬',
+    verb: 'からメッセージが届きました',
+    /* id にはスレッド ID を入れて、admin / mgr / employee それぞれのスレッド一覧に飛ぶ。
+       ここでは admin 向けにフォールバック。実際のリンクは bell 側で role に応じて切替えても良い。 */
+    href: () => '/admin/messages',
   },
 };
