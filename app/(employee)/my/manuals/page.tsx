@@ -53,6 +53,7 @@ export default function MyManualsPage() {
           .from('manuals')
           .select('*')
           .eq('tenant_id', me.tenant_id)
+          .eq('is_published', true)
           .order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true });
 
         const { data: reads } = await supabase

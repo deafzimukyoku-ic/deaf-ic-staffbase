@@ -17,6 +17,8 @@ import { PersonInline } from '@/components/admin/PersonInline';
 import { ReorderButtons } from '@/components/admin/ReorderButtons';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
+import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
+import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
@@ -192,9 +194,17 @@ export default function AdminTrainingsPage() {
   if (!selectedCategory) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">研修管理</h1>
-          <CategoryManagerModal type="training" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <BulkPublishButtons
+              table="trainings"
+              items={trainings.map((t) => ({ id: t.id, is_published: t.is_published ?? true }))}
+              scopeLabel="全体"
+              onChanged={() => tenantId && reloadTrainings(tenantId)}
+            />
+            <CategoryManagerModal type="training" />
+          </div>
         </div>
 
         <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して研修内容を確認・編集してください。新規作成はカテゴリを開いて行います。</p>
@@ -249,15 +259,21 @@ export default function AdminTrainingsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink">
+      <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
           ← 戻る
         </Button>
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{selectedCategory.icon}</span>
-          <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-xl shrink-0">{selectedCategory.icon}</span>
+          <h1 className="text-lg sm:text-2xl font-bold break-words">{selectedCategory.name}</h1>
         </div>
-        <div className="ml-auto">
+        <div className="flex items-center gap-2 flex-wrap ml-auto">
+          <BulkPublishButtons
+            table="trainings"
+            items={visible.map((t) => ({ id: t.id, is_published: t.is_published ?? true }))}
+            scopeLabel="このカテゴリ"
+            onChanged={() => tenantId && reloadTrainings(tenantId)}
+          />
           <Button onClick={() => {
             setEditingTraining(null);
             setBlocks([]); setForm({ title: '', body: '', pdf_storage_path: '', youtube_url: '', category_id: selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
@@ -270,10 +286,10 @@ export default function AdminTrainingsPage() {
       <div className="space-y-3">
         {visible.map((t) => (
           <Card key={t.id} className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden">
-            <CardContent className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 py-4">
+            <CardContent className="flex flex-wrap items-center gap-3 py-4">
               <ReorderButtons table="trainings" itemId={t.id} items={visible} onReordered={() => tenantId && reloadTrainings(tenantId)} />
-              <div className="min-w-0">
-                <p className="font-bold text-diletto-ink truncate">{t.title}</p>
+              <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
+                <p className="font-bold text-diletto-ink break-words md:truncate">{t.title}</p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <TargetAttributeBadges
                     targetType={t.target_type}
@@ -288,11 +304,17 @@ export default function AdminTrainingsPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-wrap order-2 md:order-none">
                 <NewBadge createdAt={t.created_at} />
                 <CategoryBadge category={t.category_id ? catMap.get(t.category_id) : null} />
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-wrap order-3 md:order-none">
+                <PublishToggleButton
+                  table="trainings"
+                  id={t.id}
+                  isPublished={t.is_published ?? true}
+                  onChanged={() => tenantId && reloadTrainings(tenantId)}
+                />
                 <Button variant="ghost" size="sm" onClick={() => openEdit(t)} className="h-8 rounded-md text-xs font-bold">編集</Button>
                 <Link href={`/admin/trainings/${t.id}/submissions`}>
                   <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold">提出一覧</Button>

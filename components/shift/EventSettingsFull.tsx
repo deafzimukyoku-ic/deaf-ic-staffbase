@@ -235,7 +235,8 @@ export default function EventSettingsFull({ scope }: Props) {
         <div className="text-sm" style={{ color: 'var(--ink-3)' }}>読み込み中...</div>
       ) : (
         <>
-          <div className="rounded border" style={{ borderColor: 'var(--rule)', background: 'var(--white)' }}>
+          {/* md 以上: テーブル */}
+          <div className="hidden md:block rounded border" style={{ borderColor: 'var(--rule)', background: 'var(--white)' }}>
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: 'var(--bg)', borderBottom: '1px solid var(--rule-strong)' }}>
@@ -310,6 +311,80 @@ export default function EventSettingsFull({ scope }: Props) {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* md 未満: カード一覧 */}
+          <div className="md:hidden flex flex-col gap-2">
+            {rows.length === 0 ? (
+              <div
+                className="rounded p-4 text-center text-sm"
+                style={{ borderColor: 'var(--rule)', border: '1px solid var(--rule)', background: 'var(--white)', color: 'var(--ink-3)' }}
+              >
+                この月のイベントはまだありません
+              </div>
+            ) : (
+              rows.map((r) => {
+                const dt = /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? new Date(r.date) : null;
+                const dateLabel = dt ? format(dt, 'M月d日（E）', { locale: ja }) : '日付を選択';
+                return (
+                  <div
+                    key={r.id}
+                    className="rounded p-3 flex flex-col gap-2"
+                    style={{ border: '1px solid var(--rule)', background: 'var(--white)' }}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-semibold" style={{ color: 'var(--ink-3)' }}>日付</label>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          dateAnchorRef.current = e.currentTarget;
+                          setOpenRowId(r.id);
+                        }}
+                        className="outline-none w-full px-2 py-2 rounded text-left transition-colors hover:bg-[var(--accent-pale)]"
+                        style={{ background: 'var(--white)', border: '1px solid var(--rule)', color: 'var(--ink)' }}
+                      >
+                        {dateLabel}
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-semibold" style={{ color: 'var(--ink-3)' }}>イベント名</label>
+                      <input
+                        type="text"
+                        value={r.name}
+                        onChange={(e) => updateRow(r.id, { name: e.target.value })}
+                        placeholder="例) ピザづくり"
+                        className="outline-none w-full px-2 py-2 rounded"
+                        style={{ background: 'var(--white)', border: '1px solid var(--rule)' }}
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1 flex flex-col gap-1">
+                        <label className="text-[11px] font-semibold" style={{ color: 'var(--ink-3)' }}>金額（円）</label>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          step={1}
+                          value={r.price}
+                          onChange={(e) => updateRow(r.id, { price: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                          className="outline-none w-full px-2 py-2 rounded text-right"
+                          style={{ background: 'var(--white)', border: '1px solid var(--rule)' }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeRow(r)}
+                        className="text-xs font-semibold px-3 py-2 rounded"
+                        style={{ color: 'var(--red)', background: 'transparent', border: '1px solid var(--red)' }}
+                        aria-label={`${r.name} を削除`}
+                      >
+                        削除
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           <div className="flex items-center gap-2">

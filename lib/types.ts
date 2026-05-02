@@ -540,6 +540,8 @@ export interface Manual {
   target_type: 'all' | 'facility';
   target_facility_ids: string[];
   target_position_ids: string[];
+  /** 公開フラグ。employee は is_published=true のみ閲覧可（migration 141） */
+  is_published: boolean;
   created_by: string | null;
   updated_by?: string | null;
   created_at: string;
@@ -589,6 +591,8 @@ export interface ComplianceDoc {
   target_position_ids: string[];
   sort_order?: number | null;
   content_blocks?: ContentBlockJson[];
+  /** 公開フラグ。employee は is_published=true のみ閲覧可（migration 141） */
+  is_published: boolean;
   created_by?: string;
   updated_by?: string | null;
   creator?: PersonRef | null;
@@ -617,6 +621,8 @@ export interface Training {
   target_position_ids: string[];
   sort_order?: number | null;
   content_blocks?: ContentBlockJson[];
+  /** 公開フラグ。employee は is_published=true のみ閲覧可（migration 141） */
+  is_published: boolean;
   created_by?: string;
   updated_by?: string | null;
   creator?: PersonRef | null;
@@ -646,6 +652,8 @@ export interface Announcement {
   target_position_ids: string[];
   sort_order: number | null;
   content_blocks?: ContentBlockJson[];
+  /** 公開フラグ。employee は is_published=true のみ閲覧可（migration 141） */
+  is_published: boolean;
   created_at: string;
   created_by: string | null;
   updated_by?: string | null;

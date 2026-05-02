@@ -529,6 +529,27 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- Phase E: モバイル対応 + 公開非公開フラグ -->
+<div class="phase">
+  <h2>Phase E: モバイル対応 + 4機能の公開/非公開フラグ <span class="phase-pct">進行中</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">E-1: モバイル対応（admin/mgr 3画面）</td></tr>
+      <tr><td>休み希望（admin/mgr）モバイル化</td><td class="files">components/shift/AdminRequestsView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>md 未満はカード型へ切替（職員ごと=1カード）。md 以上はテーブル維持</td></tr>
+      <tr><td>児童管理 モバイル化</td><td class="files">components/shift/ChildrenSettingsFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>md 未満はカード型。D&D は↑↓ボタンに代替</td></tr>
+      <tr><td>イベント設定 モバイル化</td><td class="files">components/shift/EventSettingsFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>md 未満はスタックカード行</td></tr>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">E-2: 公開/非公開フラグ追加（4機能）</td></tr>
+      <tr><td>migration 141</td><td class="files">supabase/migrations/141_publish_visibility.sql</td><td><span class="status prog">SQL作成済・適用待ち</span></td><td class="pct">90%</td><td>announcements / compliance_documents / trainings / manuals に is_published BOOLEAN NOT NULL DEFAULT TRUE 追加 + employee 用 RLS を is_published=true で絞る。<strong>ユーザーに Supabase ダッシュボードで適用してもらう</strong></td></tr>
+      <tr><td>型拡張</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>Announcement / ComplianceDoc / Training / Manual に is_published 追加</td></tr>
+      <tr><td>共通 PublishToggleButton 追加</td><td class="files">components/admin/PublishToggleButton.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>4 機能で再利用する公開/非公開切替ボタン</td></tr>
+      <tr><td>admin/mgr UI: 公開トグル</td><td class="files">app/(admin)/admin/{announcements,compliance,trainings,manuals}, app/(manager)/mgr/{...}</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>一覧カードに公開/非公開バッジ＋ワンクリック切替ボタン（8ページ全て対応）</td></tr>
+      <tr><td>employee 側クエリで is_published=true 絞込</td><td class="files">app/(employee)/my/{announcements,compliance,trainings,manuals}/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>クライアント側でも .eq('is_published', true) を追加（RLS の二重防御）</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">①既存データはデフォルト公開（true）で運用継続を保証 ②非公開→公開は admin/mgr のみ可能 ③employee 側はクエリ＋RLS の二重で非公開分が絶対に見えないこと ④モバイル幅でも 44px タッチ対象を確保 ⑤テーブル→カード切替は md (768px) 境界で行う</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- Phase 66: イベント設定 + 利用料金表 -->
 <div class="phase">
   <h2>Phase 66: イベント設定 + 利用料金表（5月分から運用） <span class="phase-pct">完了 100%（migration 126〜128 適用済 + 動作確認済）</span></h2>

@@ -69,11 +69,12 @@ export default function MyCompliancePage() {
         position_id: me.position_id,
       });
 
-      // 全遵守事項を取得
+      // 全遵守事項を取得（公開分のみ）
       const { data: compDocs } = await supabase
         .from('compliance_documents')
         .select('*')
         .eq('tenant_id', me.tenant_id)
+        .eq('is_published', true)
         .order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true });
 
       // 自分の所属 facility 集合（主所属 + 兼任先 / migration 130）

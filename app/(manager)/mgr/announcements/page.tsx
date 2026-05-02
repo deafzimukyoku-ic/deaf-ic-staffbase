@@ -17,6 +17,8 @@ import { PersonInline } from '@/components/admin/PersonInline';
 import { ReorderButtons } from '@/components/admin/ReorderButtons';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
+import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
+import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
@@ -236,9 +238,17 @@ export default function ManagerAnnouncementsPage() {
     if (!selectedCategory) {
         return (
             <div>
-                <div className="flex items-center justify-between mb-6 gap-3">
+                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                     <h1 className="text-2xl font-bold whitespace-nowrap">お知らせ</h1>
-                    <CategoryManagerModal type="announcement" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <BulkPublishButtons
+                            table="announcements"
+                            items={announcements.map((a) => ({ id: a.id, is_published: a.is_published ?? true }))}
+                            scopeLabel="全体"
+                            onChanged={() => me && reloadAnnouncements(me.tenant_id)}
+                        />
+                        <CategoryManagerModal type="announcement" />
+                    </div>
                 </div>
 
                 <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して内容を確認・投稿してください。新規投稿はカテゴリを開いて行います。</p>
@@ -292,15 +302,21 @@ export default function ManagerAnnouncementsPage() {
 
     return (
         <div>
-            <div className="flex items-center gap-4 mb-6">
-                <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink">
+            <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
+                <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
                     ← 戻る
                 </Button>
-                <div className="flex items-center gap-2">
-                    <span className="text-xl">{selectedCategory.icon}</span>
-                    <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-xl shrink-0">{selectedCategory.icon}</span>
+                    <h1 className="text-lg sm:text-2xl font-bold break-words">{selectedCategory.name}</h1>
                 </div>
-                <div className="ml-auto">
+                <div className="flex items-center gap-2 flex-wrap ml-auto">
+                    <BulkPublishButtons
+                        table="announcements"
+                        items={visible.map((a) => ({ id: a.id, is_published: a.is_published ?? true }))}
+                        scopeLabel="このカテゴリ"
+                        onChanged={() => me && reloadAnnouncements(me.tenant_id)}
+                    />
                     <Button onClick={openNew} className="bg-diletto-ink hover:bg-black text-white rounded-xl h-11 font-bold px-8 shadow-sm transition-all hover:shadow-md">
                         + 新規投稿
                     </Button>
@@ -314,25 +330,31 @@ export default function ManagerAnnouncementsPage() {
                     return (
                         <Card key={a.id} className="border-diletto-gray/5 shadow-sm rounded-xl overflow-hidden hover:border-diletto-blue/20 transition-all bg-white">
                             <CardContent className="py-6">
-                                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 mb-2">
+                                <div className="flex flex-wrap items-center gap-3 mb-2">
                                     <ReorderButtons table="announcements" itemId={a.id} items={visible} onReordered={() => me && reloadAnnouncements(me.tenant_id)} />
-                                    <div className="min-w-0">
-                                        <p className="font-bold text-diletto-ink text-lg truncate">{a.title}</p>
+                                    <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
+                                        <p className="font-bold text-diletto-ink text-lg break-words md:truncate">{a.title}</p>
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <PersonInline label="作成者" person={a.creator} />
                                             {a.created_by !== a.updated_by && <PersonInline label="編集者" person={a.editor} />}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                    <div className="flex items-center gap-2 flex-wrap order-2 md:order-none">
                                         <NewBadge createdAt={a.created_at} />
                                         <CategoryBadge category={a.category_id ? catMap.get(a.category_id) : null} />
                                         <p className="text-xs text-diletto-gray-light font-medium ml-2">
                                             {new Date(a.created_at).toLocaleDateString('ja-JP')}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                    <div className="flex items-center gap-2 flex-wrap order-3 md:order-none">
                                         {canEdit && (
                                             <>
+                                                <PublishToggleButton
+                                                    table="announcements"
+                                                    id={a.id}
+                                                    isPublished={a.is_published ?? true}
+                                                    onChanged={() => me && reloadAnnouncements(me.tenant_id)}
+                                                />
                                                 <Button variant="ghost" size="sm" onClick={() => openEdit(a)} className="h-8 rounded-md text-xs font-bold">編集</Button>
                                                 <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-diletto-red" onClick={() => handleDelete(a.id)}>削除</Button>
                                             </>

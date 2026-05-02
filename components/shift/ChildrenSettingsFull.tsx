@@ -461,7 +461,8 @@ export default function ChildrenSettingsFull({ scope }: Props) {
         </div>
       )}
 
-      <div className="overflow-x-auto" style={{ borderRadius: '8px', border: '1px solid var(--rule)' }}>
+      {/* md 以上: テーブル */}
+      <div className="hidden md:block overflow-x-auto" style={{ borderRadius: '8px', border: '1px solid var(--rule)' }}>
         <table className="w-full border-collapse" style={{ fontSize: '0.85rem' }}>
           <thead>
             <tr>
@@ -635,6 +636,104 @@ export default function ChildrenSettingsFull({ scope }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* md 未満: カード一覧 */}
+      <ul className="md:hidden flex flex-col gap-2">
+        {visibleChildren.length === 0 && (
+          <li
+            className="rounded-md p-4 text-center text-sm"
+            style={{ background: 'var(--white)', border: '1px solid var(--rule)', color: 'var(--ink-3)' }}
+          >
+            児童が登録されていません
+          </li>
+        )}
+        {visibleChildren.map((c, idx) => {
+          const facAreas = facilityAreas[c.facility_id] ?? { pickup: [], dropoff: [] };
+          const childPickupAreas = [...facAreas.pickup, ...(c.custom_pickup_areas ?? [])];
+          const childDropoffAreas = [...facAreas.dropoff, ...(c.custom_dropoff_areas ?? [])];
+          const pickupCount = filterValidLabels(c.pickup_area_labels, childPickupAreas).length;
+          const dropoffCount = filterValidLabels(c.dropoff_area_labels, childDropoffAreas).length;
+          const free = isFreeOfCharge(c.grade_type, c.municipality ?? null);
+          const tier = (c.copay_tier ?? 'zero') as CopayTier;
+          const cap = resolveCopayCap({ copayTier: tier, copayFreeformAmount: c.copay_freeform_amount ?? null });
+          return (
+            <li key={c.id}>
+              <div
+                onClick={() => handleEdit(c)}
+                className="rounded-md p-3 transition-colors active:bg-[var(--accent-pale)] cursor-pointer"
+                style={{
+                  background: getGradeRowBg(c.grade_type),
+                  border: '1px solid var(--rule)',
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold text-sm truncate" style={{ color: 'var(--ink)' }}>{c.name}</span>
+                    <Badge variant="info">{GRADE_LABELS[c.grade_type]}</Badge>
+                  </div>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => idx > 0 && handleReorderChildren(idx, idx - 1)}
+                      disabled={idx === 0}
+                      className="px-2 py-1 rounded text-xs font-bold disabled:opacity-30"
+                      style={{ border: '1px solid var(--rule)', background: 'var(--white)' }}
+                      aria-label="上へ移動"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => idx < visibleChildren.length - 1 && handleReorderChildren(idx, idx + 1)}
+                      disabled={idx === visibleChildren.length - 1}
+                      className="px-2 py-1 rounded text-xs font-bold disabled:opacity-30"
+                      style={{ border: '1px solid var(--rule)', background: 'var(--white)' }}
+                      aria-label="下へ移動"
+                    >
+                      ↓
+                    </button>
+                    <Badge variant={c.is_active ? 'success' : 'neutral'}>{c.is_active ? '在籍' : '退籍'}</Badge>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span style={{ color: 'var(--ink-3)' }}>上限</span>
+                    <span className="tabular-nums">
+                      {free ? (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: 'var(--accent-pale)', color: 'var(--accent)', border: '1px solid var(--accent)' }}>無償化</span>
+                      ) : cap == null || cap <= 0 ? (
+                        <span style={{ color: 'var(--ink-3)' }}>¥0</span>
+                      ) : (
+                        <span style={{ color: 'var(--green)', fontWeight: 700 }}>¥{cap.toLocaleString('ja-JP')}</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span style={{ color: 'var(--ink-3)' }}>公文</span>
+                    <span className="tabular-nums">
+                      {c.kumon_monthly_fee != null && c.kumon_monthly_fee > 0
+                        ? <span style={{ color: 'var(--red)', fontWeight: 700 }}>¥{c.kumon_monthly_fee.toLocaleString('ja-JP')}</span>
+                        : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span style={{ color: 'var(--ink-3)' }}>迎マーク</span>
+                    <span style={{ color: pickupCount > 0 ? 'var(--accent)' : 'var(--ink-3)' }}>
+                      {pickupCount === 0 ? '—' : `${pickupCount}件`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span style={{ color: 'var(--ink-3)' }}>送マーク</span>
+                    <span style={{ color: dropoffCount > 0 ? 'var(--green)' : 'var(--ink-3)' }}>
+                      {dropoffCount === 0 ? '—' : `${dropoffCount}件`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
 
       <Modal
         isOpen={!!editing}

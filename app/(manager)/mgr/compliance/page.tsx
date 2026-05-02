@@ -26,6 +26,8 @@ import { nextSortOrder } from '@/lib/sort-helpers';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
+import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
+import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
 import type { Category, ComplianceDoc, Position } from '@/lib/types';
@@ -273,9 +275,17 @@ export default function ManagerCompliancePage() {
   if (!selectedCategory) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6 gap-3">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <h1 className="text-2xl font-bold whitespace-nowrap">遵守事項</h1>
-          <CategoryManagerModal type="compliance" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <BulkPublishButtons
+              table="compliance_documents"
+              items={docs.map((d) => ({ id: d.id, is_published: d.is_published ?? true }))}
+              scopeLabel="全体"
+              onChanged={() => me && loadDocs(me.tenant_id)}
+            />
+            <CategoryManagerModal type="compliance" />
+          </div>
         </div>
 
         <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して内容を確認・編集してください。新規作成はカテゴリを開いて行います。</p>
@@ -329,15 +339,21 @@ export default function ManagerCompliancePage() {
 
   return (
     <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink">
+      <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
           ← 戻る
         </Button>
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{selectedCategory.icon}</span>
-          <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-xl shrink-0">{selectedCategory.icon}</span>
+          <h1 className="text-lg sm:text-2xl font-bold break-words">{selectedCategory.name}</h1>
         </div>
-        <div className="ml-auto">
+        <div className="flex items-center gap-2 flex-wrap ml-auto">
+          <BulkPublishButtons
+            table="compliance_documents"
+            items={visible.map((d) => ({ id: d.id, is_published: d.is_published ?? true }))}
+            scopeLabel="このカテゴリ"
+            onChanged={() => me && loadDocs(me.tenant_id)}
+          />
           <Button onClick={openNew}>新規作成</Button>
         </div>
       </div>
@@ -349,20 +365,28 @@ export default function ManagerCompliancePage() {
           return (
             <Card key={doc.id} className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden">
               <CardHeader className="py-4">
-                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <ReorderButtons table="compliance_documents" itemId={doc.id} items={visible} onReordered={() => me && loadDocs(me.tenant_id)} />
-                  <div className="min-w-0">
-                    <CardTitle className="text-base font-bold text-diletto-ink truncate">{doc.title || '（無題）'}</CardTitle>
+                  <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
+                    <CardTitle className="text-base font-bold text-diletto-ink break-words md:truncate">{doc.title || '（無題）'}</CardTitle>
                     <div className="flex items-center gap-2 flex-wrap">
                       <PersonInline label="作成者" person={doc.creator} />
                       {doc.created_by !== doc.updated_by && <PersonInline label="編集者" person={doc.editor} />}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-wrap order-2 md:order-none">
                     <NewBadge createdAt={doc.created_at || doc.updated_at} />
                     <CategoryBadge category={doc.category_id ? catMap.get(doc.category_id) : null} />
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex gap-2 flex-wrap order-3 md:order-none">
+                    {canEdit && (
+                      <PublishToggleButton
+                        table="compliance_documents"
+                        id={doc.id}
+                        isPublished={doc.is_published ?? true}
+                        onChanged={() => me && loadDocs(me.tenant_id)}
+                      />
+                    )}
                     <Button variant="outline" size="sm" onClick={() => openAckStatus(doc)} className="h-8 rounded-md text-xs font-bold">
                       同意状況
                     </Button>

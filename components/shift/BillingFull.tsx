@@ -464,10 +464,10 @@ export default function BillingFull({ scope }: Props) {
         <h1 className="text-lg font-bold" style={{ color: 'var(--ink)' }}>
           💰 利用料金表
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="secondary" onClick={() => changeMonth(-1)}>‹ 前の月</Button>
           <div
-            className="px-3 py-1.5 rounded font-bold"
+            className="px-3 py-1.5 rounded font-bold whitespace-nowrap"
             style={{ background: 'var(--white)', border: '1.5px solid var(--accent)', color: 'var(--ink)', minWidth: '110px', textAlign: 'center' }}
           >
             {year}年{month}月
@@ -501,13 +501,13 @@ export default function BillingFull({ scope }: Props) {
             {/* Excel 風の縦横線: 全セルに 1px、ヘッダ下線とフッタ上線は太線 */}
             <thead>
               <tr style={{ background: 'var(--bg)' }}>
-                <th className="px-2 py-2 text-center font-semibold" style={{ width: '40px' }}>#</th>
-                <th className="px-2 py-2 text-left font-semibold" style={{ width: '90px' }}>市町村</th>
-                <th className="px-2 py-2 text-left font-semibold" style={{ width: '140px' }}>氏名</th>
-                <th className="px-2 py-2 text-right font-semibold" style={{ width: '70px' }}>出席日数</th>
-                <th className="px-2 py-2 text-right font-semibold" style={{ width: '110px' }}>利用負担額</th>
-                <th className="px-2 py-2 text-right font-semibold" style={{ width: '90px' }}>おやつ消耗品代</th>
-                <th className="px-2 py-2 text-right font-semibold" style={{ width: '90px' }}>公文代</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '40px' }}>#</th>
+                <th className="px-2 py-2 text-left font-semibold whitespace-nowrap" style={{ width: '90px' }}>市町村</th>
+                <th className="px-2 py-2 text-left font-semibold whitespace-nowrap" style={{ width: '140px' }}>氏名</th>
+                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
+                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
+                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '90px' }}>おやつ消耗品代</th>
+                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '90px' }}>公文代</th>
                 {events.map((ev) => {
                   /* イベント名が長いと列幅で折り返してしまうので、文字数に応じて自動縮小して 1 行に収める。
                      scaleX 系よりフォントサイズ縮小 + 微妙なトラッキング詰めの方が読みやすい。 */
@@ -533,8 +533,8 @@ export default function BillingFull({ scope }: Props) {
                     </th>
                   );
                 })}
-                <th className="px-2 py-2 text-right font-semibold" style={{ width: '110px' }}>請求額</th>
-                <th className="px-2 py-2 text-center font-semibold" style={{ width: '120px' }}>受取（入金）日</th>
+                <th className="px-2 py-2 text-right font-semibold whitespace-nowrap" style={{ width: '110px' }}>請求額</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '120px' }}>受取（入金）日</th>
               </tr>
             </thead>
             <tbody>
@@ -548,9 +548,9 @@ export default function BillingFull({ scope }: Props) {
                   prev != null && underElem(prev.child.gradeType) !== underElem(r.child.gradeType);
                 return (
                   <tr key={r.childId} className={isGroupBoundary ? 'billing-group-divider' : ''}>
-                    <td className="px-2 py-2 text-center">{idx + 1}</td>
-                    <td className="px-2 py-2">{r.municipality ?? ''}</td>
-                    <td className="px-2 py-2 font-semibold">{r.childName}</td>
+                    <td className="px-2 py-2 text-center whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-2 py-2 whitespace-nowrap">{r.municipality ?? ''}</td>
+                    <td className="px-2 py-2 font-semibold whitespace-nowrap">{r.childName}</td>
                     <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {r.attendanceDays}
                     </td>

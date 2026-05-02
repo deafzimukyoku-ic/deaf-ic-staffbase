@@ -19,6 +19,8 @@ import { ReorderButtons } from '@/components/admin/ReorderButtons';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
+import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
+import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { toast } from 'sonner';
 import type { Manual, Category, Facility, Position } from '@/lib/types';
 
@@ -148,9 +150,17 @@ export default function AdminManualsPage() {
   if (!selectedCategory) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">業務マニュアル</h1>
-          <CategoryManagerModal type="manual" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <BulkPublishButtons
+              table="manuals"
+              items={manuals.map((m) => ({ id: m.id, is_published: m.is_published ?? true }))}
+              scopeLabel="全体"
+              onChanged={() => tenantId && reloadManuals(tenantId)}
+            />
+            <CategoryManagerModal type="manual" />
+          </div>
         </div>
 
         <p className="text-sm text-diletto-gray mb-6">カテゴリを選択してマニュアルを確認・修正してください。新規投稿はカテゴリを開いて行います。</p>
@@ -203,15 +213,21 @@ export default function AdminManualsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink">
+      <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
           ← 戻る
         </Button>
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{selectedCategory.icon}</span>
-          <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-xl shrink-0">{selectedCategory.icon}</span>
+          <h1 className="text-lg sm:text-2xl font-bold break-words">{selectedCategory.name}</h1>
         </div>
-        <div className="ml-auto">
+        <div className="flex items-center gap-2 flex-wrap ml-auto">
+          <BulkPublishButtons
+            table="manuals"
+            items={visible.map((m) => ({ id: m.id, is_published: m.is_published ?? true }))}
+            scopeLabel="このカテゴリ"
+            onChanged={() => tenantId && reloadManuals(tenantId)}
+          />
           <Button onClick={() => {
             setForm({ title: '', category_id: selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
             setBlocks([]);
@@ -224,14 +240,20 @@ export default function AdminManualsPage() {
         {visible.map((m) => (
           <Card key={m.id} className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden">
             <CardContent className="py-4">
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <ReorderButtons table="manuals" itemId={m.id} items={visible} onReordered={() => tenantId && reloadManuals(tenantId)} />
-                <div className="min-w-0">
-                  <p className="font-bold text-diletto-ink truncate">{m.title}</p>
+                <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
+                  <p className="font-bold text-diletto-ink break-words md:truncate">{m.title}</p>
                   <PersonInline label="作成者" person={m.creator} />
                   {m.created_by !== m.updated_by && <PersonInline label="編集者" person={m.editor} />}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-wrap order-2 md:order-none">
+                  <PublishToggleButton
+                    table="manuals"
+                    id={m.id}
+                    isPublished={m.is_published ?? true}
+                    onChanged={() => tenantId && reloadManuals(tenantId)}
+                  />
                   <NewBadge createdAt={m.created_at} />
                   <CategoryBadge category={m.category_id ? catMap.get(m.category_id) : null} />
                   {m.pdf_storage_path && (

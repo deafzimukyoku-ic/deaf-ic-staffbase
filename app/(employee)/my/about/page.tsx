@@ -84,10 +84,15 @@ export default function AboutPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex w-full overflow-x-auto no-scrollbar">
+        {/* sm 未満: 2 行 grid（3列×2段）。sm 以上: 1 行 flex */}
+        <TabsList className="grid grid-cols-3 sm:flex w-full h-auto sm:h-8 gap-1 sm:gap-0">
           {TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="shrink-0 flex-1 text-xs sm:text-sm px-2 sm:px-3">
-              <span className="mr-1">{tab.icon}</span>{tab.label}
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="text-[11px] sm:text-sm px-1.5 sm:px-3 py-1.5 sm:py-0 sm:flex-1 leading-tight whitespace-nowrap"
+            >
+              <span className="mr-0.5 sm:mr-1">{tab.icon}</span>{tab.label}
             </TabsTrigger>
           ))}
         </TabsList>

@@ -19,6 +19,8 @@ import { nextSortOrder } from '@/lib/sort-helpers';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { FacilityScopeSelector, TargetScopeBadge } from '@/components/admin/FacilityScopeSelector';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
+import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
+import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { enqueueNotification } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
 import type { Announcement, Category, Facility, TargetType, Position } from '@/lib/types';
@@ -141,9 +143,17 @@ export default function AdminAnnouncementsPage() {
   if (!selectedCategory) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">お知らせ</h1>
-          <CategoryManagerModal type="announcement" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <BulkPublishButtons
+              table="announcements"
+              items={announcements.map((a) => ({ id: a.id, is_published: a.is_published ?? true }))}
+              scopeLabel="全体"
+              onChanged={() => tenantId && reloadAnnouncements(tenantId)}
+            />
+            <CategoryManagerModal type="announcement" />
+          </div>
         </div>
 
         <p className="text-sm text-diletto-gray mb-6">カテゴリを選択してお知らせを確認・修正してください。新規投稿はカテゴリを開いて行います。</p>
@@ -198,15 +208,21 @@ export default function AdminAnnouncementsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink">
+      <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
           ← 戻る
         </Button>
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{selectedCategory.icon}</span>
-          <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-xl shrink-0">{selectedCategory.icon}</span>
+          <h1 className="text-lg sm:text-2xl font-bold break-words">{selectedCategory.name}</h1>
         </div>
-        <div className="ml-auto">
+        <div className="flex items-center gap-2 flex-wrap ml-auto">
+          <BulkPublishButtons
+            table="announcements"
+            items={visible.map((a) => ({ id: a.id, is_published: a.is_published ?? true }))}
+            scopeLabel="このカテゴリ"
+            onChanged={() => tenantId && reloadAnnouncements(tenantId)}
+          />
           <Button onClick={() => {
             setForm({ title: '', category_id: selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
             setBlocks([]);
@@ -220,14 +236,20 @@ export default function AdminAnnouncementsPage() {
         {visible.map((a) => (
           <Card key={a.id} className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden">
             <CardContent className="py-4">
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <ReorderButtons table="announcements" itemId={a.id} items={visible} onReordered={() => tenantId && reloadAnnouncements(tenantId)} />
-                <div className="min-w-0">
-                  <p className="font-bold text-diletto-ink truncate">{a.title}</p>
+                <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
+                  <p className="font-bold text-diletto-ink break-words md:truncate">{a.title}</p>
                   <PersonInline label="作成者" person={a.creator} />
                   {a.created_by !== a.updated_by && <PersonInline label="編集者" person={a.editor} />}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-wrap order-2 md:order-none">
+                  <PublishToggleButton
+                    table="announcements"
+                    id={a.id}
+                    isPublished={a.is_published ?? true}
+                    onChanged={() => tenantId && reloadAnnouncements(tenantId)}
+                  />
                   <NewBadge createdAt={a.created_at} />
                   <CategoryBadge category={a.category_id ? catMap.get(a.category_id) : null} />
                 </div>
