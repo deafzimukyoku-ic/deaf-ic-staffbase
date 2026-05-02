@@ -12,7 +12,7 @@
  * PDF 列構成: # / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ消耗品代 / 公文代 / 各イベント / 請求額 / 受取日
  */
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { format, getDaysInMonth } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
@@ -245,6 +245,27 @@ export default function BillingFull({ scope }: Props) {
   useEffect(() => { void loadMe(); }, [loadMe]);
   useEffect(() => { void fetchAll(); }, [fetchAll]);
 
+  /* sticky 列の左オフセットを実測（インライン width は table-layout:auto では hint に過ぎず、
+     固定値 left:40/130 を使うとセルの実幅とズレて隙間ができる → 背面のテキストが透ける）。
+     ResizeObserver で行方向のリフローを検知して都度更新する。 */
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [stickyLeft, setStickyLeft] = useState({ c2: 40, c3: 130 });
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+    const measure = () => {
+      const headerCells = table.querySelectorAll('thead > tr > th');
+      if (headerCells.length < 3) return;
+      const w1 = (headerCells[0] as HTMLElement).getBoundingClientRect().width;
+      const w2 = (headerCells[1] as HTMLElement).getBoundingClientRect().width;
+      setStickyLeft({ c2: Math.round(w1), c3: Math.round(w1 + w2) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(table);
+    return () => ro.disconnect();
+  }, [rows.length, events.length]);
+
   /* 行の派生値（snack/kumon/event_total/total）*/
   const computed = useMemo(() => {
     return rows.map((r) => {
@@ -397,7 +418,7 @@ export default function BillingFull({ scope }: Props) {
   /* ===== render ===== */
   return (
     <div
-      className="flex flex-col -m-6 lg:-m-8 p-6 lg:p-8 h-full overflow-auto billing-print-root"
+      className="flex flex-col -m-6 lg:-m-8 p-6 lg:p-8 billing-print-root"
       data-density={printDensity}
     >
       {/* 印刷 CSS + Excel 風グリッド線（縦横全セル枠線） + イベント数に応じた密度自動調整 */}
@@ -421,13 +442,48 @@ export default function BillingFull({ scope }: Props) {
               border-top: 3px double var(--ink) !important;
               box-shadow: 0 -1px 0 var(--white) inset;
             }
+            /* スクリーン表示: 見出し（thead）と先頭3列（# / 市町村 / 氏名）を固定 */
+            @media screen {
+              .billing-grid thead th {
+                position: sticky;
+                top: 0;
+                background: var(--bg);
+                z-index: 2;
+              }
+              .billing-grid .billing-sticky-col {
+                position: sticky;
+                background: var(--white);
+                z-index: 1;
+              }
+              .billing-grid thead .billing-sticky-col,
+              .billing-grid tbody tr.billing-total-row .billing-sticky-col {
+                background: var(--bg);
+                z-index: 3;
+              }
+              .billing-grid .billing-sticky-col-1 { left: 0; }
+              .billing-grid .billing-sticky-col-2 { left: var(--sticky-c2, 40px); }
+              .billing-grid .billing-sticky-col-3 {
+                left: var(--sticky-c3, 130px);
+                box-shadow: 1px 0 0 var(--rule-strong);
+              }
+            }
             @media print {
               /* ユーザー要望: 常に A4 横で出力。イベントが増えても A3 にしない */
               @page { size: A4 landscape; margin: 8mm; }
               .billing-print-root { overflow: visible !important; height: auto !important; padding: 0 !important; margin: 0 !important; }
               .billing-print-root .print-hide { display: none !important; }
               /* スクロール用ラッパーの clip を解除しないとはみ出した部分が切れる */
-              .billing-print-root .overflow-x-auto { overflow: visible !important; }
+              .billing-print-root .overflow-x-auto,
+              .billing-print-root .overflow-auto {
+                overflow: visible !important;
+                max-height: none !important;
+              }
+              /* 印刷時は sticky を解除（PDF 上では普通に流す） */
+              .billing-print-root .billing-grid thead th,
+              .billing-print-root .billing-grid .billing-sticky-col {
+                position: static !important;
+                box-shadow: none !important;
+              }
               /* table 自体は A4 幅にフィット。インライン min-width / 列幅の px 指定を全て無効化し、
                  table-layout: auto + word-break で内容に応じて 1 ページ幅に収める。 */
               .billing-print-root table { width: 100% !important; min-width: 0 !important; table-layout: auto !important; }
@@ -501,17 +557,33 @@ export default function BillingFull({ scope }: Props) {
       ) : rows.length === 0 ? (
         <div className="text-sm" style={{ color: 'var(--ink-3)' }}>児童が登録されていません。</div>
       ) : (
-        <div className="overflow-x-auto rounded border" style={{ borderColor: 'var(--rule-strong)', background: 'var(--white)' }}>
+        <div
+          className="overflow-auto rounded border"
+          style={{
+            borderColor: 'var(--rule-strong)',
+            background: 'var(--white)',
+            /* main の縦スクロールに乗せるのではなく、この div 内で縦・横ともにスクロールさせる。
+               こうすることで sticky thead / sticky 列が main や ancestor の都合に左右されず確実に効く。
+               topbar 60 + breadcrumb 約 40 + コンテンツ padding 32 + 月選択 / タイトル行 約 80 = 約 210 を確保。 */
+            maxHeight: 'calc(100dvh - 220px)',
+          }}
+        >
           <table
+            ref={tableRef}
             className="w-full text-sm billing-grid"
-            style={{ minWidth: `${600 + events.length * 80}px`, borderCollapse: 'collapse' }}
+            style={{
+              minWidth: `${600 + events.length * 80}px`,
+              borderCollapse: 'collapse',
+              ['--sticky-c2' as string]: `${stickyLeft.c2}px`,
+              ['--sticky-c3' as string]: `${stickyLeft.c3}px`,
+            } as React.CSSProperties}
           >
             {/* Excel 風の縦横線: 全セルに 1px、ヘッダ下線とフッタ上線は太線 */}
             <thead>
               <tr style={{ background: 'var(--bg)' }}>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '40px' }}>#</th>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '90px' }}>市町村</th>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '140px' }}>氏名</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-1" style={{ width: '40px' }}>#</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-2" style={{ width: '90px' }}>市町村</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3" style={{ width: '140px' }}>氏名</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>おやつ等</th>
@@ -555,9 +627,9 @@ export default function BillingFull({ scope }: Props) {
                   prev != null && underElem(prev.child.gradeType) !== underElem(r.child.gradeType);
                 return (
                   <tr key={r.childId} className={isGroupBoundary ? 'billing-group-divider' : ''}>
-                    <td className="px-2 py-2 text-center whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-2 py-2 whitespace-nowrap">{r.municipality ?? ''}</td>
-                    <td className="px-2 py-2 font-semibold whitespace-nowrap">{r.childName}</td>
+                    <td className="px-2 py-2 text-center whitespace-nowrap billing-sticky-col billing-sticky-col-1">{idx + 1}</td>
+                    <td className="px-2 py-2 whitespace-nowrap billing-sticky-col billing-sticky-col-2">{r.municipality ?? ''}</td>
+                    <td className="px-2 py-2 font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3">{r.childName}</td>
                     <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {r.attendanceDays}
                     </td>
@@ -616,7 +688,7 @@ export default function BillingFull({ scope }: Props) {
               })}
               {/* 合計行 */}
               <tr className="billing-total-row" style={{ background: 'var(--bg)', fontWeight: 700 }}>
-                <td colSpan={3} className="px-2 py-2 text-right">合計</td>
+                <td colSpan={3} className="px-2 py-2 text-right billing-sticky-col billing-sticky-col-1">合計</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{totals.attendanceDays}</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.copay)}</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.snack)}</td>

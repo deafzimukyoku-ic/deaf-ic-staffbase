@@ -32,6 +32,10 @@ export default function NewEmployeePage() {
   const [form, setForm] = useState({
     email: '',
     employee_number: '',
+    /* 基本勤務時間（シフト・送迎モードで初期表示する勤務時間と同じカラム）。
+       /admin/shifts/staff-settings の DEFAULT_START_TIME / DEFAULT_END_TIME と一致させて初期値を入れておく。 */
+    default_start_time: '09:30',
+    default_end_time: '18:30',
     last_name: '',
     first_name: '',
     last_name_kana: '',
@@ -122,6 +126,8 @@ export default function NewEmployeePage() {
         position_id: form.position_id || null,
         role: form.role,
         manager_facility_ids: form.role === 'manager' ? form.manager_facility_ids : [],
+        default_start_time: form.default_start_time || null,
+        default_end_time: form.default_end_time || null,
       }),
     });
 
@@ -179,6 +185,29 @@ export default function NewEmployeePage() {
                     required
                     placeholder="EMP-001"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>基本勤務時間</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      aria-label="基本勤務開始時刻"
+                      value={form.default_start_time}
+                      onChange={(e) => update('default_start_time', e.target.value)}
+                      className="flex-1"
+                    />
+                    <span className="text-sm text-muted-foreground">〜</span>
+                    <Input
+                      type="time"
+                      aria-label="基本勤務終了時刻"
+                      value={form.default_end_time}
+                      onChange={(e) => update('default_end_time', e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    シフト・送迎表モードの初期勤務時間として使われます。後から職員管理で変更できます。
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

@@ -36,6 +36,45 @@
 ## エラー一覧
 
 ---
+## sticky 列が背景透けして背面テキストが見える（縦・横スクロールでヘッダー/列固定）
+
+- **発生日**: 2026-05-02
+- **発生箇所**: components/shift/BillingFull.tsx（利用料金表ページ） — 他のシフト表・利用表でも同様のパターンが頻出
+- **フェーズ**: Phase 66 利用料金表 印刷以外のスクロール対応
+- **エラー内容**: `position: sticky` + `left: 40px` / `left: 130px` を `<th style={{ width: '40px' }}>` の宣言値ベースで決め打ちしたところ、横スクロール時に sticky 列の隙間から背面の列（出席日数 / 利用負担額 / 公文代 など）のテキストが透けて見えた。
+- **原因**:
+  - `table-layout: auto`（既定）における `<th width="...">` や `style={{ width: ... }}` は **ヒント** に過ぎず、ブラウザは内容に応じて列幅を再計算する。
+  - 宣言値ベースで `left` を決めると、実際のレンダリング幅が宣言値と1〜数px ずれた瞬間に sticky 列の間に隙間ができる。
+  - 隙間部分は z-index の高い sticky cell の背景に守られないため、背面の非 sticky cell（横スクロールで流れている列）の中身が露出する。
+- **解決方法**:
+  1. `useRef<HTMLTableElement>` で table を掴む。
+  2. `useEffect` + `ResizeObserver` で `thead > tr > th` の `getBoundingClientRect().width` を実測。
+  3. `--sticky-c2` / `--sticky-c3` という CSS 変数として table の inline style に出力。
+  4. CSS 側は `left: var(--sticky-c2, 40px)` のように変数参照（フォールバックで初期値）。
+  ```tsx
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [stickyLeft, setStickyLeft] = useState({ c2: 40, c3: 130 });
+  useEffect(() => {
+    const table = tableRef.current; if (!table) return;
+    const measure = () => {
+      const cells = table.querySelectorAll('thead > tr > th');
+      if (cells.length < 3) return;
+      const w1 = (cells[0] as HTMLElement).getBoundingClientRect().width;
+      const w2 = (cells[1] as HTMLElement).getBoundingClientRect().width;
+      setStickyLeft({ c2: Math.round(w1), c3: Math.round(w1 + w2) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure); ro.observe(table);
+    return () => ro.disconnect();
+  }, [rows.length, events.length]);
+  ```
+- **再発防止**:
+  - **複数列を横方向に sticky させる場合、left オフセットの px 直書き禁止**。必ず実測 → CSS 変数経由で渡す。
+  - sticky cell の背景は **必ず opaque な色を明示**。`background: transparent` / 未指定は禁止。背面の cell はスクロールに連動して動くので、背景がないと必ず透ける。
+  - 印刷時は `position: static !important` で sticky を解除する（PDF 上で意図せず固定されるのを防ぐ）。
+  - thead 全体を縦方向 sticky にする場合は、スクロール ancestor が「table を内包する div の `overflow: auto`」であることを確認する（`overflow-x-auto` だけだと縦軸 sticky が効かないことがある — overflow-y の used value 規定を理解する）。
+  - z-index は corner cell（thead × sticky-col）が最大、thead-only / sticky-col-only がその下、本文セルが最下層。
+---
 ## 役職 (positions) 変更時にシステムロールが勝手に書き換わる
 
 - **発生日**: 2026-04-25（仕様調査で発覚）

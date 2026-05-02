@@ -15,6 +15,7 @@ type BasicFields = Pick<Employee,
   'birth_date' | 'gender' | 'postal_code' | 'address' | 'phone' |
   'position' | 'years_of_service' | 'job_type' | 'work_location' |
   'facility_id' |
+  'default_start_time' | 'default_end_time' |
   'join_date' | 'my_number' | 'previous_employer' | 'qualifications' | 'custom_fields' |
   'bank_name' | 'bank_branch_name' | 'bank_account_type' | 'bank_account_number' | 'bank_account_holder'
 >;
@@ -135,6 +136,32 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* 基本勤務時間: シフト・送迎モードで初期表示する勤務時間と同じカラム (default_start_time / default_end_time)。
+                ここで編集すれば職員管理画面 (/admin/shifts/staff-settings) にも反映される。 */}
+            <div className="space-y-2">
+              <Label>基本勤務時間</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  aria-label="基本勤務開始時刻"
+                  value={(data.default_start_time ?? '').slice(0, 5)}
+                  onChange={(e) => update('default_start_time', e.target.value || null)}
+                  className="flex-1"
+                />
+                <span className="text-sm text-muted-foreground shrink-0">〜</span>
+                <Input
+                  type="time"
+                  aria-label="基本勤務終了時刻"
+                  value={(data.default_end_time ?? '').slice(0, 5)}
+                  onChange={(e) => update('default_end_time', e.target.value || null)}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-[11px] text-diletto-gray-light px-1">
+                シフト・送迎表モードの初期勤務時間として使われます。
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

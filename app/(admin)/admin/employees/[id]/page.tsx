@@ -373,6 +373,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     /* 編集対象フィールドだけ draft に複製。ここに無いフィールドは update されない */
     setBasicDraft({
       employee_number: employee.employee_number,
+      /* 基本勤務時間: シフト・送迎モードで使う default_start_time / default_end_time をここから編集できる。
+         /admin/shifts/staff-settings の編集と同じカラムなので片方を変えれば両方に反映される。 */
+      default_start_time: employee.default_start_time,
+      default_end_time: employee.default_end_time,
       last_name: employee.last_name, first_name: employee.first_name,
       last_name_kana: employee.last_name_kana, first_name_kana: employee.first_name_kana,
       birth_date: employee.birth_date, gender: employee.gender,
@@ -725,6 +729,38 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <CardHeader><CardTitle className="text-base font-bold">本人情報</CardTitle></CardHeader>
               <CardContent className="space-y-1.5 text-sm">
                 <EditableRow label="従業員番号" editing={basicEditing} value={basicEditing ? basicDraft.employee_number : employee.employee_number} onChange={(v) => updBasic('employee_number', String(v))} />
+                {/* 基本勤務時間: シフト・送迎モードで初期表示する勤務時間。/admin/shifts/staff-settings と同じカラムを共有。 */}
+                {(() => {
+                  const startVal = basicEditing ? basicDraft.default_start_time : employee.default_start_time;
+                  const endVal = basicEditing ? basicDraft.default_end_time : employee.default_end_time;
+                  const fmt = (v: string | null | undefined) => (v && typeof v === 'string' ? v.slice(0, 5) : '');
+                  if (!basicEditing) {
+                    const display = startVal || endVal ? `${fmt(startVal) || '-'} 〜 ${fmt(endVal) || '-'}` : '-';
+                    return <InfoRow label="基本勤務時間" value={display} />;
+                  }
+                  return (
+                    <div className="flex items-center gap-4 py-1.5 border-b border-diletto-gray/5">
+                      <span className="text-diletto-gray-light w-24 shrink-0 text-xs">基本勤務時間</span>
+                      <div className="flex-1 min-w-0 flex items-center gap-2">
+                        <input
+                          type="time"
+                          aria-label="基本勤務開始時刻"
+                          value={fmt(startVal)}
+                          onChange={(e) => updBasic('default_start_time', e.target.value)}
+                          className="h-8 flex-1 min-w-0 rounded-md border border-input bg-white px-2 text-sm"
+                        />
+                        <span className="text-xs text-diletto-gray-light">〜</span>
+                        <input
+                          type="time"
+                          aria-label="基本勤務終了時刻"
+                          value={fmt(endVal)}
+                          onChange={(e) => updBasic('default_end_time', e.target.value)}
+                          className="h-8 flex-1 min-w-0 rounded-md border border-input bg-white px-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
                 <EditableRow label="姓" editing={basicEditing} value={basicEditing ? basicDraft.last_name : employee.last_name} onChange={(v) => updBasic('last_name', String(v))} />
                 <EditableRow label="名" editing={basicEditing} value={basicEditing ? basicDraft.first_name : employee.first_name} onChange={(v) => updBasic('first_name', String(v))} />
                 <EditableRow label="姓カナ" editing={basicEditing} value={basicEditing ? basicDraft.last_name_kana : employee.last_name_kana} onChange={(v) => updBasic('last_name_kana', String(v))} />

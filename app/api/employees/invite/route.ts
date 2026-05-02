@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
     position_id,
     role: requestedRole,
     manager_facility_ids,
+    default_start_time,
+    default_end_time,
   } = body as {
     email: string;
     employee_number: string;
@@ -55,6 +57,10 @@ export async function POST(request: NextRequest) {
     role?: 'admin' | 'manager' | 'shift_manager' | 'employee';
     /** 担当施設の追加 (manager_facilities)。manager の場合のみ意味を持つ。 */
     manager_facility_ids?: string[];
+    /** 基本勤務時間（シフト・送迎モードの初期値として使う employees.default_start_time / default_end_time）。
+     *  HH:MM 形式 or null。空文字 / undefined は null として扱う。 */
+    default_start_time?: string | null;
+    default_end_time?: string | null;
   };
   /* 不正値ガード: 未指定/未知の値は employee に正規化。
      migration 140: shift_manager は事業所共用 → facility_id 必須。 */
@@ -145,6 +151,10 @@ export async function POST(request: NextRequest) {
     createdNewAuthUser = true;
   }
 
+  /* 基本勤務時間: 空文字は null に正規化（HH:MM のまま渡せば Postgres time に cast される）。 */
+  const normalizedStart = default_start_time && default_start_time.trim() !== '' ? default_start_time : null;
+  const normalizedEnd = default_end_time && default_end_time.trim() !== '' ? default_end_time : null;
+
   // 3. employeeレコード作成 + 招待メール送信
   return await createEmployeeAndSendInvite({
     adminClient,
@@ -152,7 +162,7 @@ export async function POST(request: NextRequest) {
     authUserId,
     createdNewAuthUser,
     tenantId: me.tenant_id,
-    employeeData: { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position: positionName, role: normalizedRole, manager_facility_ids: manager_facility_ids ?? [] },
+    employeeData: { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position: positionName, role: normalizedRole, manager_facility_ids: manager_facility_ids ?? [], default_start_time: normalizedStart, default_end_time: normalizedEnd },
   });
 }
 
@@ -247,6 +257,8 @@ interface CreateParams {
     position: string;
     role: 'admin' | 'manager' | 'shift_manager' | 'employee';
     manager_facility_ids: string[];
+    default_start_time: string | null;
+    default_end_time: string | null;
   };
 }
 
@@ -258,7 +270,7 @@ async function createEmployeeAndSendInvite({
   tenantId,
   employeeData,
 }: CreateParams) {
-  const { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position, role, manager_facility_ids } = employeeData;
+  const { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position, role, manager_facility_ids, default_start_time, default_end_time } = employeeData;
 
   // employeeレコード作成（service roleでRLSバイパス）
   const { data: createdEmp, error: empErr } = await adminClient
@@ -282,6 +294,8 @@ async function createEmployeeAndSendInvite({
       is_shuttle_driver,
       facility_id: facility_id || null,
       position: position || '',
+      default_start_time,
+      default_end_time,
       invited_at: new Date().toISOString(),
     })
     .select('id')

@@ -74,6 +74,10 @@ export interface Employee {
   join_date: string | null;
   retirement_date: string | null;
   retirement_reason: string | null;
+  /* 基本勤務時間 (migration 103)。シフト・送迎モードの初期勤務時間として使う。HH:MM:SS。
+     /admin/shifts/staff-settings からも編集可能 — 同じカラムを共有。 */
+  default_start_time: string | null;
+  default_end_time: string | null;
   // 振込先口座
   bank_name: string | null;
   bank_branch_name: string | null;

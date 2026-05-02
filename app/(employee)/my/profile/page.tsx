@@ -108,6 +108,7 @@ export default function ProfilePage() {
               position: employee.position,
               years_of_service: employee.years_of_service, job_type: employee.job_type,
               work_location: employee.work_location, facility_id: employee.facility_id, join_date: employee.join_date,
+              default_start_time: employee.default_start_time, default_end_time: employee.default_end_time,
               my_number: employee.my_number, previous_employer: employee.previous_employer,
               qualifications: employee.qualifications, custom_fields: employee.custom_fields,
               bank_name: employee.bank_name, bank_branch_name: employee.bank_branch_name,
