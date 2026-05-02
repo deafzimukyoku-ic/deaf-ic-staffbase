@@ -32,12 +32,13 @@ export function SubordinateTable({ employees }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-24">社員番号</TableHead>
-              <TableHead>氏名</TableHead>
-              <TableHead className="w-28">役職</TableHead>
-              <TableHead className="w-24">入社日</TableHead>
-              <TableHead className="w-20">ステータス</TableHead>
-              <TableHead className="w-32">操作</TableHead>
+              {/* モバイル: whitespace-nowrap で見出し縦折れ防止。overflow-x-auto で横スクロール */}
+              <TableHead className="w-24 whitespace-nowrap">社員番号</TableHead>
+              <TableHead className="whitespace-nowrap min-w-[7em]">氏名</TableHead>
+              <TableHead className="w-28 whitespace-nowrap">役職</TableHead>
+              <TableHead className="w-24 whitespace-nowrap">入社日</TableHead>
+              <TableHead className="w-20 whitespace-nowrap">ステータス</TableHead>
+              <TableHead className="w-32 whitespace-nowrap">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -50,8 +51,8 @@ export function SubordinateTable({ employees }: Props) {
             ) : (
               employees.map((emp) => (
                 <TableRow key={emp.id}>
-                  <TableCell className="font-mono text-xs">{emp.employee_number}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-mono text-xs whitespace-nowrap">{emp.employee_number}</TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <Link
                       href={`/mgr/subordinates/${emp.id}`}
                       className="font-medium text-diletto-blue hover:underline"
@@ -59,9 +60,9 @@ export function SubordinateTable({ employees }: Props) {
                       {emp.last_name} {emp.first_name}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-sm">{emp.position || '-'}</TableCell>
-                  <TableCell className="text-sm">{emp.join_date}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">{emp.position || '-'}</TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">{emp.join_date}</TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {emp.status === 'active' ? (
                       <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">
                         在籍
@@ -72,7 +73,7 @@ export function SubordinateTable({ employees }: Props) {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {emp.status === 'active' && (
                       <Link
                         href={`/mgr/messages?to=${emp.id}`}

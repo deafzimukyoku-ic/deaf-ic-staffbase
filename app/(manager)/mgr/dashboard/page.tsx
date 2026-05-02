@@ -255,30 +255,32 @@ export default function ManagerDashboardPage() {
             <Card className="rounded-xl border-diletto-gray/5 bg-white shadow-sm overflow-hidden">
               <CardContent className="pt-4">
                 <div className="overflow-x-auto">
+                  {/* モバイル: whitespace-nowrap で名前縦折れ防止 + min-w で社員名最低幅確保。
+                      列が増えても overflow-x-auto で横スクロール対応（admin/ProgressDashboard と同パターン） */}
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-xs text-diletto-gray-light uppercase font-bold tracking-wider">
-                        <th className="py-3 pr-4">社員名</th>
-                        <th className="py-3 px-4 text-center">書類</th>
-                        <th className="py-3 px-4 text-center">遵守事項</th>
-                        <th className="py-3 px-4 text-center">研修</th>
-                        <th className="py-3 px-4 text-center">お知らせ</th>
-                        <th className="py-3 px-4 text-center">業務マニュアル</th>
+                        <th className="py-3 pr-4 whitespace-nowrap min-w-[7em]">社員名</th>
+                        <th className="py-3 px-4 text-center whitespace-nowrap">書類</th>
+                        <th className="py-3 px-4 text-center whitespace-nowrap">遵守事項</th>
+                        <th className="py-3 px-4 text-center whitespace-nowrap">研修</th>
+                        <th className="py-3 px-4 text-center whitespace-nowrap">お知らせ</th>
+                        <th className="py-3 px-4 text-center whitespace-nowrap">業務マニュアル</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-diletto-gray/5">
                       {filteredActive.map((r) => (
                         <tr key={r.employee_id} className="hover:bg-diletto-beige/20 transition-colors">
-                          <td className="py-3 pr-4 font-bold">
+                          <td className="py-3 pr-4 font-bold whitespace-nowrap min-w-[7em]">
                             <Link href={`/mgr/subordinates?id=${r.employee_id}`} className="hover:text-diletto-blue transition-colors">
                               {r.last_name} {r.first_name}
                             </Link>
                           </td>
-                          <td className="py-3 px-4 text-center"><ProgressBadge current={r.docs_submitted} total={totals.docs} /></td>
-                          <td className="py-3 px-4 text-center"><ProgressBadge current={r.compliance_done} total={totals.compliance} /></td>
-                          <td className="py-3 px-4 text-center"><ProgressBadge current={r.trainings_passed} total={totals.trainings} /></td>
-                          <td className="py-3 px-4 text-center"><ProgressBadge current={r.announcements_read} total={totals.announcements} /></td>
-                          <td className="py-3 px-4 text-center"><ProgressBadge current={r.manuals_read} total={totals.manuals} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.docs_submitted} total={totals.docs} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.compliance_done} total={totals.compliance} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.trainings_passed} total={totals.trainings} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.announcements_read} total={totals.announcements} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.manuals_read} total={totals.manuals} /></td>
                         </tr>
                       ))}
                     </tbody>
