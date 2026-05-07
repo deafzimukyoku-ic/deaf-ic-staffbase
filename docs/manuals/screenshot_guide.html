@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>スクショ貼付ガイド — 職員ステーション マニュアル</title>
+<style>
+  :root {
+    --teal: #028090;
+    --teal-dark: #02575F;
+    --teal-pale: #E0F2F1;
+    --hr: #6D2E46;
+    --hr-pale: #F5E5EC;
+    --red: #C0392B;
+    --green: #27AE60;
+    --gold: #F4A261;
+    --ink: #1F2937;
+    --ink-2: #4B5563;
+    --muted: #9CA3AF;
+    --bg: #F9FAFB;
+    --white: #FFFFFF;
+    --rule: #E5E7EB;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.5;
+    padding: 24px; max-width: 1280px; margin: 0 auto;
+  }
+  h1 { font-size: 28px; margin-bottom: 4px; color: var(--teal-dark); }
+  .sub { color: var(--ink-2); font-size: 14px; margin-bottom: 24px; }
+
+  /* 優先度バッジ */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: bold; letter-spacing: 0.05em;
+    margin-right: 4px;
+  }
+  .badge-must { background: var(--red); color: #fff; }
+  .badge-nice { background: var(--gold); color: #fff; }
+  .badge-opt  { background: var(--muted); color: #fff; }
+
+  /* TOP20 サマリ */
+  .summary {
+    background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+    color: #fff; padding: 20px 24px; border-radius: 12px;
+    margin-bottom: 24px;
+  }
+  .summary h2 { font-size: 18px; margin-bottom: 8px; }
+  .summary p  { font-size: 14px; opacity: 0.9; }
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px;
+  }
+  .summary-tile {
+    background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px;
+    backdrop-filter: blur(4px);
+  }
+  .summary-tile .num { font-size: 32px; font-weight: bold; line-height: 1; }
+  .summary-tile .label { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+
+  /* タブ */
+  .tabs {
+    display: flex; gap: 4px; border-bottom: 2px solid var(--rule);
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .tab {
+    padding: 10px 18px; cursor: pointer; border: none; background: none;
+    font-size: 14px; font-weight: 600; color: var(--ink-2);
+    border-bottom: 3px solid transparent; margin-bottom: -2px;
+    transition: all 0.15s; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .tab:hover { color: var(--teal); }
+  .tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+  .tab .count {
+    background: var(--rule); color: var(--ink-2);
+    padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+  }
+  .tab.active .count { background: var(--teal); color: #fff; }
+
+  /* タブパネル */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .panel-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+  }
+  .panel-head h2 { font-size: 22px; color: var(--teal-dark); }
+  .panel-head .meta { font-size: 13px; color: var(--ink-2); }
+
+  /* カードグリッド */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: #fff; border: 1px solid var(--rule); border-radius: 10px;
+    padding: 14px 16px; transition: box-shadow 0.15s;
+    border-left: 4px solid var(--rule);
+  }
+  .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+  .card.must { border-left-color: var(--red); }
+  .card.nice { border-left-color: var(--gold); }
+  .card.opt  { border-left-color: var(--muted); }
+  .card.hr-section { border-left-color: var(--hr); background: var(--hr-pale); }
+
+  .card-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; gap: 8px;
+  }
+  .slide-num {
+    background: var(--teal); color: #fff; padding: 2px 8px; border-radius: 4px;
+    font-weight: bold; font-size: 12px; flex-shrink: 0;
+  }
+  .card.hr-section .slide-num { background: var(--hr); }
+  .slide-title { font-size: 15px; font-weight: bold; flex: 1; }
+  .card-url {
+    font-family: "SF Mono", Consolas, monospace; font-size: 11px;
+    color: var(--teal-dark); background: var(--teal-pale);
+    padding: 4px 8px; border-radius: 4px; margin-bottom: 8px;
+    display: inline-block; word-break: break-all; max-width: 100%;
+  }
+  .card-desc { font-size: 13px; color: var(--ink-2); }
+  .card-tip {
+    font-size: 12px; color: var(--ink-2); margin-top: 6px;
+    padding-top: 6px; border-top: 1px dashed var(--rule);
+    font-style: italic;
+  }
+
+  /* 撮影手順 */
+  .steps {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px; margin: 16px 0;
+  }
+  .step {
+    background: #fff; border: 1px solid var(--rule); border-radius: 8px;
+    padding: 12px; position: relative;
+  }
+  .step-num {
+    position: absolute; top: -10px; left: 12px;
+    background: var(--teal); color: #fff; width: 24px; height: 24px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: bold;
+  }
+  .step h4 { font-size: 13px; margin: 6px 0 4px; color: var(--teal-dark); }
+  .step p { font-size: 12px; color: var(--ink-2); }
+  kbd {
+    background: var(--ink); color: #fff; padding: 1px 6px;
+    border-radius: 3px; font-family: monospace; font-size: 11px;
+  }
+
+  /* 注意ボックス */
+  .alert {
+    background: #FFF7E6; border-left: 4px solid var(--gold);
+    padding: 12px 16px; border-radius: 6px; margin: 12px 0;
+    font-size: 13px;
+  }
+  .alert b { color: var(--gold); }
+
+  /* セクションタイトル */
+  h3.section {
+    font-size: 16px; color: var(--teal-dark);
+    margin: 20px 0 10px; padding-bottom: 4px;
+    border-bottom: 2px solid var(--teal-pale);
+  }
+
+  /* レスポンシブ */
+  @media (max-width: 700px) {
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .tab { padding: 8px 12px; font-size: 12px; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>📸 スクショ貼付ガイド</h1>
+<p class="sub">職員ステーション 操作マニュアル PPTX × 4 本のスクショ貼付け先を一覧化。読まずに眺めてください。</p>
+
+<!-- TOP サマリ -->
+<div class="summary">
+  <h2>⏱ 時間ない場合は「必須 20 枚」だけでOK（約 1 時間）</h2>
+  <p>各 PPTX 上の「📸 画面のイメージ」プレースホルダにスクショを貼るだけ。タブで PPTX を切替えて確認。</p>
+  <div class="summary-grid">
+    <div class="summary-tile">
+      <div class="num">2</div>
+      <div class="label">shift_station_card<br>シフト統括 / 共用端末</div>
+    </div>
+    <div class="summary-tile">
+      <div class="num">7</div>
+      <div class="label">employee_handbook<br>一般職員（最優先）</div>
+    </div>
+    <div class="summary-tile">
+      <div class="num">6</div>
+      <div class="label">manager_guide<br>マネージャー（必須のみ）</div>
+    </div>
+    <div class="summary-tile">
+      <div class="num">5</div>
+      <div class="label">admin_guide<br>管理者（必須のみ）</div>
+    </div>
+  </div>
+</div>
+
+<!-- 撮影手順 -->
+<h3 class="section">📷 撮影手順（共通）</h3>
+<div class="steps">
+  <div class="step">
+    <span class="step-num">1</span>
+    <h4>dev 起動</h4>
+    <p><kbd>npm run dev</kbd> →<br>http://localhost:6001</p>
+  </div>
+  <div class="step">
+    <span class="step-num">2</span>
+    <h4>役割別ログイン</h4>
+    <p>admin / manager / shift_manager / employee の 4 アカウントを使い分け</p>
+  </div>
+  <div class="step">
+    <span class="step-num">3</span>
+    <h4>撮影</h4>
+    <p><kbd>Win+Shift+S</kbd> で範囲選択 → クリップボードへ</p>
+  </div>
+  <div class="step">
+    <span class="step-num">4</span>
+    <h4>貼付け</h4>
+    <p>PowerPoint で <kbd>Ctrl+V</kbd> → 点線枠に重ねてサイズ合わせ</p>
+  </div>
+  <div class="step">
+    <span class="step-num">5</span>
+    <h4>点線枠削除</h4>
+    <p>「📸 画面のイメージ」テキスト + ダッシュ枠を選択して Delete</p>
+  </div>
+  <div class="step">
+    <span class="step-num">6</span>
+    <h4>強調追加</h4>
+    <p>挿入 → 図形 → 楕円 / 矢印で「ここ！」を強調</p>
+  </div>
+</div>
+
+<div class="alert">
+  <b>⚠️ 個人情報の扱い</b>: 児童名・職員氏名・電話・メールが映る場合は、<b>架空名のテストデータ</b>で撮影するか、貼付前にぼかし加工してください。
+</div>
+
+<!-- タブ -->
+<div class="tabs">
+  <button class="tab active" data-target="t-station">🏢 shift_station_card <span class="count">2</span></button>
+  <button class="tab" data-target="t-employee">👋 employee_handbook <span class="count">7</span></button>
+  <button class="tab" data-target="t-manager">🧭 manager_guide <span class="count">16</span></button>
+  <button class="tab" data-target="t-admin">🏛 admin_guide <span class="count">13</span></button>
+</div>
+
+<!-- shift_station_card -->
+<section id="t-station" class="panel active">
+  <div class="panel-head">
+    <h2>🏢 shift_station_card.pptx（共用端末向け / 8 枚中 2 枚撮影）</h2>
+    <span class="meta">想定アカウント: shift_manager（共用端末ログイン）</span>
+  </div>
+  <div class="grid">
+    <div class="card must">
+      <div class="card-head">
+        <span class="slide-num">P6</span>
+        <span class="slide-title">📋 シフト表の見方</span>
+        <span class="badge badge-must">必須</span>
+      </div>
+      <div class="card-url">/admin/shifts/shift?facility=&lt;ID&gt;</div>
+      <div class="card-desc">月単位のシフト表全体。日付ヘッダ + 職員一覧 + 「待 N」バッジが見える状態を撮影。</div>
+      <div class="card-tip">💡 mgr 側でも同じレイアウト。事業所セレクタが映ると分かりやすい。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head">
+        <span class="slide-num">P7</span>
+        <span class="slide-title">🚐 送迎表の見方</span>
+        <span class="badge badge-must">必須</span>
+      </div>
+      <div class="card-url">/admin/shifts/transport</div>
+      <div class="card-desc">1 日分の送迎表。緑チップ・赤枠（未割当）・「キャンセル待ち集約バー」が映る日を選ぶ。</div>
+      <div class="card-tip">💡 集約バーが出る日が無ければ、テストデータで waitlist を 1 件作る。</div>
+    </div>
+  </div>
+  <div class="alert">
+    <b>📝 シンプル運用</b>: この PPTX は「共用端末横に貼るカード」想定。スクショ 2 枚以外は絵文字 + テキストで完結しているので追加撮影不要。
+  </div>
+</section>
+
+<!-- employee_handbook -->
+<section id="t-employee" class="panel">
+  <div class="panel-head">
+    <h2>👋 employee_handbook.pptx（一般職員向け / 10 枚中 7 枚撮影）</h2>
+    <span class="meta">想定アカウント: employee（テストデータ充実が必須）</span>
+  </div>
+  <div class="grid">
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P3</span><span class="slide-title">🏠 ダッシュボード</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/my/dashboard</div>
+      <div class="card-desc">ログイン後の最初の画面。今日のシフト・お知らせバッジ・未受講研修・未同意遵守事項が見える状態。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P4</span><span class="slide-title">📅 自分のシフト</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/my/shifts</div>
+      <div class="card-desc">月単位カレンダー。<b>公開済の月</b>を選んで撮る（draft 月は employee からは空になる）。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P5</span><span class="slide-title">🏖 休み希望</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/my/requests</div>
+      <div class="card-desc">月選択 + 公休/有給/出勤可能のチェック画面。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P6</span><span class="slide-title">📜 遵守事項</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/my/compliance</div>
+      <div class="card-desc">一覧 + 同意済み/未同意の状態が分かる画面。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P7</span><span class="slide-title">📚 研修</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/my/trainings</div>
+      <div class="card-desc">一覧画面。受講前 / 提出済 / 修了 のバッジが分かる状態。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P8</span><span class="slide-title">📢 お知らせ</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/my/announcements</div>
+      <div class="card-desc">🆕 バッジ付きの新着 + カテゴリ分類が見える状態。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P9</span><span class="slide-title">📖 業務マニュアル</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/my/manuals</div>
+      <div class="card-desc">カテゴリ別マニュアル一覧。</div>
+    </div>
+  </div>
+</section>
+
+<!-- manager_guide -->
+<section id="t-manager" class="panel">
+  <div class="panel-head">
+    <h2>🧭 manager_guide.pptx（マネージャー向け / 28 枚中 16 枚撮影）</h2>
+    <span class="meta">想定アカウント: manager（自事業所が選択されている状態）</span>
+  </div>
+
+  <h3 class="section">★ 必須（先にこれだけ撮ればOK）</h3>
+  <div class="grid">
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P4</span><span class="slide-title">📅 利用予定（手動）</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/mgr/shifts/schedule</div>
+      <div class="card-desc">児童 × 日付グリッド + セルクリックで開く利用予定モーダル。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P7</span><span class="slide-title">🤖 シフト作成（自動）</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/mgr/shifts/shift</div>
+      <div class="card-desc">月選択 + 「シフト生成」ボタンが見える画面。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P11</span><span class="slide-title">🚐 送迎担当（自動）</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/mgr/shifts/transport</div>
+      <div class="card-desc">「送迎を生成」ボタン + 自動割当後の状態。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P13</span><span class="slide-title">💰 利用料金表（月選択）</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/mgr/shifts/output/billing</div>
+      <div class="card-desc">月選択直後の児童一覧 + 出席日数 + おやつ代。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P19</span><span class="slide-title">🏖 休み希望</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/mgr/requests</div>
+      <div class="card-desc">全職員の希望が並んだ画面 + 集計バッジ。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P20</span><span class="slide-title">🔄 シフト変更申請</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/mgr/requests（変更申請タブ）</div>
+      <div class="card-desc">部下からの申請が並んだリスト + 承認/却下ボタン。</div>
+    </div>
+  </div>
+
+  <h3 class="section">☆ あると親切</h3>
+  <div class="grid">
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P3</span><span class="slide-title">🏠 マネージャーダッシュボード</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/dashboard</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P5</span><span class="slide-title">📄 PDF 取込（デイロボ）</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/schedule</div>
+      <div class="card-desc">「PDF を取り込む」モーダル開いた状態。</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P8</span><span class="slide-title">✋ シフト作成（手動）</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/shift</div>
+      <div class="card-desc">セル編集中の状態。コアタイム下線 + 余力警告。</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P12</span><span class="slide-title">✋ 送迎担当（手動）</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/transport</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P14</span><span class="slide-title">💴 利用料金表（オーバーライド）</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/output/billing</div>
+      <div class="card-desc">手動入力欄 + イベント参加チェック + 印刷ボタン。</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P15</span><span class="slide-title">📝 業務日報</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/output/daily-report</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P16</span><span class="slide-title">📤 日次出力</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/output/daily</div>
+      <div class="card-desc">児童カード DnD 並び替え + 送迎担当。</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P17</span><span class="slide-title">📅 週次送迎表</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/output/weekly-transport</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P18</span><span class="slide-title">👥 同席日数</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/output/staff-child-overlap</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P21</span><span class="slide-title">👤 部下管理</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/subordinates または /mgr/subordinates/&lt;id&gt;</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P22</span><span class="slide-title">👶 児童管理</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/children</div>
+      <div class="card-desc">児童一覧 + 編集モーダル。</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P23</span><span class="slide-title">👷 職員管理</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/staff-settings</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P24</span><span class="slide-title">🎉 イベント設定</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/events</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P25</span><span class="slide-title">🏢 事業所設定</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/shifts/facility-settings</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P26</span><span class="slide-title">🏷 カテゴリ管理</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/announcements の「📁 カテゴリ管理」モーダル</div>
+    </div>
+  </div>
+
+  <h3 class="section">△ 撮影任意（概念図で代替可）</h3>
+  <div class="grid">
+    <div class="card opt">
+      <div class="card-head"><span class="slide-num">P6</span><span class="slide-title">🎯 出席ステータス</span><span class="badge badge-opt">任意</span></div>
+      <div class="card-desc">利用予定モーダルの「お休み / 欠席 / キャンセル待ち」3 ボタン。</div>
+    </div>
+    <div class="card opt">
+      <div class="card-head"><span class="slide-num">P9</span><span class="slide-title">🚦 シフト公開フロー</span><span class="badge badge-opt">任意</span></div>
+      <div class="card-desc">「下書き / 作成完了 / 公開」のステータスバッジ。</div>
+    </div>
+    <div class="card opt">
+      <div class="card-head"><span class="slide-num">P10</span><span class="slide-title">🔄 シフトの再公開</span><span class="badge badge-opt">任意</span></div>
+      <div class="card-desc">「差分警告」モーダル。</div>
+    </div>
+    <div class="card opt">
+      <div class="card-head"><span class="slide-num">P27</span><span class="slide-title">📢 コンテンツ作成</span><span class="badge badge-opt">任意</span></div>
+      <div class="card-desc">お知らせ作成ダイアログ。</div>
+    </div>
+  </div>
+</section>
+
+<!-- admin_guide -->
+<section id="t-admin" class="panel">
+  <div class="panel-head">
+    <h2>🏛 admin_guide.pptx（管理者向け / 21 枚中 13 枚撮影）</h2>
+    <span class="meta">想定アカウント: admin</span>
+  </div>
+
+  <h3 class="section">★ 必須</h3>
+  <div class="grid">
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P4</span><span class="slide-title">🏢 事業所の追加・編集</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/admin/settings（facility タブ）</div>
+      <div class="card-desc">事業所一覧 + 編集モーダル。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P6</span><span class="slide-title">👤 職員の招待</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/admin/employees/new</div>
+      <div class="card-desc">招待フォーム + 招待リンク発行モーダル。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P9</span><span class="slide-title">🪪 シフト統括 発行</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/admin/access-matrix または /admin/employees</div>
+      <div class="card-desc">「シフト統括を発行」ボタン + パスワード表示モーダル。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P10</span><span class="slide-title">🔐 アクセス権限マトリクス</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/admin/access-matrix</div>
+      <div class="card-desc">manager × 事業所 のクロス表。</div>
+    </div>
+    <div class="card must">
+      <div class="card-head"><span class="slide-num">P11</span><span class="slide-title">🏷 カテゴリ管理</span><span class="badge badge-must">必須</span></div>
+      <div class="card-url">/admin/announcements の「📁 カテゴリ管理」モーダル</div>
+      <div class="card-desc">モーダル全景。</div>
+    </div>
+  </div>
+
+  <h3 class="section">☆ あると親切</h3>
+  <div class="grid">
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P3</span><span class="slide-title">🏛 法人 (tenant) 設定</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/admin/settings（tenant タブ）</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P5</span><span class="slide-title">🎚 事業所のフィーチャー</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/admin/settings 編集モーダル</div>
+      <div class="card-desc">transport_enabled / shift_only_mode トグル。</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P7</span><span class="slide-title">🚪 職員の退職処理</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/admin/employees/&lt;id&gt;</div>
+      <div class="card-desc">「退職」ボタン + ダイアログ。</div>
+    </div>
+    <div class="card nice">
+      <div class="card-head"><span class="slide-num">P12</span><span class="slide-title">📢 一括公開・配信対象</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/admin/announcements または /admin/compliance</div>
+    </div>
+  </div>
+
+  <h3 class="section">△ 任意・第 6 章（人事評価）の補強用</h3>
+  <div class="grid">
+    <div class="card opt">
+      <div class="card-head"><span class="slide-num">P8</span><span class="slide-title">🔄 ロール変更</span><span class="badge badge-opt">任意</span></div>
+      <div class="card-desc">個別ページのロール選択ドロップダウン。</div>
+    </div>
+    <div class="card opt">
+      <div class="card-head"><span class="slide-num">P13</span><span class="slide-title">🤖 AI 診断</span><span class="badge badge-opt">任意</span></div>
+      <div class="card-desc">結果プレビュー画面（API キー設定済の環境で）。</div>
+    </div>
+    <div class="card hr-section">
+      <div class="card-head"><span class="slide-num">P16</span><span class="slide-title">⏰ 勤務態度の評価</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/subordinates/&lt;id&gt;</div>
+      <div class="card-desc">出勤履歴 + 遅刻早退の表示部分。</div>
+    </div>
+    <div class="card hr-section">
+      <div class="card-head"><span class="slide-num">P17</span><span class="slide-title">📚 学習姿勢の評価</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/admin/trainings 提出一覧 or 個別職員</div>
+      <div class="card-desc">修了 / 差戻しの分布。</div>
+    </div>
+    <div class="card hr-section">
+      <div class="card-head"><span class="slide-num">P18</span><span class="slide-title">👁 情報感度の評価</span><span class="badge badge-opt">任意</span></div>
+      <div class="card-desc">既読率レポート（無ければ DB スクショで代替）。</div>
+    </div>
+    <div class="card hr-section">
+      <div class="card-head"><span class="slide-num">P19</span><span class="slide-title">💬 コミュニケーション</span><span class="badge badge-nice">親切</span></div>
+      <div class="card-url">/mgr/subordinates/&lt;id&gt; の DM タブ</div>
+      <div class="card-desc">DM スレッド画面。</div>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>
