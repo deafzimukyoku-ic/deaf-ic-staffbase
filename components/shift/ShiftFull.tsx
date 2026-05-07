@@ -215,6 +215,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
 
       // migration 130: 兼任職員の他施設での勤務 (assignment_type='normal') を fetch して
       // 本施設シフト表で「○○ 勤務」と表示する
+      const memberIds = emps.map((e) => e.id);
       const { data: crossAssigns } = memberIds.length === 0
         ? { data: [] }
         : await supabase
