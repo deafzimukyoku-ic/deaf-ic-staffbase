@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,12 @@ export default function AdminManualsPage() {
     target_position_ids: string[];
   }>({ title: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
   const supabase = createClient();
+
+  /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+  const reloadCategories = useCallback(async () => {
+    const catRes = await fetch('/api/categories?type=manual');
+    if (catRes.ok) setCategories(await catRes.json());
+  }, []);
 
   async function reloadManuals(tid: string) {
     const { data } = await supabase
@@ -159,7 +165,7 @@ export default function AdminManualsPage() {
               scopeLabel="全体"
               onChanged={() => tenantId && reloadManuals(tenantId)}
             />
-            <CategoryManagerModal type="manual" />
+            <CategoryManagerModal type="manual" onChanged={reloadCategories} />
           </div>
         </div>
 

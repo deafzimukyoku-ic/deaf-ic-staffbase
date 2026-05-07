@@ -38,9 +38,11 @@ const CONTENT_TABLE: Record<CategoryType, string> = {
 
 interface Props {
   type: CategoryType;
+  /** カテゴリが追加・編集・削除・並び替えされたら呼ぶ。親画面で categories 再 fetch してリストやフィルタに即反映するために使う */
+  onChanged?: () => void | Promise<void>;
 }
 
-export function CategoryManager({ type }: Props) {
+export function CategoryManager({ type, onChanged }: Props) {
   const [items, setItems] = useState<Category[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
@@ -116,6 +118,7 @@ export function CategoryManager({ type }: Props) {
     setNewColor(DEFAULT_CATEGORY_COLOR);
     setNewIcon(DEFAULT_CATEGORY_ICON);
     await load();
+    onChanged?.();
   }
 
   async function handleUpdate(id: string, patch: Partial<Pick<Category, 'name' | 'color' | 'icon'>>) {
@@ -131,6 +134,7 @@ export function CategoryManager({ type }: Props) {
       return false;
     }
     await load();
+    onChanged?.();
     return true;
   }
 
@@ -144,6 +148,7 @@ export function CategoryManager({ type }: Props) {
       return;
     }
     await load();
+    onChanged?.();
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -166,7 +171,9 @@ export function CategoryManager({ type }: Props) {
     if (!res.ok) {
       setErrorMsg('並び替えの保存に失敗しました');
       await load(); // 失敗時はサーバー状態に戻す
+      return;
     }
+    onChanged?.();
   }
 
   return (
@@ -306,7 +313,7 @@ export function CategoryManager({ type }: Props) {
         destinationType={type}
         isOpen={importOpen}
         onClose={() => setImportOpen(false)}
-        onImported={load}
+        onImported={async () => { await load(); onChanged?.(); }}
       />
     </div>
   );

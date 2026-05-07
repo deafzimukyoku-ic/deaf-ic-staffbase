@@ -57,6 +57,12 @@ export default function ManagerManualsPage() {
 
     const supabase = createClient();
 
+    /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+    const reloadCategories = useCallback(async () => {
+        const catRes = await fetch('/api/categories?type=manual');
+        if (catRes.ok) setCategories(await catRes.json());
+    }, []);
+
     const reloadManuals = useCallback(async (tid: string) => {
         const { data } = await supabase
             .from('manuals')
@@ -255,7 +261,7 @@ export default function ManagerManualsPage() {
                             scopeLabel="全体"
                             onChanged={() => me && reloadManuals(me.tenant_id)}
                         />
-                        <CategoryManagerModal type="manual" />
+                        <CategoryManagerModal type="manual" onChanged={reloadCategories} />
                     </div>
                 </div>
 

@@ -71,6 +71,12 @@ export default function ManagerCompliancePage() {
 
   const supabase = createClient();
 
+  /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+  const reloadCategories = useCallback(async () => {
+    const catRes = await fetch('/api/categories?type=compliance');
+    if (catRes.ok) setCategories(await catRes.json());
+  }, []);
+
   const loadDocs = useCallback(async (tid: string) => {
     const { data } = await supabase
       .from('compliance_documents')
@@ -284,7 +290,7 @@ export default function ManagerCompliancePage() {
               scopeLabel="全体"
               onChanged={() => me && loadDocs(me.tenant_id)}
             />
-            <CategoryManagerModal type="compliance" />
+            <CategoryManagerModal type="compliance" onChanged={reloadCategories} />
           </div>
         </div>
 

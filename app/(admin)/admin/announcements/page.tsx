@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,12 @@ export default function AdminAnnouncementsPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const supabase = createClient();
+
+  /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+  const reloadCategories = useCallback(async () => {
+    const catRes = await fetch('/api/categories?type=announcement');
+    if (catRes.ok) setCategories(await catRes.json());
+  }, []);
 
   async function reloadAnnouncements(tid: string) {
     const { data } = await supabase
@@ -152,7 +158,7 @@ export default function AdminAnnouncementsPage() {
               scopeLabel="全体"
               onChanged={() => tenantId && reloadAnnouncements(tenantId)}
             />
-            <CategoryManagerModal type="announcement" />
+            <CategoryManagerModal type="announcement" onChanged={reloadCategories} />
           </div>
         </div>
 

@@ -54,6 +54,12 @@ export default function ManagerTrainingsPage() {
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const supabase = createClient();
 
+  /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+  const reloadCategories = useCallback(async () => {
+    const catRes = await fetch('/api/categories?type=training');
+    if (catRes.ok) setCategories(await catRes.json());
+  }, []);
+
   const reloadTrainings = useCallback(async (tid: string) => {
     const { data } = await supabase
       .from('trainings')
@@ -233,7 +239,7 @@ export default function ManagerTrainingsPage() {
               scopeLabel="全体"
               onChanged={() => me && reloadTrainings(me.tenant_id)}
             />
-            <CategoryManagerModal type="training" />
+            <CategoryManagerModal type="training" onChanged={reloadCategories} />
           </div>
         </div>
 

@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,12 @@ export default function AdminTrainingsPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const supabase = createClient();
+
+  /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+  const reloadCategories = useCallback(async () => {
+    const catRes = await fetch('/api/categories?type=training');
+    if (catRes.ok) setCategories(await catRes.json());
+  }, []);
 
   async function reloadTrainings(tid: string) {
     const { data } = await supabase
@@ -203,7 +209,7 @@ export default function AdminTrainingsPage() {
               scopeLabel="全体"
               onChanged={() => tenantId && reloadTrainings(tenantId)}
             />
-            <CategoryManagerModal type="training" />
+            <CategoryManagerModal type="training" onChanged={reloadCategories} />
           </div>
         </div>
 

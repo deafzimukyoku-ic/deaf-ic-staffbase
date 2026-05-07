@@ -66,6 +66,12 @@ export default function AdminCompliancePage() {
 
   const supabase = createClient();
 
+  /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+  const reloadCategories = useCallback(async () => {
+    const catRes = await fetch('/api/categories?type=compliance');
+    if (catRes.ok) setCategories(await catRes.json());
+  }, []);
+
   const loadDocs = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -266,7 +272,7 @@ export default function AdminCompliancePage() {
               scopeLabel="全体"
               onChanged={loadDocs}
             />
-            <CategoryManagerModal type="compliance" />
+            <CategoryManagerModal type="compliance" onChanged={reloadCategories} />
           </div>
         </div>
 

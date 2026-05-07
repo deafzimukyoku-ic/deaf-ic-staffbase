@@ -54,6 +54,12 @@ export default function ManagerAnnouncementsPage() {
 
     const supabase = createClient();
 
+    /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
+    const reloadCategories = useCallback(async () => {
+        const catRes = await fetch('/api/categories?type=announcement');
+        if (catRes.ok) setCategories(await catRes.json());
+    }, []);
+
     const reloadAnnouncements = useCallback(async (tid: string) => {
         const { data } = await supabase
             .from('announcements')
@@ -247,7 +253,7 @@ export default function ManagerAnnouncementsPage() {
                             scopeLabel="全体"
                             onChanged={() => me && reloadAnnouncements(me.tenant_id)}
                         />
-                        <CategoryManagerModal type="announcement" />
+                        <CategoryManagerModal type="announcement" onChanged={reloadCategories} />
                     </div>
                 </div>
 
