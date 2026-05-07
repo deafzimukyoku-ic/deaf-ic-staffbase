@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { generateShiftAssignments, type ShiftWarning } from '@/lib/logic/generateShift';
+import { isAttended } from '@/lib/logic/attendance';
 import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
 import { fetchFacilityMemberIds } from '@/lib/multi-facility';
 import { toast } from 'sonner';
@@ -119,12 +120,11 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   const tenantId = staff[0]?.tenant_id ?? '';
 
   const childrenCountByDate = useMemo(() => {
-    /* Phase 64: 必要職員数の算定から waitlist / absent / leave を除外 */
+    /* 必要職員数の算定: isAttended (時間あり ∧ ¬waitlist) のみ集計。
+       時間 NULL の planned エントリ（attendance status だけ作られた空セル）はカウントしない。 */
     const m = new Map<string, number>();
     for (const e of scheduleEntries) {
-      if (e.attendance_status === 'absent') continue;
-      if (e.attendance_status === 'leave') continue;
-      if (e.attendance_status === 'waitlist') continue;
+      if (!isAttended(e)) continue;
       m.set(e.date, (m.get(e.date) ?? 0) + 1);
     }
     return m;

@@ -18,6 +18,7 @@ import type {
   ShiftAssignmentType,
 } from '@/lib/types';
 import { DEFAULT_MIN_QUALIFIED_STAFF } from '@/lib/constants';
+import { isAttended } from '@/lib/logic/attendance';
 
 interface GenerateShiftInput {
   tenantId: string;
@@ -90,13 +91,11 @@ export function generateShiftAssignments(
   }
 
   // 日ごとの利用人数を集計
-  // Phase 64: absent / leave / waitlist は必要職員数算定の対象外
-  // （waitlist もカウントすると必要職員数が過剰見積もりになりシフトが過剰生成される）
+  // 判定は lib/logic/attendance.ts の isAttended (時間あり ∧ ¬waitlist) に一元化。
+  // 時間 NULL の planned エントリ（attendance_status だけ作られた空セル）はカウントしない。
   const dailyChildCount = new Map<string, number>();
   for (const entry of scheduleEntries) {
-    if (entry.attendance_status === 'absent') continue;
-    if (entry.attendance_status === 'leave') continue;
-    if (entry.attendance_status === 'waitlist') continue;
+    if (!isAttended(entry)) continue;
     const count = dailyChildCount.get(entry.date) || 0;
     dailyChildCount.set(entry.date, count + 1);
   }

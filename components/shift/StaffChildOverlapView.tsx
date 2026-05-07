@@ -24,6 +24,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import { fetchFacilityMemberIds } from '@/lib/multi-facility';
 import { staffDisplayName } from '@/lib/shift-utils';
+import { isAttended } from '@/lib/logic/attendance';
 import Button from '@/components/shift-compat/Button';
 import type { Facility } from '@/lib/types';
 
@@ -185,11 +186,8 @@ export default function StaffChildOverlapView({ scope }: Props) {
         .lte('date', monthTo);
 
       const shifts = (shiftData ?? []) as ShiftRow[];
-      /* 出席判定: (pickup_time OR dropoff_time) AND status NOT IN excluded */
-      const entries = ((entryData ?? []) as EntryRow[]).filter((e) => {
-        if (e.attendance_status === 'absent' || e.attendance_status === 'leave' || e.attendance_status === 'waitlist') return false;
-        return !!(e.pickup_time || e.dropoff_time);
-      });
+      /* 出席判定は lib/logic/attendance.ts の isAttended に一元化（時間あり ∧ ¬waitlist）*/
+      const entries = ((entryData ?? []) as EntryRow[]).filter(isAttended);
 
       /* date → shifts[] / date → entries[] にバケット化 */
       const shiftsByDate = new Map<string, ShiftRow[]>();

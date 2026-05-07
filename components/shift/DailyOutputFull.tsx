@@ -8,6 +8,7 @@ import DateStepperFull from '@/components/shift/DateStepperFull';
 import { defaultOutputDate } from '@/lib/date/defaultOutputDate';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
+import { isAttended } from '@/lib/logic/attendance';
 import { staffDisplayName } from '@/lib/shift-utils';
 import type { GradeType } from '@/lib/constants';
 import type {
@@ -299,10 +300,8 @@ export default function DailyOutputFull({ role: _role }: Props) {
     const taByEntry = new Map(transportAssignments.map((t) => [t.schedule_entry_id, t]));
 
     for (const entry of entries) {
-      if (entry.attendance_status === 'absent') continue;
-      if (entry.attendance_status === 'leave') continue;
-      if (entry.attendance_status === 'waitlist') continue; /* Phase 64: waitlist は別セクションで表示 */
-      if (!entry.pickup_time && !entry.dropoff_time) continue; /* 旧データ互換のお休み除外 */
+      /* 出席判定は lib/logic/attendance.ts に一元化（時間あり ∧ ¬waitlist）*/
+      if (!isAttended(entry)) continue;
 
       const child = childById.get(entry.child_id);
       if (!child) continue;
@@ -499,15 +498,11 @@ export default function DailyOutputFull({ role: _role }: Props) {
   );
 
   /* 利用児童数: 当日 entries のうち「実際に来所する」児童のユニーク数。
-     欠席・お休み（attendance_status='absent'/'leave' または times 両方 null）を除外。
-     Phase 64: waitlist も実際の来所ではないので除外（別セクションで表示）。 */
+     判定は isAttended (時間あり ∧ ¬waitlist) に一元化。 */
   const activeChildCount = useMemo(() => {
     const ids = new Set<string>();
     for (const e of entries) {
-      if (e.attendance_status === 'absent') continue;
-      if (e.attendance_status === 'leave') continue;
-      if (e.attendance_status === 'waitlist') continue;
-      if (!e.pickup_time && !e.dropoff_time) continue;
+      if (!isAttended(e)) continue;
       ids.add(e.child_id);
     }
     return ids.size;

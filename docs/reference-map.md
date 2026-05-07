@@ -681,6 +681,29 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 
 ---
 
+## 14a. 出席判定ヘルパー `isAttended` / `isWaitlist`（Phase 66-E, 2026-05-07）
+
+**料金表で「利用していないのに料金発生」が起きた → 各箇所で出席判定ロジックがコピペされ微妙にズレていたため一元化。**
+
+| ファイル | 参照内容 |
+|---|---|
+| **lib/logic/attendance.ts** | **`isAttended(e)` = 「pickup_time or dropoff_time が入っている」AND「status !== 'waitlist'」/ `isWaitlist(e)` = 「status === 'waitlist'」** |
+| components/shift/BillingFull.tsx | 出席日数 + イベント参加初期値 → `isAttended` 一括 |
+| components/shift/DailyOutputFull.tsx | 送迎スロット組立て + `activeChildCount` → `isAttended` |
+| components/shift/ShiftFull.tsx | `childrenCountByDate`（必要職員数算定） → `isAttended` |
+| components/shift/WeeklyTransportFull.tsx | scheduleEntries フィルタ → `isAttended` |
+| components/shift/TransportFull.tsx | scheduleEntries フィルタ → `isAttended ∪ isWaitlist`（送迎表は集約バー用に waitlist も保持）/ 当日利用人数 → `isAttended` / 当日キャンセル待ち → `isWaitlist` / 送迎スロット組立て → `isAttended` |
+| components/shift/StaffChildOverlapView.tsx | 児童 × 職員同席日数 → `isAttended` |
+| lib/logic/generateShift.ts | `dailyChildCount` 集計 → `isAttended` |
+
+### 設計判断
+- **時間 NULL の planned/present は非カウント**: 旧コードは `attendance_status NOT IN ('absent','leave','waitlist')` だけで判定する箇所もあったが、新ロジックでは時間 NULL の planned エントリ（attendance status だけ作られた空セル）は**全て非カウント**に統一
+- **absent / leave の status 明示除外を廃止**: UI で absent / leave を選ぶと `pickup_time` / `dropoff_time` が NULL に強制される（ScheduleFull.tsx handleSave）ため、時間チェックだけで自動的にカウント外になる。status による明示除外はノイズだったので削除
+- **waitlist のみ status で除外**: waitlist は present 昇格時に時刻を引き継ぐため時刻を保持する設計（migration 124）。なので時間チェックだけでは除外できず、status で明示除外する
+- **送迎表のみ `isAttended ∪ isWaitlist`**: キャンセル待ちセクション表示用に scheduleEntries は両方保持。出席判定が必要な内部ロジックでは `isAttended` だけを使う
+
+---
+
 ## 14b. facilities フィーチャーフラグ（shift_enabled / transport_enabled / shift_only_mode）
 
 | ファイル | 参照内容 |

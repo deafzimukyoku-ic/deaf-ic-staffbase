@@ -9,6 +9,7 @@ import Button from '@/components/shift-compat/Button';
 import MonthStepper from '@/components/shift/MonthStepper';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
+import { isAttended } from '@/lib/logic/attendance';
 import type {
   StaffRow,
   ChildRow,
@@ -179,16 +180,9 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
       setStaff(staffRows);
       setChildren((childRes.data ?? []) as ChildRow[]);
 
-      /* 欠席 (absent)・お休み (leave または時刻両方 null)・キャンセル待ち (waitlist) は印刷対象外。
-         Phase 64: waitlist は週次送迎の送迎担当を持たないので除外。 */
+      /* 出席判定は isAttended (時間あり ∧ ¬waitlist) に一元化。waitlist は送迎担当を持たないので除外。 */
       setScheduleEntries(
-        ((entryRes.data ?? []) as ScheduleEntryRow[]).filter((e) => {
-          if (e.attendance_status === 'absent') return false;
-          if (e.attendance_status === 'leave') return false;
-          if (e.attendance_status === 'waitlist') return false;
-          if (!e.pickup_time && !e.dropoff_time) return false;
-          return true;
-        }),
+        ((entryRes.data ?? []) as ScheduleEntryRow[]).filter(isAttended),
       );
 
       /* transport_assignments を当月分の schedule_entry_id で絞る */

@@ -295,11 +295,16 @@ shift-maker 由来:
 - `schedule_entries.attendance_status`: `planned|present|absent|late|early_leave|leave|waitlist`
 - 更新は RPC `update_schedule_entry_attendance(p_entry_id, p_status, p_waitlist_order)` 経由（migration 124 で 第3引数追加）
 - `attendance_audit_logs` に status 変更時のみ履歴記録（changed_by_name スナップショット）
-- **deaf-ic 出席判定（一元化）**: 「出席扱い = 時間が入っている (`pickup_time` または `dropoff_time` not null) AND `attendance_status NOT IN ('absent', 'leave', 'waitlist')`」
-  - `planned + 時間あり` も自動で出席扱い（PDF インポート直後でカウントされる）
+- **deaf-ic 出席判定（一元化・Phase 66-E 以降）**: `lib/logic/attendance.ts` の `isAttended()` を全箇所で使用。
+  - 判定式: 「`pickup_time` または `dropoff_time` が入っている」かつ「`attendance_status !== 'waitlist'`」
+  - `absent` / `leave` を選ぶと UI で時刻が NULL に強制されるため、status による明示除外は不要（時間 NULL で自動的にカウント外）
+  - `planned + 時間あり` は自動で出席扱い（PDF インポート直後でカウントされる）
+  - 時間 NULL の `planned` / `present` エントリ（attendance status だけ作られた空セル）はカウントされない
   - 利用表モーダルから「出席」ボタンは削除済。明示マークは「お休み / 欠席 / キャンセル待ち」の 3 つのみ（再押下でトグル解除）
-  - `present` ステータスは互換のため enum に残置。既存データはそのまま動く（時間ありなら出席扱いに該当）
-- `absent` / `leave` / `waitlist` 児童は日次出力・送迎表・シフト生成・利用料金表 出席日数 から除外
+  - `present` ステータスは互換のため enum に残置。時間ありなら出席扱いに該当
+  - 利用箇所: `BillingFull` / `DailyOutputFull` / `ShiftFull` / `WeeklyTransportFull` / `TransportFull` / `StaffChildOverlapView` / `generateShift`
+  - 送迎表 (`TransportFull`) のみ「キャンセル待ちセクション表示用」に `isWaitlist()` も併用（出席扱いではない）
+- `waitlist` 児童は日次出力・送迎表（メイン）・シフト生成・利用料金表 出席日数 から除外
 
 ### AI診断
 - `claude-haiku-4-5` 固定

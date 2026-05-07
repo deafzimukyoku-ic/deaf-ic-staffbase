@@ -11,6 +11,7 @@ import DateStepperFull from '@/components/shift/DateStepperFull';
 import Button from '@/components/shift-compat/Button';
 import Modal from '@/components/shift-compat/Modal';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
+import { isAttended, isWaitlist } from '@/lib/logic/attendance';
 import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
 import { fetchFacilityMemberIds } from '@/lib/multi-facility';
 import {
@@ -310,16 +311,12 @@ export default function TransportFull({ role }: Props) {
         return a.name.localeCompare(b.name, 'ja');
       }));
 
-      /* 送迎表で出さないものを除外（欠席・お休み・両時刻 null）。
-         Phase 64: waitlist は集約バー表示用に時刻有無に関わらず保持する。 */
+      /* 送迎表は「出席（isAttended）∪ キャンセル待ち（waitlist 集約バー表示用）」を保持する。
+         キャンセル待ちは時刻有無に関わらず別セクションに表示するため特例扱い。 */
       setScheduleEntries(
-        ((entryRes.data ?? []) as ScheduleEntryRow[]).filter((e) => {
-          if (e.attendance_status === 'absent') return false;
-          if (e.attendance_status === 'leave') return false;
-          if (e.attendance_status === 'waitlist') return true;
-          if (!e.pickup_time && !e.dropoff_time) return false;
-          return true;
-        })
+        ((entryRes.data ?? []) as ScheduleEntryRow[]).filter(
+          (e) => isAttended(e) || isWaitlist(e),
+        ),
       );
 
       setShiftAssignments((shiftRes.data ?? []) as ShiftAssignmentRow[]);
@@ -1054,14 +1051,10 @@ export default function TransportFull({ role }: Props) {
             {/* 当日利用人数 + Phase 64: キャンセル待ち件数 */}
             {(() => {
               const dayEntries = scheduleEntries.filter(
-                (e) =>
-                  e.date === selectedDate &&
-                  e.attendance_status !== 'absent' &&
-                  e.attendance_status !== 'leave' &&
-                  e.attendance_status !== 'waitlist'
+                (e) => e.date === selectedDate && isAttended(e),
               );
               const waitlistCount = scheduleEntries.filter(
-                (e) => e.date === selectedDate && e.attendance_status === 'waitlist'
+                (e) => e.date === selectedDate && isWaitlist(e),
               ).length;
               return (
                 <>

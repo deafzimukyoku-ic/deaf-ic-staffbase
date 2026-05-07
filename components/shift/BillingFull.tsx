@@ -23,6 +23,7 @@ import {
   type BillingChildInput,
   type BillingEventInput,
 } from '@/lib/logic/computeBilling';
+import { isAttended } from '@/lib/logic/attendance';
 import type {
   ChildRow,
   EventRow,
@@ -177,18 +178,13 @@ export default function BillingFull({ scope }: Props) {
       }
       const summaryByChildId = new Map(summaries.map((s) => [s.child_id, s]));
 
-      /* 出席日数 = 「時間が入っている AND 欠席系ステータスではない」日数。
-         deaf-ic 仕様: 利用予定（pickup_time or dropoff_time）が入っている = 出席扱い。
-         明示的に absent / leave / waitlist マークされた日のみ除外。
-         また attendedSet (childId_date) はイベント参加初期値の判定にも使う。 */
+      /* 出席日数 / イベント参加初期値: lib/logic/attendance.ts の isAttended に一元化。
+         「時間あり ∧ ¬waitlist」だけで判定（absent/leave は時間 NULL に強制されるため自動除外）。 */
       const presentDaysByChildId = new Map<string, number>();
       const attendedSet = new Set<string>();
       const attendedKey = (cid: string, d: string) => `${cid}_${d}`;
       for (const e of entries) {
-        if (e.attendance_status === 'absent') continue;
-        if (e.attendance_status === 'leave') continue;
-        if (e.attendance_status === 'waitlist') continue;
-        if (!e.pickup_time && !e.dropoff_time) continue;
+        if (!isAttended(e)) continue;
         presentDaysByChildId.set(e.child_id, (presentDaysByChildId.get(e.child_id) ?? 0) + 1);
         attendedSet.add(attendedKey(e.child_id, e.date));
       }

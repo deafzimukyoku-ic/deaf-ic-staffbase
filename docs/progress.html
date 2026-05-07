@@ -600,6 +600,28 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- Phase 66-E: 出席判定の一元化 (2026-05-07) -->
+<div class="phase">
+  <h2>Phase 66-E: 出席判定の一元化（lib/logic/attendance.ts） <span class="phase-pct">実装完了 / ローカル確認待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">背景: 料金表で「利用していないのに料金発生」/「逆」のズレが発生。各箇所で出席判定がコピペされ微妙にズレていたため一元化</td></tr>
+      <tr><td>出席判定ヘルパー新設: isAttended() / isWaitlist()</td><td class="files">lib/logic/attendance.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「pickup_time or dropoff_time が入っている AND status !== 'waitlist'」に統一。absent/leave は時間 NULL に強制されるため status 明示除外を廃止</td></tr>
+      <tr><td>BillingFull: 出席日数 + イベント参加初期値を isAttended に置換</td><td class="files">components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>DailyOutputFull: 送迎スロット組立て + activeChildCount を isAttended に置換</td><td class="files">components/shift/DailyOutputFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>ShiftFull: childrenCountByDate を isAttended に置換（必要職員数の算定）</td><td class="files">components/shift/ShiftFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>時間 NULL の planned エントリは非カウントに変更（旧コードはカウントしていた）</td></tr>
+      <tr><td>WeeklyTransportFull: scheduleEntries フィルタを isAttended に置換</td><td class="files">components/shift/WeeklyTransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>TransportFull: scheduleEntries フィルタ = isAttended ∪ isWaitlist / 当日利用人数 / 送迎スロット組立て を一括置換</td><td class="files">components/shift/TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>キャンセル待ちセクション表示用に waitlist は scheduleEntries に保持</td></tr>
+      <tr><td>StaffChildOverlapView: 児童 × 職員同席日数を isAttended に置換</td><td class="files">components/shift/StaffChildOverlapView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>generateShift: dailyChildCount を isAttended に置換</td><td class="files">lib/logic/generateShift.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>時間 NULL の planned エントリは非カウントに変更</td></tr>
+      <tr><td>CLAUDE.md §10 / docs/reference-map.md 更新</td><td class="files">CLAUDE.md, docs/reference-map.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>§10 出席判定セクションを isAttended ベースに書き換え + reference-map に §14a 追加</td></tr>
+      <tr><td>ローカル動作確認 (npm run dev)</td><td class="files">—</td><td><span class="status prog">確認待ち</span></td><td class="pct">90%</td><td>ユーザー確認後に main へ push</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 利用料金表の出席日数が利用予定の表示通りに一致するか（時間あり ∧ ¬waitlist）② シフト表 サイドバーの利用人数バッジが正しいか ③ 送迎表で キャンセル待ちが別セクションに表示され、メインから除外されているか ④ 日次出力の利用児童数が一致 ⑤ 旧データ（時間 NULL の planned）が混在していないか SQL で確認 ⑥ ゴーストデータ（山本美潤・中村日菜美 4/29 あおむしのお散歩制作）は別タスクで個別クリーンアップ予定</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- Phase 66: イベント設定 + 利用料金表 -->
 <div class="phase">
   <h2>Phase 66: イベント設定 + 利用料金表（5月分から運用） <span class="phase-pct">完了 100%（migration 126〜128 適用済 + 動作確認済）</span></h2>
