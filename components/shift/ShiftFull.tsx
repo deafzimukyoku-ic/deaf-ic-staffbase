@@ -17,7 +17,7 @@ import { staffDisplayName } from '@/lib/shift-utils';
 import { generateShiftAssignments, type ShiftWarning } from '@/lib/logic/generateShift';
 import { isAttended } from '@/lib/logic/attendance';
 import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
-import { fetchFacilityMemberIds } from '@/lib/multi-facility';
+import { fetchFacilityMembers } from '@/lib/multi-facility';
 import { toast } from 'sonner';
 import type {
   ShiftAssignmentType,
@@ -153,29 +153,26 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       const to = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
 
       // employees (active)
-      // migration 130: 兼任職員 (employee_facilities) も含めるため、まず member ids を取得
-      const memberIds = await fetchFacilityMemberIds(supabase, facilityId);
+      // migration 155: get_facility_members RPC で兼任含む職員一覧を取得（RLS バイパス）。
+      // 旧: fetchFacilityMemberIds + from('employees').in('id', ids) は employees の RLS で
+      // manager / shift_manager が自分の行しか見えない問題があった。
+      const allMembers = await fetchFacilityMembers(supabase, facilityId);
+      const emps = allMembers
+        .filter((m) => m.status === 'active')
+        .sort((a, b) => {
+          const ao = a.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+          const bo = b.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+          if (ao !== bo) return ao - bo;
+          return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
+        });
 
-      const { data: emps, error: eErr } = memberIds.length === 0
-        ? { data: [], error: null }
-        : await supabase
-            .from('employees')
-            .select(
-              'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status'
-            )
-            .in('id', memberIds)
-            .eq('status', 'active')
-            .order('shift_display_order', { ascending: true, nullsFirst: false })
-            .order('last_name', { ascending: true });
-      if (eErr) throw new Error('職員取得失敗: ' + eErr.message);
-
-      const staffRows: StaffRow[] = (emps ?? []).map((e) => ({
+      const staffRows: StaffRow[] = emps.map((e) => ({
         id: e.id,
         tenant_id: e.tenant_id,
-        facility_id: e.facility_id,
+        facility_id: e.facility_id ?? '',
         name: staffDisplayName({
-          last_name: e.last_name,
-          first_name: e.first_name,
+          last_name: e.last_name ?? '',
+          first_name: e.first_name ?? '',
         }),
         email: e.email ?? null,
         role: (e.role ?? 'employee') as 'admin' | 'manager' | 'employee',

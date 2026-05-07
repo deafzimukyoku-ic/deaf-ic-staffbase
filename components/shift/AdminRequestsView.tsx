@@ -10,7 +10,7 @@ import Badge from '@/components/shift-compat/Badge';
 import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import { staffDisplayName } from '@/lib/shift-utils';
-import { fetchFacilityMemberIds } from '@/lib/multi-facility';
+import { fetchFacilityMembers } from '@/lib/multi-facility';
 import { isJpHoliday } from '@/lib/date/holidays';
 import type { ShiftRequestRow, ShiftRequestType } from '@/lib/types';
 
@@ -81,30 +81,32 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
     setLoading(true);
 
     // migration 130: 兼任先 (employee_facilities) の職員も含めて取得
-    const memberIds = await fetchFacilityMemberIds(supabase, facilityId);
+    // migration 155: SECURITY DEFINER RPC で employees の RLS をバイパス（manager / shift_manager 対応）
+    const allMembers = await fetchFacilityMembers(supabase, facilityId);
 
-    if (memberIds.length === 0) {
+    if (allMembers.length === 0) {
       setEmployees([]);
       setRequests([]);
       setLoading(false);
       return;
     }
 
-    const { data: emps } = await supabase
-      .from('employees')
-      .select('id, last_name, first_name, employment_type, status, role')
-      .in('id', memberIds)
-      .eq('status', 'active')
-      .order('shift_display_order', { ascending: true, nullsFirst: false })
-      .order('last_name', { ascending: true });
-
     /* 本部などシフトのみモードの事業所には admin ロールの社員も在籍するため、role フィルタを撤去。
        「自分が休み希望を提出する」運用は role に関係なく可能。 */
-    const empRows: EmployeeRow[] = (emps ?? []).map((e) => ({
-      id: e.id,
-      name: staffDisplayName({ last_name: e.last_name, first_name: e.first_name }),
-      employment_type: (e.employment_type ?? null) as 'full_time' | 'part_time' | null,
-    }));
+    const memberIds = allMembers.map((m) => m.id);
+    const empRows: EmployeeRow[] = allMembers
+      .filter((m) => m.status === 'active')
+      .sort((a, b) => {
+        const ao = a.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+        const bo = b.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+        if (ao !== bo) return ao - bo;
+        return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
+      })
+      .map((e) => ({
+        id: e.id,
+        name: staffDisplayName({ last_name: e.last_name ?? '', first_name: e.first_name ?? '' }),
+        employment_type: (e.employment_type ?? null) as 'full_time' | 'part_time' | null,
+      }));
 
     /* 兼任職員の他施設で出された希望も「両方の管理者が見える」要件のため、
        facility_id 絞り込みを employee_id 絞り込みに置換 (migration 131 の RLS と整合) */

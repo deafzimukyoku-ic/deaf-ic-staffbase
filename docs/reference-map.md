@@ -681,6 +681,36 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 
 ---
 
+## 14b. `get_facility_members` / `get_facility_member_ids` RPC — shift_manager / manager の職員一覧取得（migration 154, 155, 2026-05-07）
+
+**送迎表で他職員が見えない問題の修正。** `lib/multi-facility.ts` の `fetchFacilityMemberIds` / `fetchEmployeeIdsForFacilities` が `employees` を直接 SELECT していたが、employees の RLS は migration 010 で「自分のみ」「admin のみ tenant 全件」しか定義されておらず、manager / shift_manager は自分 1 件しか取れなかった（migration 144 で許可しようとしたが「全員ログアウト」発生で 145 ロールバック済）。
+
+**ID リスト（migration 154）だけでは不十分**だった点に注意: 取得後に `from('employees').select(...).in('id', ids)` を呼ぶと employees の RLS が再び効いて結局自分の行しか返らない。**行データ全体を返す `get_facility_members`（migration 155）** を新設し、各画面のクエリを RPC 1 本に置換した。
+
+| ファイル | 参照内容 |
+|---|---|
+| supabase/migrations/154_get_facility_member_ids_rpc.sql | `get_facility_member_ids(p_facility_id uuid)` SECURITY DEFINER RPC（id 配列のみ）。assignments の結合キー判定など ID だけで足りる用途に残置 |
+| **supabase/migrations/155_get_facility_members_rpc.sql** | **`get_facility_members(p_facility_id uuid)` SECURITY DEFINER RPC。id, tenant_id, facility_id, employee_number, last_name, first_name, email, role, status, employment_type, default_start/end_time, pickup/dropoff_transport_areas, qualifications, shift_qualifications, is_qualified/driver/attendant, shift_display_order, join_date, employee_position を返す（住所・電話・birth_date・銀行・保険番号は含めない）** |
+| lib/multi-facility.ts | `fetchFacilityMembers(supabase, facility_id): FacilityMemberRow[]` 追加 / `fetchFacilityMemberIds` は注意書きとともに残置（ID だけで足りる用途専用） |
+| components/shift/StaffSettingsFull.tsx | 職員一覧 SELECT を `fetchFacilityMembers` に置換 |
+| components/shift/TransportFull.tsx | empRes Promise.all から外し、`fetchFacilityMembers` で先に取って StaffRow projection |
+| components/shift/ShiftFull.tsx | 同上 |
+| components/shift/WeeklyTransportFull.tsx | 同上 |
+| components/shift/DailyOutputFull.tsx | 同上 |
+| components/shift/DailyReportFull.tsx | 同上 |
+| components/shift/StaffChildOverlapView.tsx | 同上（StaffCol projection） |
+| components/shift/AdminRequestsView.tsx | 同上（EmployeeRow projection、memberIds は shift_requests 絞り込みに引き続き使用） |
+
+### 設計判断
+- **RLS は触らない**: migration 144 ロールバックの教訓（再帰的 RLS 評価で全員ログアウト）から、SECURITY DEFINER RPC で必要最小限のフィールドだけ返す方式に統一（migration 146 `get_my_subordinates` と同じ設計）
+- **manager / shift_manager の認可**: `get_my_managed_facility_ids()` 経由で「自分の管轄 facility か」だけチェック。employee ロールには空配列を返す
+- **同テナントチェック**: `facilities.tenant_id` を直接照合
+- **戻り値カラム**: シフト・送迎・職員管理 UI で必要な列のみ。住所・電話・banking 等の機密情報は含めない
+- **`position` は予約語**: 戻り値カラム名は `employee_position` に変更（migration 146 と同じ手法）
+- **`distinct on (e.id)`**: 主所属 + 兼任を employee_facilities LEFT JOIN で union するときに重複を避ける
+
+---
+
 ## 14a. 出席判定ヘルパー `isAttended` / `isWaitlist`（Phase 66-E, 2026-05-07）
 
 **料金表で「利用していないのに料金発生」が起きた → 各箇所で出席判定ロジックがコピペされ微妙にズレていたため一元化。**

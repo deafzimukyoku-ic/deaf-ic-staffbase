@@ -10,6 +10,7 @@ import MonthStepper from '@/components/shift/MonthStepper';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
 import { isAttended } from '@/lib/logic/attendance';
+import { fetchFacilityMembers, type FacilityMemberRow } from '@/lib/multi-facility';
 import type {
   StaffRow,
   ChildRow,
@@ -126,16 +127,18 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
       const from = `${year}-${String(month).padStart(2, '0')}-01`;
       const to = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
-      const [empRes, childRes, entryRes, transportRes, settingsRes] = await Promise.all([
-        supabase
-          .from('employees')
-          .select(
-            'id, tenant_id, facility_id, last_name, first_name, email, role, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order, status',
-          )
-          .eq('facility_id', facilityId)
-          .eq('status', 'active')
-          .order('shift_display_order', { ascending: true, nullsFirst: false })
-          .order('last_name', { ascending: true }),
+      // 職員一覧は SECURITY DEFINER RPC 経由（migration 155）。RLS バイパスで manager / shift_manager でも全員取得可能
+      const allMembers = await fetchFacilityMembers(supabase, facilityId);
+      const empRows: FacilityMemberRow[] = allMembers
+        .filter((m) => m.status === 'active')
+        .sort((a, b) => {
+          const ao = a.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+          const bo = b.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+          if (ao !== bo) return ao - bo;
+          return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
+        });
+
+      const [childRes, entryRes, transportRes, settingsRes] = await Promise.all([
         supabase.from('children').select('*').eq('facility_id', facilityId),
         supabase
           .from('schedule_entries')
@@ -154,29 +157,25 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
           .maybeSingle(),
       ]);
 
-      const staffRows: StaffRow[] = (empRes.data ?? []).map((e: Record<string, unknown>) => {
-        const lastName = (e.last_name as string | null) ?? '';
-        const firstName = (e.first_name as string | null) ?? '';
-        return {
-          id: e.id as string,
-          tenant_id: e.tenant_id as string,
-          facility_id: e.facility_id as string,
-          name: `${lastName} ${firstName}`.trim(),
-          email: e.email as string | null,
-          role: (e.role as 'admin' | 'manager' | 'employee') ?? 'employee',
-          employment_type: (e.employment_type as 'full_time' | 'part_time') ?? 'full_time',
-          default_start_time: e.default_start_time as string | null,
-          default_end_time: e.default_end_time as string | null,
-          pickup_transport_areas: (e.pickup_transport_areas as string[]) ?? [],
-          dropoff_transport_areas: (e.dropoff_transport_areas as string[]) ?? [],
-          qualifications: (e.qualifications as string[]) ?? [],
-          shift_qualifications: ((e.shift_qualifications as string[] | undefined) ?? (e.qualifications as string[]) ?? []),
-          is_qualified: (e.is_qualified as boolean) ?? false,
-          is_driver: (e.is_driver as boolean) ?? false,
-          is_attendant: (e.is_attendant as boolean) ?? false,
-          shift_display_order: (e.shift_display_order as number | null) ?? null,
-        } as StaffRow;
-      });
+      const staffRows: StaffRow[] = empRows.map((e) => ({
+        id: e.id,
+        tenant_id: e.tenant_id,
+        facility_id: e.facility_id ?? '',
+        name: `${e.last_name ?? ''} ${e.first_name ?? ''}`.trim(),
+        email: e.email,
+        role: (e.role as 'admin' | 'manager' | 'employee') ?? 'employee',
+        employment_type: (e.employment_type as 'full_time' | 'part_time') ?? 'full_time',
+        default_start_time: e.default_start_time,
+        default_end_time: e.default_end_time,
+        pickup_transport_areas: e.pickup_transport_areas ?? [],
+        dropoff_transport_areas: e.dropoff_transport_areas ?? [],
+        qualifications: e.qualifications ?? [],
+        shift_qualifications: e.shift_qualifications ?? e.qualifications ?? [],
+        is_qualified: e.is_qualified ?? false,
+        is_driver: e.is_driver ?? false,
+        is_attendant: e.is_attendant ?? false,
+        shift_display_order: e.shift_display_order,
+      }));
       setStaff(staffRows);
       setChildren((childRes.data ?? []) as ChildRow[]);
 

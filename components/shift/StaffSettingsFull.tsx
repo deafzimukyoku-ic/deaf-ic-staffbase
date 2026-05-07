@@ -15,7 +15,7 @@ import Modal from '@/components/shift-compat/Modal';
 import { DragSortList, DragSortItem, DragHandleIcon } from '@/components/admin/DragSortList';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { useShiftFacilityId } from '@/lib/shift-facility';
-import { fetchFacilityMemberIds } from '@/lib/multi-facility';
+import { fetchFacilityMembers } from '@/lib/multi-facility';
 import type { AreaLabel, QualificationType, Facility, EmploymentType } from '@/lib/types';
 
 type EmployeeRole = 'admin' | 'manager' | 'employee';
@@ -277,19 +277,19 @@ export default function StaffSettingsFull({ scope }: Props) {
     if (!me || !selectedFacilityId) return;
     setError('');
     try {
-      // 職員一覧（自 facility + 兼任先で来ている職員）
-      // migration 130: 送迎担当・エリア割当の編集対象として兼任職員も含める
-      const memberIds = await fetchFacilityMemberIds(supabase, selectedFacilityId);
-      const baseSel = supabase
-        .from('employees')
-        .select('id, tenant_id, facility_id, last_name, first_name, email, role, status, employment_type, default_start_time, default_end_time, pickup_transport_areas, dropoff_transport_areas, qualifications, shift_qualifications, is_qualified, is_driver, is_attendant, shift_display_order')
-        .eq('tenant_id', me.tenant_id)
-        .in('id', memberIds.length > 0 ? memberIds : ['00000000-0000-0000-0000-000000000000']);
-      const filteredSel = showRetired ? baseSel : baseSel.eq('status', 'active');
-      const { data: empRows } = await filteredSel
-        .order('shift_display_order', { ascending: true, nullsFirst: false })
-        .order('last_name', { ascending: true });
-      setStaffList(((empRows ?? []) as StaffRow[]));
+      // 職員一覧（自 facility + 兼任先）。
+      // migration 155: get_facility_members RPC（SECURITY DEFINER）で employees の RLS をバイパス。
+      // 旧: fetchFacilityMemberIds + from('employees').in('id', ids) は RLS で manager / shift_manager が
+      //     自分の行しか見えない問題があった（migration 010 employees RLS は admin/self のみ）。
+      const allMembers = await fetchFacilityMembers(supabase, selectedFacilityId);
+      const filtered = showRetired ? allMembers : allMembers.filter((m) => m.status === 'active');
+      const sorted = [...filtered].sort((a, b) => {
+        const ao = a.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+        const bo = b.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+        if (ao !== bo) return ao - bo;
+        return a.last_name.localeCompare(b.last_name, 'ja');
+      });
+      setStaffList(sorted as unknown as StaffRow[]);
 
       // facility_shift_settings
       const { data: fs } = await supabase

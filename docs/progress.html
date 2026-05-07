@@ -600,6 +600,26 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- Phase 70 fix: shift_manager で職員一覧が空問題 (2026-05-07) -->
+<div class="phase">
+  <h2>Phase 70 fix: shift_manager / manager で職員一覧が空問題 <span class="phase-pct">実装完了 + 動作確認済</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">背景: shift_manager で送迎表を開くと「自分 1 人だけ」になる現象。原因は employees の RLS で manager/shift_manager に SELECT 権限がないため (migration 144 ロールバック済)、fetchFacilityMemberIds が直接 SELECT してたので空集合に</td></tr>
+      <tr><td>SECURITY DEFINER RPC `get_facility_member_ids` 新設（id 配列のみ・互換用）</td><td class="files">supabase/migrations/154_get_facility_member_ids_rpc.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>SECURITY DEFINER RPC `get_facility_members` 新設（行データ全体を返す本命）</td><td class="files">supabase/migrations/155_get_facility_members_rpc.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>id 配列だけだと from('employees').in() で再び RLS に弾かれるため、運用カラム全部を SECURITY DEFINER で返す。住所・電話・銀行は含めない</td></tr>
+      <tr><td>lib/multi-facility.ts に fetchFacilityMembers / FacilityMemberRow 追加</td><td class="files">lib/multi-facility.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>StaffSettingsFull / TransportFull / ShiftFull / WeeklyTransportFull / DailyOutputFull / DailyReportFull / StaffChildOverlapView / AdminRequestsView を RPC 経由に置換</td><td class="files">components/shift/*.tsx (8 ファイル)</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>migration 154 / 155 を Supabase に適用</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>SQL Editor で手動適用</td></tr>
+      <tr><td>reference-map.md §14b 追加</td><td class="files">docs/reference-map.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>npm run build 成功</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>ローカル動作確認（shift_manager で職員一覧表示）</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「見れるようになった」とユーザー確認済</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① shift_manager で送迎表・シフト表・職員管理・日次出力・業務日報・同席日数 → 全部職員一覧が表示される（同じ RPC 経由なので一括で直った）② manager / admin でも同等の挙動 ③ employee ロールには空配列を返すので情報漏洩なし（送迎表に来ない仕様）④ ID だけで足りる用途では従来の get_facility_member_ids を残置（互換）</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- Phase 66-E: 出席判定の一元化 (2026-05-07) -->
 <div class="phase">
   <h2>Phase 66-E: 出席判定の一元化（lib/logic/attendance.ts） <span class="phase-pct">実装完了 / ローカル確認待ち</span></h2>

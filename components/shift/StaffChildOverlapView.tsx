@@ -22,9 +22,9 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { getDaysInMonth } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
-import { fetchFacilityMemberIds } from '@/lib/multi-facility';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { isAttended } from '@/lib/logic/attendance';
+import { fetchFacilityMembers } from '@/lib/multi-facility';
 import Button from '@/components/shift-compat/Button';
 import type { Facility } from '@/lib/types';
 
@@ -127,9 +127,10 @@ export default function StaffChildOverlapView({ scope }: Props) {
         .single();
       setFacility((facData ?? null) as Facility | null);
 
-      /* 当該 facility の所属職員 ID（兼任 employee_facilities 含む / migration 130） */
-      const memberIds = await fetchFacilityMemberIds(supabase, facilityId);
-      if (memberIds.length === 0) {
+      /* 当該 facility の所属職員（兼任 employee_facilities 含む / migration 130）。
+         migration 155: SECURITY DEFINER RPC で取得（RLS バイパス）。 */
+      const allMembers = await fetchFacilityMembers(supabase, facilityId);
+      if (allMembers.length === 0) {
         setStaff([]);
         setChildren([]);
         setCounts({});
@@ -137,21 +138,21 @@ export default function StaffChildOverlapView({ scope }: Props) {
         return;
       }
 
-      /* 職員一覧 (active のみ)。employees に display_name 列は無いので select しない（migration 0 系の構造のまま） */
-      const { data: staffData } = await supabase
-        .from('employees')
-        .select('id, last_name, first_name, shift_display_order, status')
-        .in('id', memberIds)
-        .eq('status', 'active')
-        .order('shift_display_order', { ascending: true, nullsFirst: false })
-        .order('last_name', { ascending: true });
-      const staffRows: StaffCol[] = (staffData ?? []).map((e) => ({
-        id: e.id,
-        name: staffDisplayName({
-          last_name: e.last_name,
-          first_name: e.first_name,
-        }),
-      }));
+      const staffRows: StaffCol[] = allMembers
+        .filter((m) => m.status === 'active')
+        .sort((a, b) => {
+          const ao = a.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+          const bo = b.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+          if (ao !== bo) return ao - bo;
+          return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
+        })
+        .map((e) => ({
+          id: e.id,
+          name: staffDisplayName({
+            last_name: e.last_name ?? '',
+            first_name: e.first_name ?? '',
+          }),
+        }));
 
       /* 児童一覧（在籍 + 当該 facility） */
       const { data: childData } = await supabase
