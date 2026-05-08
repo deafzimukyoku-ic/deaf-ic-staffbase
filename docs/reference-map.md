@@ -764,7 +764,7 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | lib/constants.ts | `SNACK_FEE_PER_DAY=50` / `COPAY_TIERS` / `COPAY_TIER_AMOUNT` / `COPAY_TIER_LABELS` / `NAGOYA_FREE_PRESCHOOL_MUNICIPALITY` / `FREE_GRADES_NATIONWIDE` |
 | lib/logic/computeBilling.ts | `isFreeOfCharge` / `resolveCopayCap` / `computeDefaultCopayAmount` / `computeBillingRow`（純関数） |
 | components/shift/ChildrenSettingsFull.tsx | 児童編集モーダルに料金属性 UI、児童一覧テーブルに「上限 / 公文」列追加（事業所列削除）|
-| components/shift/EventSettingsFull.tsx | イベント設定 ページ（CRUD + 月切替）|
+| components/shift/EventSettingsFull.tsx | イベント設定 ページ（CRUD + 月切替）。Phase 66-F: 日付変更検出時に `billing_event_participations` を新日付の出席実績で再計算 + `billing_summaries.event_total/total_amount` 連動更新（`isAttended` 利用） |
 | components/shift/BillingFull.tsx | 利用料金表 ページ（月選択 / 自動計算 / 手動オーバーライド / 保存 / A4 横印刷）|
 | app/(admin)/admin/shifts/events/, app/(manager)/mgr/shifts/events/ | EventSettingsFull のページラッパ |
 | app/(admin)/admin/shifts/output/billing/, app/(manager)/mgr/shifts/output/billing/ | BillingFull のページラッパ |

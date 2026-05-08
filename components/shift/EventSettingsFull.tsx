@@ -22,6 +22,7 @@ import { useShiftFacilityId } from '@/lib/shift-facility';
 import Button from '@/components/shift-compat/Button';
 import DatePopover from '@/components/shift/DatePopover';
 import type { EventRow } from '@/lib/types';
+import { isAttended } from '@/lib/logic/attendance';
 
 interface Props {
   scope: 'admin' | 'manager';
@@ -69,6 +70,9 @@ export default function EventSettingsFull({ scope }: Props) {
      行ごとの日付ボタンクリック時に anchorRef を差し替えてから openRowId をセットして開く。 */
   const [openRowId, setOpenRowId] = useState<string | null>(null);
   const dateAnchorRef = useRef<HTMLButtonElement | null>(null);
+  /* イベントロード時の元の date を保持。保存時に「日付が変わったか」を検出するために使う
+     （保存後に出席実績で billing_event_participations を再計算するため）。 */
+  const originalDatesRef = useRef<Map<string, string>>(new Map());
 
   const monthFrom = `${year}-${String(month).padStart(2, '0')}-01`;
   const monthTo = `${year}-${String(month).padStart(2, '0')}-${String(getDaysInMonth(new Date(year, month - 1))).padStart(2, '0')}`;
@@ -103,7 +107,9 @@ export default function EventSettingsFull({ scope }: Props) {
         .order('display_order', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true });
       if (e) throw new Error(e.message);
-      setRows(((data ?? []) as EventRow[]).map<EditableEvent>((r) => ({
+      const list = (data ?? []) as EventRow[];
+      originalDatesRef.current = new Map(list.map((r) => [r.id, r.date]));
+      setRows(list.map<EditableEvent>((r) => ({
         id: r.id,
         date: r.date,
         name: r.name,
@@ -150,6 +156,129 @@ export default function EventSettingsFull({ scope }: Props) {
     setRows((prev) => prev.filter((r) => r.id !== row.id));
   };
 
+  /* 日付変更を出席実績ベースで billing_event_participations に反映。
+     - 旧月: 該当 event_id の participation を削除（その月の料金表からイベントが消えるため）
+     - 新月: 該当 event_id の participation を一旦削除 → 新日付の出席児童分を participated=true で insert
+     - billing_summaries.event_total / total_amount も連動更新（料金表を開かなくても合計が整合）
+     - 出席日数 / 利用負担額（copay）は再計算しない（イベント日付と無関係なため） */
+  const syncParticipationsForDateChange = async (args: {
+    eventId: string;
+    oldDate: string;
+    newDate: string;
+    price: number;
+  }) => {
+    if (!me || !facilityId) return;
+    const { eventId, oldDate, newDate, price } = args;
+
+    const parseYM = (d: string): [number, number] => {
+      const [y, m] = d.split('-').map(Number);
+      return [y, m];
+    };
+    const [oldY, oldM] = parseYM(oldDate);
+    const [newY, newM] = parseYM(newDate);
+    const sameMonth = oldY === newY && oldM === newM;
+
+    const targets: Array<{ y: number; m: number; recomputeDate: string | null }> = sameMonth
+      ? [{ y: newY, m: newM, recomputeDate: newDate }]
+      : [
+          { y: oldY, m: oldM, recomputeDate: null },     // 旧月: 削除のみ
+          { y: newY, m: newM, recomputeDate: newDate },  // 新月: 出席実績で再計算
+        ];
+
+    for (const { y, m, recomputeDate } of targets) {
+      const { data: summaries, error: sumErr } = await supabase
+        .from('billing_summaries')
+        .select('id, child_id, copay_amount, snack_fee, kumon_fee')
+        .eq('tenant_id', me.tenant_id)
+        .eq('facility_id', facilityId)
+        .eq('year', y)
+        .eq('month', m);
+      if (sumErr) throw new Error(sumErr.message);
+      const sumList = (summaries ?? []) as Array<{
+        id: string;
+        child_id: string;
+        copay_amount: number | null;
+        snack_fee: number | null;
+        kumon_fee: number | null;
+      }>;
+      if (sumList.length === 0) continue;
+
+      const summaryIds = sumList.map((s) => s.id);
+
+      /* この event の既存 participation を削除（旧月は削除のみ・新月は再 insert 前のクリア） */
+      const { error: delErr } = await supabase
+        .from('billing_event_participations')
+        .delete()
+        .in('billing_summary_id', summaryIds)
+        .eq('event_id', eventId);
+      if (delErr) throw new Error(delErr.message);
+
+      if (recomputeDate != null) {
+        /* 新日付の出席児童を抽出（lib/logic/attendance.ts 一元化） */
+        const { data: entries, error: entErr } = await supabase
+          .from('schedule_entries')
+          .select('child_id, pickup_time, dropoff_time, attendance_status')
+          .eq('tenant_id', me.tenant_id)
+          .eq('facility_id', facilityId)
+          .eq('date', recomputeDate);
+        if (entErr) throw new Error(entErr.message);
+
+        const attended = new Set<string>();
+        for (const e of (entries ?? []) as Array<{
+          child_id: string;
+          pickup_time: string | null;
+          dropoff_time: string | null;
+          attendance_status: string | null;
+        }>) {
+          if (isAttended(e)) attended.add(e.child_id);
+        }
+
+        const inserts = sumList
+          .filter((s) => attended.has(s.child_id))
+          .map((s) => ({
+            billing_summary_id: s.id,
+            event_id: eventId,
+            participated: true,
+            amount: price,
+          }));
+
+        if (inserts.length > 0) {
+          const { error: insErr } = await supabase
+            .from('billing_event_participations')
+            .insert(inserts);
+          if (insErr) throw new Error(insErr.message);
+        }
+      }
+
+      /* この月の billing_summaries について event_total / total_amount を再集計。
+         participation が変わったので合計値もズレる。料金表を開かずに整合させる。 */
+      const { data: allParts, error: partsErr } = await supabase
+        .from('billing_event_participations')
+        .select('billing_summary_id, amount')
+        .in('billing_summary_id', summaryIds);
+      if (partsErr) throw new Error(partsErr.message);
+
+      const totalsBySid = new Map<string, number>();
+      for (const p of (allParts ?? []) as Array<{ billing_summary_id: string; amount: number | null }>) {
+        totalsBySid.set(
+          p.billing_summary_id,
+          (totalsBySid.get(p.billing_summary_id) ?? 0) + (p.amount ?? 0),
+        );
+      }
+
+      for (const s of sumList) {
+        const eventTotal = totalsBySid.get(s.id) ?? 0;
+        const totalAmount =
+          (s.copay_amount ?? 0) + (s.snack_fee ?? 0) + (s.kumon_fee ?? 0) + eventTotal;
+        const { error: updErr } = await supabase
+          .from('billing_summaries')
+          .update({ event_total: eventTotal, total_amount: totalAmount })
+          .eq('id', s.id);
+        if (updErr) throw new Error(updErr.message);
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (!me || !facilityId) return;
     setSaving(true);
@@ -158,6 +287,16 @@ export default function EventSettingsFull({ scope }: Props) {
       /* 新規行: insert / 既存 dirty 行: update */
       const newRows = rows.filter((r) => r.isNew && r.name.trim() !== '');
       const dirtyRows = rows.filter((r) => !r.isNew && r.dirty);
+
+      /* 日付が変わった既存イベントを抽出（出席実績再計算の対象） */
+      const dateChanged = dirtyRows
+        .map((r) => {
+          const orig = originalDatesRef.current.get(r.id);
+          return orig && orig !== r.date
+            ? { eventId: r.id, oldDate: orig, newDate: r.date, price: Math.max(0, Math.floor(r.price)) }
+            : null;
+        })
+        .filter((x): x is { eventId: string; oldDate: string; newDate: string; price: number } => x != null);
 
       if (newRows.length > 0) {
         const { error: e } = await supabase.from('events').insert(
@@ -178,6 +317,12 @@ export default function EventSettingsFull({ scope }: Props) {
           .eq('id', r.id);
         if (e) throw new Error(e.message);
       }
+
+      /* events 更新後に participation を出席実績ベースで再計算 */
+      for (const change of dateChanged) {
+        await syncParticipationsForDateChange(change);
+      }
+
       await fetchEvents();
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失敗');

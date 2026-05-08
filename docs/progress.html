@@ -642,6 +642,23 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- Phase 66-F: イベント日付変更時の participation 自動再計算 (2026-05-08) -->
+<div class="phase">
+  <h2>Phase 66-F: イベント日付変更時の出席実績再反映 <span class="phase-pct">実装完了 / ローカル確認待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">背景: 料金表保存後にイベント日付を変更すると、参加チェックは event_id 紐付けで保存値が固定されたままだった（新日付の出席実績で再計算されない）。ユーザー要望で「日付変更時に自動同期」を実装</td></tr>
+      <tr><td>fetchEvents 時に id→date のスナップショットを useRef で保持</td><td class="files">components/shift/EventSettingsFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>originalDatesRef。保存時に「date が変わったか」検出に使用</td></tr>
+      <tr><td>syncParticipationsForDateChange: 旧月で participation 削除 / 新月で出席実績ベースに participated=true を再 insert</td><td class="files">components/shift/EventSettingsFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>同月内変更は新月のみ処理 / 月またぎは旧月削除＋新月再計算 / billing_summaries が無い月はスキップ（料金表開いた時に既存ロジックで初期化）</td></tr>
+      <tr><td>billing_summaries.event_total / total_amount を participation 再集計後に連動更新</td><td class="files">components/shift/EventSettingsFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>料金表を開かなくても合計が整合。出席日数 / 利用負担額（copay）はイベント日付と無関係なので再計算しない</td></tr>
+      <tr><td>handleSave で events 更新後に dateChanged のみ syncParticipations を実行</td><td class="files">components/shift/EventSettingsFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>新規追加（isNew）と name/price のみ変更は対象外</td></tr>
+      <tr><td>ローカル動作確認 (npm run dev)</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>ユーザー確認後に push</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 同月内 6/1→6/30 で 6/1 出席だった児童のチェックが外れ 6/30 出席児童のチェックが付くか ② 月またぎ 6/30→7/1 で 6 月料金表からイベントが消え 7 月で新規参加扱いになるか ③ 6 月の合計（event_total / total_amount）が正しく減少するか ④ price だけ変更（日付不変）では participation を触らないか ⑤ 新規追加イベントを保存→直後にもう一度同じイベントを編集して保存したとき重複 insert にならないか（event_id+billing_summary_id で先に delete しているので OK）⑥ 出席児童 0 名の日付に変更した場合、参加チェック全外し + event_total ゼロになるか</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- Phase 66: イベント設定 + 利用料金表 -->
 <div class="phase">
   <h2>Phase 66: イベント設定 + 利用料金表（5月分から運用） <span class="phase-pct">完了 100%（migration 126〜128 適用済 + 動作確認済）</span></h2>
