@@ -19,6 +19,10 @@ interface TodoItem {
   icon: string;
   /* 提出済みのうち基本情報変更後の「要再提出」件数（書類カード専用） */
   resubmitCount?: number;
+  /* 個別連絡カード専用: 未読件数 (赤バッジ用) */
+  messageUnread?: number;
+  /* シフトカード専用: 今月の出勤予定日数 (進捗計算には使わない情報表示用) */
+  shiftPlannedDays?: number;
 }
 
 type UpdateKind = 'announcement' | 'compliance' | 'training' | 'manual';
@@ -172,7 +176,13 @@ export default function EmployeeDashboardPage() {
       const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
-      const [templates, submissions, compliance, compAcks, trainings, trainSubs, announcements, annReads, manuals, manualReads, shiftReqs] = await Promise.all([
+      // 今月の YYYY-MM (シフトカード用)
+      const thisMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      const thisMonthFrom = `${thisMonthDate.getFullYear()}-${String(thisMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+      const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const thisMonthTo = `${thisMonthEnd.getFullYear()}-${String(thisMonthEnd.getMonth() + 1).padStart(2, '0')}-${String(thisMonthEnd.getDate()).padStart(2, '0')}`;
+
+      const [templates, submissions, compliance, compAcks, trainings, trainSubs, announcements, annReads, manuals, manualReads, shiftReqs, threadMembers, messageReads, shiftPlanned] = await Promise.all([
         supabase.from('document_templates').select('id').eq('tenant_id', tid),
         /* submitted_at も取得して、基本情報更新後の要再提出件数を判定する */
         supabase.from('document_submissions').select('id, submitted_at').eq('employee_id', eid).eq('status', 'submitted'),
@@ -186,6 +196,18 @@ export default function EmployeeDashboardPage() {
         supabase.from('manuals').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('manual_reads').select('manual_id').eq('employee_id', eid),
         supabase.from('shift_requests').select('id').eq('employee_id', eid).eq('month', nextMonth),
+        /* 個別連絡 未読: 自分が参加するスレッドのメッセージで自分以外発信 & 未既読のもの (sidebar と同じロジック) */
+        supabase.from('message_thread_members').select('thread_id').eq('employee_id', eid),
+        supabase.from('message_reads').select('message_id').eq('employee_id', eid),
+        /* シフトカード: 今月の自分の出勤予定日数 (assignment_type='normal' かつ ready/published) */
+        supabase
+          .from('shift_assignments')
+          .select('date')
+          .eq('employee_id', eid)
+          .in('publish_status', ['ready', 'published'])
+          .eq('assignment_type', 'normal')
+          .gte('date', thisMonthFrom)
+          .lte('date', thisMonthTo),
       ]);
 
       const tTotal = templates.data?.length || 0;
@@ -205,6 +227,23 @@ export default function EmployeeDashboardPage() {
       const mTotal = manuals.data?.length || 0;
       const mDone = manualReads.data?.length || 0;
       const reqDone = (shiftReqs.data?.length || 0) > 0;
+
+      /* 個別連絡 未読件数 (sidebar layout と同じロジック) */
+      const myThreadIds = ((threadMembers.data || []) as { thread_id: string }[]).map((r) => r.thread_id);
+      const myReadMsgIds = new Set(((messageReads.data || []) as { message_id: string }[]).map((r) => r.message_id));
+      let messageUnreadCount = 0;
+      if (myThreadIds.length > 0) {
+        const { data: pendingMsgs } = await supabase
+          .from('messages')
+          .select('id, sender_employee_id')
+          .in('thread_id', myThreadIds)
+          .neq('sender_employee_id', eid)
+          .is('deleted_at', null);
+        messageUnreadCount = ((pendingMsgs || []) as { id: string }[]).filter((m) => !myReadMsgIds.has(m.id)).length;
+      }
+
+      /* 今月の出勤予定日数 (シフトカード情報表示用) */
+      const shiftPlannedCount = shiftPlanned.data?.length || 0;
 
       // 「最近の更新」ヒーローデータ: 7日以内かつ未消化の遵守事項/研修/お知らせ
       const sinceIso = new Date(Date.now() - HERO_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -272,6 +311,9 @@ export default function EmployeeDashboardPage() {
         { label: '研修の受講', href: '/my/trainings', done: trDone >= trTotal && trTotal > 0, current: trDone, total: trTotal, icon: '📚' },
         { label: 'お知らせの確認', href: '/my/announcements', done: aDone >= aTotal && aTotal > 0, current: aDone, total: aTotal, icon: '🔔' },
         { label: '業務マニュアル', href: '/my/manuals', done: mDone >= mTotal && mTotal > 0, current: mDone, total: mTotal, icon: '📘' },
+        /* sidebar 並びに合わせて 業務マニュアル と 休み希望 の間に「個別連絡」、その後に「シフト」を配置 */
+        { label: '個別連絡', href: '/my/messages', done: messageUnreadCount === 0, current: 0, total: 0, icon: '💬', messageUnread: messageUnreadCount },
+        { label: 'シフト', href: '/my/requests?tab=facility-shift', done: false, current: 0, total: 0, icon: '📅', shiftPlannedDays: shiftPlannedCount },
         { label: `休み希望（${nextMonthDate.getMonth() + 1}月分）`, href: '/my/requests', done: reqDone, current: reqDone ? 1 : 0, total: 1, icon: '🗓️' },
       ]);
 
@@ -282,9 +324,10 @@ export default function EmployeeDashboardPage() {
 
   if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
 
-  const completed = todos.filter((t) => t.done).length;
-
-  const pct = todos.length > 0 ? Math.round((completed / todos.length) * 100) : 0;
+  /* 進捗バーの分母から情報カード (total=0 の シフト / 個別連絡) は除外する */
+  const progressTodos = todos.filter((t) => t.total > 0);
+  const completed = progressTodos.filter((t) => t.done).length;
+  const pct = progressTodos.length > 0 ? Math.round((completed / progressTodos.length) * 100) : 0;
 
   return (
     <div>
@@ -332,7 +375,7 @@ export default function EmployeeDashboardPage() {
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-diletto-gray">全体の進捗 — {completed}/{todos.length} 完了</p>
+          <p className="text-sm text-diletto-gray">全体の進捗 — {completed}/{progressTodos.length} 完了</p>
           <p className={`text-sm font-semibold ${
             pct < 30 ? 'text-diletto-red'
               : pct < 70 ? 'text-diletto-gold'
@@ -363,12 +406,27 @@ export default function EmployeeDashboardPage() {
              /my/documents 側で submitted_at < employees.updated_at の判定と一致。 */
           const resubmitCount = t.resubmitCount ?? 0;
           const isResubmit = t.href === '/my/documents' && resubmitCount > 0;
-          const hasUnread = (isNotifKind && unreadCount > 0) || isResubmit;
-          const badgeCount = isResubmit ? resubmitCount : unreadCount;
+          /* 個別連絡カード: 未読件数で赤バッジ */
+          const isMessageCard = t.href === '/my/messages';
+          const messageUnread = t.messageUnread ?? 0;
+          const isShiftCard = t.href.startsWith('/my/requests?tab=facility-shift');
+          const hasUnread =
+            (isNotifKind && unreadCount > 0) ||
+            isResubmit ||
+            (isMessageCard && messageUnread > 0);
+          const badgeCount = isResubmit
+            ? resubmitCount
+            : isMessageCard
+              ? messageUnread
+              : unreadCount;
+          /* 進捗バー・current/total 表示は total=0 のカード (シフト・個別連絡) では出さない */
+          const showProgress = t.total > 0;
+          /* シフトカードと個別連絡カードは「完了/未完了」概念がないので line-through も完了バッジも出さない */
+          const showDoneStyling = t.total > 0;
 
           return (
             <Link key={t.href} href={t.href}>
-              <Card className={`relative transition-all hover:border-diletto-blue h-full ${t.done ? 'opacity-60' : ''} ${hasUnread ? 'border-diletto-red/50 bg-diletto-red/[0.02]' : ''}`}>
+              <Card className={`relative transition-all hover:border-diletto-blue h-full ${showDoneStyling && t.done ? 'opacity-60' : ''} ${hasUnread ? 'border-diletto-red/50 bg-diletto-red/[0.02]' : ''}`}>
                 {hasUnread && (
                   <span className="absolute top-1.5 right-1.5 z-10 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-diletto-red text-white text-[10px] font-bold leading-none shadow-sm">
                     <span className="relative">{badgeCount > 99 ? '99+' : badgeCount}</span>
@@ -377,20 +435,35 @@ export default function EmployeeDashboardPage() {
                 <CardContent className="py-4 px-3 sm:px-4">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xl">{t.icon}</span>
-                    <span className="text-[10px] font-medium text-diletto-gray">{t.current}/{t.total}</span>
+                    {showProgress && (
+                      <span className="text-[10px] font-medium text-diletto-gray">{t.current}/{t.total}</span>
+                    )}
+                    {isShiftCard && (
+                      <span className="text-[10px] font-medium text-diletto-gray">
+                        {(t.shiftPlannedDays ?? 0) > 0 ? `${t.shiftPlannedDays}日` : '未公開'}
+                      </span>
+                    )}
                   </div>
                   <div className="mb-2">
-                    <span className={`text-xs sm:text-sm font-medium ${t.done ? 'line-through text-diletto-gray-light' : ''}`}>
+                    <span className={`text-xs sm:text-sm font-medium ${showDoneStyling && t.done ? 'line-through text-diletto-gray-light' : ''}`}>
                       {t.label}
                     </span>
-                    {t.done && <Badge variant="success" className="text-[10px] ml-1">完了</Badge>}
+                    {showDoneStyling && t.done && <Badge variant="success" className="text-[10px] ml-1">完了</Badge>}
+                    {isMessageCard && messageUnread === 0 && (
+                      <span className="ml-1 text-[10px] text-diletto-gray-light">未読なし</span>
+                    )}
+                    {isShiftCard && (t.shiftPlannedDays ?? 0) > 0 && (
+                      <span className="ml-1 text-[10px] text-diletto-gray-light">今月の予定</span>
+                    )}
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${t.done ? 'bg-diletto-green' : itemPct > 0 ? 'bg-diletto-blue' : 'bg-diletto-gray-light/30'}`}
-                      style={{ width: `${itemPct}%` }}
-                    />
-                  </div>
+                  {showProgress && (
+                    <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${t.done ? 'bg-diletto-green' : itemPct > 0 ? 'bg-diletto-blue' : 'bg-diletto-gray-light/30'}`}
+                        style={{ width: `${itemPct}%` }}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </Link>

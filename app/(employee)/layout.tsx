@@ -22,7 +22,7 @@ const tabs: { href: string; label: string; unreadKey?: UnreadKey }[] = [
   { href: '/my/announcements', label: 'お知らせ', unreadKey: 'announcement' },
   { href: '/my/manuals', label: '業務マニュアル', unreadKey: 'manual' },
   { href: '/my/messages', label: '個別連絡', unreadKey: 'message' },
-  { href: '/my/requests', label: '休み希望' },
+  { href: '/my/requests', label: '休み希望（+シフト）' },
 ];
 
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {

@@ -88,7 +88,8 @@ export function buildShiftPublishEmail(args: BuildArgs) {
 export function buildShiftReadyEmail(args: BuildArgs) {
   const { year, month, facilityName, appUrl } = args;
   const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-  const link = `${appUrl.replace(/\/$/, '')}/my/shifts?month=${monthStr}`;
+  /* /my/shifts は /my/requests?tab=facility-shift に統合済 (自分のシフト個別ページは撤廃) */
+  const link = `${appUrl.replace(/\/$/, '')}/my/requests?tab=facility-shift&month=${monthStr}`;
 
   const subject = `【仮シフト・送迎表 確認のお願い】${year}年${month}月 ${facilityName}`;
   const text = [

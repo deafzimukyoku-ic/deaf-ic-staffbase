@@ -1,34 +1,21 @@
 import { redirect } from 'next/navigation';
-import { Suspense } from 'react';
-import { createClient } from '@/lib/supabase/server';
-import MyShiftsView from '@/components/shift/MyShiftsView';
 
 export const dynamic = 'force-dynamic';
 
-// employee 自身のシフト閲覧画面（タスクF）
-// RLS により ready/published の自分の分のみ取得される（migration 107）
-export default async function EmployeeShiftsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: me } = await supabase
-    .from('employees')
-    .select('id, tenant_id, facility_id')
-    .eq('auth_user_id', user.id)
-    .single();
-
-  if (!me?.facility_id) {
-    return (
-      <div className="rounded-md bg-white border border-diletto-gray/10 p-8 text-center">
-        <p className="text-sm text-diletto-gray">所属事業所が未設定です。管理者にお問い合わせください。</p>
-      </div>
-    );
-  }
-
-  return (
-    <Suspense fallback={null}>
-      <MyShiftsView employeeId={me.id} tenantId={me.tenant_id} facilityId={me.facility_id} />
-    </Suspense>
-  );
+/**
+ * /my/shifts は /my/requests?tab=my-shift に統合済 (旧 MyShiftsView は同タブ内で表示)。
+ * 旧 URL や email 内のリンク (shift-notification-email.ts の月別リンク) は
+ * 当面 redirect で受ける。query string (month=YYYY-MM) も保持する。
+ */
+export default async function EmployeeShiftsRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const month = typeof sp.month === 'string' ? sp.month : null;
+  const target = month
+    ? `/my/requests?tab=facility-shift&month=${encodeURIComponent(month)}`
+    : '/my/requests?tab=facility-shift';
+  redirect(target);
 }

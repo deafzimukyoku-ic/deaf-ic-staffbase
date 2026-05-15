@@ -62,8 +62,8 @@ const LABELS: Record<string, { label: string; icon: string }> = {
   '/my/trainings': { label: '研修', icon: '📚' },
   '/my/announcements': { label: 'お知らせ', icon: '📢' },
   '/my/manuals': { label: '業務マニュアル', icon: '📖' },
-  '/my/requests': { label: '休み希望', icon: '📝' },
-  '/my/shifts': { label: '自分のシフト', icon: '🗓️' },
+  '/my/requests': { label: '休み希望（+シフト）', icon: '📝' },
+  /* /my/shifts は撤廃済 (/my/requests?tab=facility-shift へリダイレクト)。breadcrumb 用にはマッピング無し */
 };
 
 // /admin, /mgr, /my のロール直下パスは実ページが無いためダッシュボードにリダイレクト扱い。
