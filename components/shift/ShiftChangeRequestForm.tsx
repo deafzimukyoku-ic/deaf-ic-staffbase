@@ -40,13 +40,14 @@ interface Props {
 
 const TYPE_OPTIONS: Array<{ value: ShiftChangeRequestType; label: string; description: string }> = [
   { value: 'time',        label: '時刻変更',     description: '出勤/退勤時刻のみ変更したい' },
-  { value: 'leave',       label: '休暇申請',     description: '出勤予定だったが休みにしたい（公休/有給）' },
+  { value: 'leave',       label: '休暇申請',     description: '出勤予定だったが休みにしたい（希望休/有給）' },
   { value: 'type_change', label: '勤務種別変更', description: '出勤↔︎休みなど、種別自体を変えたい' },
 ];
 
 const ASSIGNMENT_LABELS: Record<ShiftAssignmentType, string> = {
   normal: '出勤',
   public_holiday: '公休',
+  requested_off: '希望休',
   paid_leave: '有給',
   off: '休み',
 };
@@ -89,7 +90,8 @@ export default function ShiftChangeRequestForm({
         }
         requested_payload = { start_time: startTime, end_time: endTime };
       } else if (changeType === 'leave') {
-        // leave 申請は assignment_type を public_holiday / paid_leave / off に変更
+        // leave 申請は assignment_type を requested_off / paid_leave / off に変更
+        // （公休は管理者が決めるものなので社員の申請選択肢には出さない）
         requested_payload = { assignment_type: leaveType };
       } else {
         // type_change 申請: 任意の種別 + normal の場合のみ時刻
@@ -219,7 +221,7 @@ export default function ShiftChangeRequestForm({
             <div>
               <div className="text-xs font-bold text-diletto-gray-light mb-1.5">休暇種別</div>
               <div className="flex gap-2">
-                {(['paid_leave', 'public_holiday', 'off'] as const).map((t) => (
+                {(['paid_leave', 'requested_off', 'off'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setLeaveType(t)}
@@ -241,7 +243,7 @@ export default function ShiftChangeRequestForm({
               <div>
                 <div className="text-xs font-bold text-diletto-gray-light mb-1.5">変更後の種別</div>
                 <div className="flex gap-2 flex-wrap">
-                  {(['normal', 'paid_leave', 'public_holiday', 'off'] as const).map((t) => (
+                  {(['normal', 'paid_leave', 'requested_off', 'off'] as const).map((t) => (
                     <button
                       key={t}
                       onClick={() => setTypeChangeType(t)}

@@ -22,7 +22,7 @@ import type { ShiftRequestRow, ShiftRequestType } from '@/lib/types';
  */
 
 const TYPE_LABEL: Record<ShiftRequestType, string> = {
-  public_holiday: '公休',
+  requested_off: '希望休',
   paid_leave: '有給',
   full_day_available: '1日出勤可',
   am_off: 'AM休',
@@ -31,7 +31,7 @@ const TYPE_LABEL: Record<ShiftRequestType, string> = {
 };
 
 const TYPE_COLOR: Record<ShiftRequestType, string> = {
-  public_holiday:     'bg-purple-100 text-purple-800',
+  requested_off:      'bg-purple-100 text-purple-800',
   paid_leave:         'bg-emerald-100 text-emerald-800',
   full_day_available: 'bg-amber-100 text-amber-800',
   am_off:             'bg-blue-100 text-blue-800',
@@ -129,7 +129,7 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
     for (const e of employees) {
       m.set(e.id, {
         reqs: [],
-        counts: { public_holiday: 0, paid_leave: 0, full_day_available: 0, am_off: 0, pm_off: 0, comment: 0 },
+        counts: { requested_off: 0, paid_leave: 0, full_day_available: 0, am_off: 0, pm_off: 0, comment: 0 },
         submitted: false,
         submittedAt: null,
       });
@@ -194,7 +194,7 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
                   </div>
                   <div className="grid grid-cols-5 gap-1 md:gap-2 text-center">
                     {([
-                      ['公休', sum.counts.public_holiday, 'bg-purple-50 text-purple-700'],
+                      ['希望休', sum.counts.requested_off, 'bg-purple-50 text-purple-700'],
                       ['有給', sum.counts.paid_leave, 'bg-emerald-50 text-emerald-700'],
                       ['出勤可', sum.counts.full_day_available, 'bg-amber-50 text-amber-700'],
                       ['AM休', sum.counts.am_off, 'bg-blue-50 text-blue-700'],

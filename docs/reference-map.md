@@ -34,6 +34,7 @@
 | 130 | 130_employee_facilities.sql | **複数事業所所属（兼任）対応**。employee_facilities テーブル（兼任先のみ）+ ヘルパー関数 `get_my_facility_ids()` / `get_my_managed_facility_ids()` / `employee_belongs_to_facility(emp,fac)` + 主所属＝兼任の重複防止トリガ × 2 | 🆕 未適用 |
 | 131 | 131_multi_facility_rls.sql | RLS 大改修：facility-only テーブル (children/schedule_entries/events/billing/facility_shift_settings/transport_assignments) + employee-level cross-facility テーブル (shift_requests/shift_assignments/shift_change_requests) で兼任を考慮。manager の管轄施設は `get_my_managed_facility_ids()` ベース。`employee_in_my_managed_facilities()` 追加 + `get_manager_subordinate_ids()` 兼任対応に拡張 | 🆕 未適用 |
 | 156 | 156_get_my_subordinate_progress_rpc.sql | **`get_my_subordinate_progress(p_facility_id uuid)` RPC 新設**（SECURITY DEFINER）。/mgr/dashboard の部下達成率が全件 0% になる問題の修正。employee_progress（security_invoker ビュー）+ submission 系テーブル直読みは manager の RLS で 0 件になるため、RPC で部下ごとの完了件数 + 各カテゴリ最終完了日時を返す。migration 148/153 の ambiguous 対策（alias + `AS fid`）踏襲 | 🆕 未適用 |
+| 157 | 157_split_public_holiday_and_requested_off.sql | **公休 / 希望休 の分離**。`shift_requests.request_type`: `public_holiday`→`requested_off` リネーム + CHECK を実使用値（`requested_off`/`paid_leave`/`full_day_available`/`am_off`/`pm_off`）に作り直し（旧 CHECK は `available_day` の3値のみで `full_day_available` 等の保存が失敗していた既存バグも修正）。`shift_assignments.assignment_type` に `requested_off` 追加 + 既存 `public_holiday` 16行を `requested_off` に移行 | ✅ 適用済 |
 
 ---
 
@@ -64,6 +65,37 @@
 
 ### 参照テーブル・RPC
 - RPC: `get_my_subordinate_progress(p_facility_id uuid)` — 参照テーブル `employees` / `employee_facilities` / `manager_facilities` / `document_submissions` / `compliance_acknowledgments` / `training_submissions` / `announcement_reads` / `manual_reads`
+
+---
+
+## 0.13 公休 / 希望休 の分離（2026-05-15）
+
+### 概念
+- **公休 (`public_holiday`)** = 管理者がシフト作成画面で決める休み
+- **希望休 (`requested_off`)** = 社員が休み希望として出した休み（`shift_requests` 由来）
+- `shift_requests` には公休は存在せず希望休のみ。`shift_assignments` には両方が並存。
+
+### enum 変更（migration 157）
+| カラム | 旧 | 新 |
+|---|---|---|
+| `shift_requests.request_type` | `public_holiday` / `paid_leave` / `available_day` | `requested_off` / `paid_leave` / `full_day_available` / `am_off` / `pm_off` |
+| `shift_assignments.assignment_type` | `normal` / `public_holiday` / `paid_leave` / `off` | `normal` / `public_holiday` / `requested_off` / `paid_leave` / `off` |
+
+### 編集ファイル
+| ファイル | 変更 |
+|---|---|
+| `lib/types.ts` | `ShiftRequestType` / `ShiftAssignmentType` 更新 |
+| `lib/logic/generateShift.ts` | 社員の希望休 → `requested_off` セル生成。内部変数 `publicHolidays`→`requestedOffs` |
+| `lib/logic/qualifiedCoverage.ts` | inline `assignment_type` 型に `requested_off` 追加 |
+| `components/shift/MyRequestsView.tsx` | 「公休」表示 → 「希望休」。`SELECTABLE` / `STATUS_CONFIG` / 日曜一括ボタン |
+| `components/shift/AdminRequestsView.tsx` | `TYPE_LABEL` / `TYPE_COLOR` / `counts` / サマリ表示 |
+| `components/shift/ShiftFull.tsx` | セル編集モーダルに 公休/希望休 両方の選択肢。色: 公休=`--accent` / 希望休=`--gold` |
+| `components/shift/ShiftGridFull.tsx` | `TYPE_CONFIG` に `requested_off` / 統計に「希望休n」追加 / メモ表示対象に追加 |
+| `components/shift/MyShiftsView.tsx` | `TYPE_CONFIG` に `requested_off` |
+| `components/shift/ApprovalQueueFull.tsx` | `ASSIGNMENT_LABELS` に `requested_off` |
+| `components/shift/AddShiftStaffPicker.tsx` | `LeaveLabel` / `leaveLabelOf` に「希望休」 |
+| `components/shift/ShiftChangeRequestForm.tsx` | `ASSIGNMENT_LABELS` に追加。社員の申請選択肢から `public_holiday` 除外し `requested_off` に（公休は管理者専用） |
+| `components/shift/TransportFull.tsx` | バッジ色・leave 判定に `requested_off` 対応 |
 
 ---
 

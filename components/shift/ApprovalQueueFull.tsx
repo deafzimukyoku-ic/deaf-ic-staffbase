@@ -28,6 +28,7 @@ import type {
 const ASSIGNMENT_LABELS: Record<ShiftAssignmentType, string> = {
   normal: '出勤',
   public_holiday: '公休',
+  requested_off: '希望休',
   paid_leave: '有給',
   off: '休み',
 };

@@ -38,10 +38,11 @@ interface ShiftCellRow {
 }
 
 const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; bg: string; color: string; ring: string }> = {
-  normal:        { label: '出勤', bg: 'bg-diletto-blue/5',   color: 'text-diletto-ink',  ring: 'ring-diletto-blue/40' },
-  public_holiday:{ label: '公休', bg: 'bg-purple-50',         color: 'text-purple-700',   ring: 'ring-purple-300' },
-  paid_leave:    { label: '有給', bg: 'bg-emerald-50',        color: 'text-emerald-700',  ring: 'ring-emerald-300' },
-  off:           { label: '休み', bg: 'bg-gray-50',           color: 'text-diletto-gray', ring: 'ring-gray-200' },
+  normal:        { label: '出勤',   bg: 'bg-diletto-blue/5',   color: 'text-diletto-ink',  ring: 'ring-diletto-blue/40' },
+  public_holiday:{ label: '公休',   bg: 'bg-purple-50',        color: 'text-purple-700',   ring: 'ring-purple-300' },
+  requested_off: { label: '希望休', bg: 'bg-amber-50',         color: 'text-amber-700',    ring: 'ring-amber-300' },
+  paid_leave:    { label: '有給',   bg: 'bg-emerald-50',       color: 'text-emerald-700',  ring: 'ring-emerald-300' },
+  off:           { label: '休み',   bg: 'bg-gray-50',          color: 'text-diletto-gray', ring: 'ring-gray-200' },
 };
 
 function defaultCurrentMonthStr(): string {

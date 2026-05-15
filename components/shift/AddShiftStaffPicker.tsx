@@ -13,23 +13,24 @@ import type { StaffRow, ShiftAssignmentRow } from '@/lib/types';
  *
  * - 通常: バッジなし
  * - 既にシフトあり → 青バッジ「分割追加」
- * - 公休/有給/休み → 金色 ⚠ バッジ
+ * - 公休/希望休/有給/休み → 金色 ⚠ バッジ
  */
 
-type LeaveLabel = '公休' | '有給';
+type LeaveLabel = '公休' | '希望休' | '有給';
 
 type PickerItem = {
   id: string;
   name: string;
   /** 既に当日 normal シフトが入っている（選ぶと分割追加になる） */
   hasShift: boolean;
-  /** 当日「公休」または「有給」扱い。ない場合は null。
+  /** 当日「公休」「希望休」または「有給」扱い。ない場合は null。
       Phase 59-fix: 'off'（ただの非出勤）はバッジ対象外 */
   leaveLabel: LeaveLabel | null;
 };
 
 function leaveLabelOf(a: ShiftAssignmentRow): LeaveLabel | null {
   if (a.assignment_type === 'public_holiday') return '公休';
+  if (a.assignment_type === 'requested_off') return '希望休';
   if (a.assignment_type === 'paid_leave') return '有給';
   return null;
 }

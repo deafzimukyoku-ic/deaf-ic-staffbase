@@ -732,8 +732,10 @@ export interface StaffRow {
 }
 
 // --- Shift: 休み希望 ---
+// requested_off = 希望休（社員が出した休み希望）。migration 157 で public_holiday から改名。
+// 公休（管理者が決める休み）は shift_requests には存在せず shift_assignments 側のみ。
 export type ShiftRequestType =
-  | 'public_holiday'
+  | 'requested_off'
   | 'paid_leave'
   | 'full_day_available'
   | 'am_off'
@@ -755,7 +757,9 @@ export interface ShiftRequestRow {
 }
 
 // --- Shift: 確定 ---
-export type ShiftAssignmentType = 'normal' | 'public_holiday' | 'paid_leave' | 'off';
+// public_holiday = 公休（管理者がシフト作成画面で決める休み）
+// requested_off  = 希望休（社員の休み希望由来。generateShift が shift_requests から生成）
+export type ShiftAssignmentType = 'normal' | 'public_holiday' | 'requested_off' | 'paid_leave' | 'off';
 
 export interface ShiftAssignmentRow {
   id: string;
@@ -793,7 +797,7 @@ export interface TransportAssignmentRow {
 // --- Shift: 変更申請（公開後/仮シフトへのフィードバック）---
 export type ShiftChangeRequestType =
   | 'time'         // 出勤時刻の変更
-  | 'leave'        // 休暇申請（assignment_type を paid_leave / public_holiday 等に）
+  | 'leave'        // 休暇申請（assignment_type を paid_leave / requested_off / off 等に）
   | 'type_change'; // 勤務種別変更
 
 export type ShiftChangeRequestStatus =

@@ -63,7 +63,7 @@ export function calculateCoverage(params: {
     date: string;
     start_time: string | null;
     end_time: string | null;
-    assignment_type: 'normal' | 'public_holiday' | 'paid_leave' | 'off';
+    assignment_type: 'normal' | 'public_holiday' | 'requested_off' | 'paid_leave' | 'off';
   }>;
   staffQualifiedMap: Map<string, boolean>;
   scheduleCount: number;

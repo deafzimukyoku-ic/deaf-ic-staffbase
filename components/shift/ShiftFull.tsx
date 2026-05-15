@@ -422,7 +422,10 @@ export default function ShiftFull({ role }: ShiftFullProps) {
     // 現状の publish_status を維持（draft/ready で編集可、published は handleCellClick で弾く）
     const currentPublish: PublishStatus = monthStatus === 'ready' ? 'ready' : 'draft';
     const noteForSave =
-      (editType === 'normal' || editType === 'public_holiday' || editType === 'off') &&
+      (editType === 'normal' ||
+        editType === 'public_holiday' ||
+        editType === 'requested_off' ||
+        editType === 'off') &&
       editNote.trim()
         ? editNote.trim()
         : null;
@@ -844,24 +847,29 @@ export default function ShiftFull({ role }: ShiftFullProps) {
             <p className="text-xs" style={{ color: 'var(--ink-3)' }}>
               現在:{' '}
               {editingCellData
-                ? ({ normal: '出勤', public_holiday: '公休', paid_leave: '有給', off: '休み' } as Record<
-                    string,
-                    string
-                  >)[editingCellData.assignment_type]
+                ? ({
+                    normal: '出勤',
+                    public_holiday: '公休',
+                    requested_off: '希望休',
+                    paid_leave: '有給',
+                    off: '休み',
+                  } as Record<string, string>)[editingCellData.assignment_type]
                 : '-'}
             </p>
 
             <div className="grid grid-cols-2 gap-2">
-              {(['normal', 'public_holiday', 'paid_leave', 'off'] as const).map((type) => {
+              {(['normal', 'public_holiday', 'requested_off', 'paid_leave', 'off'] as const).map((type) => {
                 const labels: Record<ShiftAssignmentType, string> = {
                   normal: '出勤',
                   public_holiday: '公休',
+                  requested_off: '希望休',
                   paid_leave: '有給',
                   off: '休み',
                 };
                 const colors: Record<ShiftAssignmentType, string> = {
                   normal: 'var(--ink)',
                   public_holiday: 'var(--accent)',
+                  requested_off: 'var(--gold)',
                   paid_leave: 'var(--green)',
                   off: 'var(--ink-3)',
                 };
@@ -972,7 +980,10 @@ export default function ShiftFull({ role }: ShiftFullProps) {
               </div>
             )}
 
-            {(editType === 'normal' || editType === 'public_holiday' || editType === 'off') && (
+            {(editType === 'normal' ||
+              editType === 'public_holiday' ||
+              editType === 'requested_off' ||
+              editType === 'off') && (
               <div>
                 <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--ink-2)' }}>
                   メモ（任意・例: 応援先など）

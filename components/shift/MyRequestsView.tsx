@@ -15,7 +15,7 @@ import type { ShiftRequestRow, ShiftRequestType } from '@/lib/types';
 /**
  * 自分の休み希望提出カレンダー（タスクC）
  *
- * - 各日に status を設定: none / public_holiday / paid_leave / full_day_available / am_off / pm_off
+ * - 各日に status を設定: none / requested_off / paid_leave / full_day_available / am_off / pm_off
  * - 「保存する」で shift_requests に upsert（既存の自分の月行を全部消して入れ直し）
  * - shift_request_comments は使わない（案Z で削除済み）
  * - 既に shift がready/published になった月は提出不可（読み取り専用）
@@ -24,7 +24,7 @@ import type { ShiftRequestRow, ShiftRequestType } from '@/lib/types';
 type DayStatus = 'none' | ShiftRequestType;
 
 const SELECTABLE: Exclude<DayStatus, 'none' | 'comment'>[] = [
-  'public_holiday',
+  'requested_off',
   'paid_leave',
   'full_day_available',
   'am_off',
@@ -41,7 +41,7 @@ const STATUS_CONFIG: Record<Exclude<DayStatus, 'none' | 'comment'>, {
   dotBorder: string;// 凡例ドット枠
   swatchBg: string; // AM/PM 半月塗り用 hex （rgb 系）
 }> = {
-  public_holiday:     { label: '公休',      bg: 'bg-purple-50',  color: 'text-purple-700',  border: 'border-purple-400',  dot: 'bg-purple-100',  dotBorder: 'border-purple-400',  swatchBg: 'rgb(243 232 255)' },
+  requested_off:      { label: '希望休',    bg: 'bg-purple-50',  color: 'text-purple-700',  border: 'border-purple-400',  dot: 'bg-purple-100',  dotBorder: 'border-purple-400',  swatchBg: 'rgb(243 232 255)' },
   paid_leave:         { label: '有給',      bg: 'bg-emerald-50', color: 'text-emerald-700', border: 'border-emerald-400', dot: 'bg-emerald-100', dotBorder: 'border-emerald-400', swatchBg: 'rgb(209 250 229)' },
   full_day_available: { label: '1日出勤可', bg: 'bg-amber-50',   color: 'text-amber-700',   border: 'border-amber-400',   dot: 'bg-amber-100',   dotBorder: 'border-amber-400',   swatchBg: 'rgb(254 243 199)' },
   am_off:             { label: 'AM休',     bg: 'bg-blue-50',    color: 'text-blue-700',    border: 'border-blue-400',    dot: 'bg-blue-100',    dotBorder: 'border-blue-400',    swatchBg: 'rgb(219 234 254)' },
@@ -155,14 +155,14 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
     setEditingDay(null);
   };
 
-  // 一括: 全日曜を公休
-  const setAllSundaysPublic = () => {
+  // 一括: 全日曜を希望休
+  const setAllSundaysRequestedOff = () => {
     const next = { ...dayStatuses };
     for (const week of weeks) {
       for (const c of week) {
         if (!c) continue;
         const dow = getDay(new Date(c.date));
-        if (dow === 0) next[c.date] = 'public_holiday';
+        if (dow === 0) next[c.date] = 'requested_off';
       }
     }
     setDayStatuses(next);
@@ -273,8 +273,8 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
         })}
         {!readOnly && (
           <>
-            <button onClick={setAllSundaysPublic} className="ml-auto text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-blue/5">
-              日曜を一括「公休」に
+            <button onClick={setAllSundaysRequestedOff} className="ml-auto text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-blue/5">
+              日曜を一括「希望休」に
             </button>
             <button onClick={clearAll} className="text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-red/5">
               クリア

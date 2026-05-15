@@ -915,7 +915,7 @@ export default function TransportFull({ role }: Props) {
     /* Phase 66+: 共通ヘルパー replaceShiftDay 経由で 1 日まるごと送信。
        segment_order の採番はヘルパー側で行うので、クライアントでの計算ロジックを廃止。
        'off'（休み）行はシフト生成のダミーなので維持しない（送信前に除外）→ 結果的にゴミ off 行が掃除される。
-       paid_leave / public_holiday は normal と同列で残す（分割の前後コマとして扱う）。 */
+       paid_leave / public_holiday / requested_off は normal と同列で残す（分割の前後コマとして扱う）。 */
     const staffId = addShiftModal.staffId;
     const existingSegments = shiftAssignments
       .filter(
@@ -1383,12 +1383,16 @@ export default function TransportFull({ role }: Props) {
                   const badgeColor =
                     item.leaveLabel === '有給'
                       ? 'var(--green, #2f8f57)'
+                      : item.leaveLabel === '希望休'
+                      ? 'var(--gold, #8a6120)'
                       : item.leaveLabel === '公休'
                       ? 'var(--accent)'
                       : null;
                   const badgeBg =
                     item.leaveLabel === '有給'
                       ? 'var(--green-pale, rgba(47,143,87,0.10))'
+                      : item.leaveLabel === '希望休'
+                      ? 'var(--gold-pale, rgba(138,97,32,0.10))'
                       : item.leaveLabel === '公休'
                       ? 'var(--accent-pale)'
                       : null;
@@ -1461,7 +1465,9 @@ export default function TransportFull({ role }: Props) {
                 (sa) =>
                   sa.employee_id === addShiftModal.staffId &&
                   sa.date === selectedDate &&
-                  (sa.assignment_type === 'public_holiday' || sa.assignment_type === 'paid_leave')
+                  (sa.assignment_type === 'public_holiday' ||
+                    sa.assignment_type === 'requested_off' ||
+                    sa.assignment_type === 'paid_leave')
               );
               const hasShift = shiftAssignments.some(
                 (sa) =>
@@ -1469,10 +1475,27 @@ export default function TransportFull({ role }: Props) {
                   sa.date === selectedDate &&
                   sa.assignment_type === 'normal'
               );
-              const isGreen = leave?.assignment_type === 'paid_leave';
-              const leaveLabel = isGreen ? '有給' : leave ? '公休' : null;
-              const leaveColor = isGreen ? 'var(--green, #2f8f57)' : 'var(--accent)';
-              const leaveBg = isGreen ? 'var(--green-pale, rgba(47,143,87,0.10))' : 'var(--accent-pale)';
+              const leaveAType = leave?.assignment_type;
+              const leaveLabel =
+                leaveAType === 'paid_leave'
+                  ? '有給'
+                  : leaveAType === 'requested_off'
+                  ? '希望休'
+                  : leaveAType === 'public_holiday'
+                  ? '公休'
+                  : null;
+              const leaveColor =
+                leaveAType === 'paid_leave'
+                  ? 'var(--green, #2f8f57)'
+                  : leaveAType === 'requested_off'
+                  ? 'var(--gold, #8a6120)'
+                  : 'var(--accent)';
+              const leaveBg =
+                leaveAType === 'paid_leave'
+                  ? 'var(--green-pale, rgba(47,143,87,0.10))'
+                  : leaveAType === 'requested_off'
+                  ? 'var(--gold-pale, rgba(138,97,32,0.10))'
+                  : 'var(--accent-pale)';
               return (
                 <div className="flex flex-col gap-3">
                   <div

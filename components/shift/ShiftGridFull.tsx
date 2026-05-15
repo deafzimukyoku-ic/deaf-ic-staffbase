@@ -67,6 +67,7 @@ interface ShiftGridProps {
 const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; color: string; bg: string }> = {
   normal: { label: '出勤', color: 'var(--ink)', bg: 'transparent' },
   public_holiday: { label: '公休', color: 'var(--accent)', bg: 'var(--accent-pale)' },
+  requested_off: { label: '希望休', color: 'var(--gold)', bg: 'var(--gold-pale)' },
   paid_leave: { label: '有給', color: 'var(--green)', bg: 'var(--green-pale)' },
   off: { label: '休', color: 'var(--ink-3)', bg: 'rgba(0,0,0,0.03)' },
 };
@@ -119,8 +120,9 @@ export default function ShiftGridFull({
     return source[source.length - 1];
   };
 
-  const countsByStaff = new Map<string, { work: number; ph: number; pl: number }>();
-  staff.forEach((s) => countsByStaff.set(s.id, { work: 0, ph: 0, pl: 0 }));
+  // work=出勤 / ph=公休 / ro=希望休 / pl=有給
+  const countsByStaff = new Map<string, { work: number; ph: number; ro: number; pl: number }>();
+  staff.forEach((s) => countsByStaff.set(s.id, { work: 0, ph: 0, ro: 0, pl: 0 }));
   cellSegmentsMap.forEach((segs, key) => {
     const [staffId] = key.split('_');
     const rec = countsByStaff.get(staffId);
@@ -128,6 +130,7 @@ export default function ShiftGridFull({
     const type = pickPrimary(segs)?.assignment_type;
     if (type === 'normal') rec.work++;
     else if (type === 'public_holiday') rec.ph++;
+    else if (type === 'requested_off') rec.ro++;
     else if (type === 'paid_leave') rec.pl++;
   });
 
@@ -310,7 +313,7 @@ export default function ShiftGridFull({
                     )}
                   </div>
                   {(() => {
-                    const c = countsByStaff.get(s.id) ?? { work: 0, ph: 0, pl: 0 };
+                    const c = countsByStaff.get(s.id) ?? { work: 0, ph: 0, ro: 0, pl: 0 };
                     return (
                       <div
                         className="flex items-center gap-1.5 leading-none"
@@ -318,6 +321,7 @@ export default function ShiftGridFull({
                       >
                         <span>出勤{c.work}日</span>
                         {c.ph > 0 && <span style={{ color: 'var(--accent)' }}>公休{c.ph}</span>}
+                        {c.ro > 0 && <span style={{ color: 'var(--gold)' }}>希望休{c.ro}</span>}
                         {c.pl > 0 && <span style={{ color: 'var(--green)' }}>有給{c.pl}</span>}
                       </div>
                     );
@@ -421,7 +425,7 @@ export default function ShiftGridFull({
                       </div>
                     ) : (
                       <div className="flex flex-col gap-0.5 leading-tight py-0.5">
-                        {(type === 'public_holiday' || type === 'off') && cell?.note && (
+                        {(type === 'public_holiday' || type === 'requested_off' || type === 'off') && cell?.note && (
                           <span
                             style={{
                               color: 'var(--accent)',

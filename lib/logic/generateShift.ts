@@ -5,7 +5,7 @@
  * 機械的変換: staff_id → employee_id, tenant_id → tenant_id + facility_id, StaffRow → StaffRow(deaf-ic 版)
  *
  * ルール（CLAUDE.md §10 準拠）:
- * 1. 職員の休み希望を反映（公休・有給・出勤可否を割り当て）
+ * 1. 職員の休み希望を反映（希望休・有給・出勤可否を割り当て）
  * 2. 利用人数に応じた最低出勤人数を確保（ceil(利用人数/2)、最低3名）
  * 3. 有資格者が規定数以上出勤するよう確保
  * 4. 生成結果は publish_status='draft' / is_confirmed=false で保存（自動確定禁止）
@@ -61,23 +61,24 @@ export function generateShiftAssignments(
 
   const daysInMonth = new Date(year, month, 0).getDate();
 
-  // 休み希望をマップ化: employee_id → { publicHolidays, paidLeaves, availableDays }
+  // 休み希望をマップ化: employee_id → { requestedOffs, paidLeaves, availableDays }
+  // requestedOffs = 希望休（社員が出した休み希望。migration 157 で public_holiday から改名）
   const requestMap = new Map<
     string,
-    { publicHolidays: Set<string>; paidLeaves: Set<string>; availableDays: Set<string> }
+    { requestedOffs: Set<string>; paidLeaves: Set<string>; availableDays: Set<string> }
   >();
 
   for (const req of shiftRequests) {
     if (!requestMap.has(req.employee_id)) {
       requestMap.set(req.employee_id, {
-        publicHolidays: new Set(),
+        requestedOffs: new Set(),
         paidLeaves: new Set(),
         availableDays: new Set(),
       });
     }
     const entry = requestMap.get(req.employee_id)!;
     for (const d of req.dates) {
-      if (req.request_type === 'public_holiday') entry.publicHolidays.add(d);
+      if (req.request_type === 'requested_off') entry.requestedOffs.add(d);
       if (req.request_type === 'paid_leave') entry.paidLeaves.add(d);
       // full_day_available / am_off / pm_off は「出勤可」扱い（部分的でも勤務枠あり）
       if (
@@ -116,9 +117,10 @@ export function generateShiftAssignments(
       const requests = requestMap.get(s.id);
       let assignmentType: ShiftAssignmentType = 'normal';
 
-      // 休み希望の反映
-      if (requests?.publicHolidays.has(dateStr)) {
-        assignmentType = 'public_holiday';
+      // 休み希望の反映。社員の希望休は requested_off（希望休）として生成する。
+      // 公休（public_holiday）は管理者がシフト作成画面で明示的にマークするもので、ここでは生成しない。
+      if (requests?.requestedOffs.has(dateStr)) {
+        assignmentType = 'requested_off';
       } else if (requests?.paidLeaves.has(dateStr)) {
         assignmentType = 'paid_leave';
       } else if (s.employment_type === 'part_time') {

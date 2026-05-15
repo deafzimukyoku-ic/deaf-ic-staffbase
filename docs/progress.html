@@ -708,6 +708,26 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- 公休 / 希望休 の分離 -->
+<div class="phase">
+  <h2>公休 / 希望休 の分離（管理者決定 vs 社員希望） <span class="phase-pct">コード実装完了（migration 157 適用済 / 動作確認待ち）</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">要件: 公休=管理者が決めた休み / 希望休=社員が出した休み希望。両者を区別する。社員の「公休」表示は「希望休」に改名</td></tr>
+      <tr><td>migration 157: enum 分離 + 壊れた CHECK 修正</td><td class="files">supabase/migrations/157_split_public_holiday_and_requested_off.sql</td><td><span class="status done">適用済</span></td><td class="pct">100%</td><td>shift_requests.request_type: public_holiday→requested_off リネーム + CHECK を実使用値(requested_off/paid_leave/full_day_available/am_off/pm_off)に作り直し（旧 CHECK は full_day_available 等を許可しておらず保存失敗していた既存バグも同時修正）。shift_assignments.assignment_type に requested_off 追加 + 既存 public_holiday 16行を requested_off に移行</td></tr>
+      <tr><td>型定義</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ShiftRequestType: public_holiday→requested_off / ShiftAssignmentType に requested_off 追加</td></tr>
+      <tr><td>シフト生成ロジック</td><td class="files">lib/logic/generateShift.ts, lib/logic/qualifiedCoverage.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>社員の希望休 → requested_off セルとして生成。公休は管理者の手動マークのみ。内部変数 publicHolidays→requestedOffs</td></tr>
+      <tr><td>休み希望 UI（社員・管理者）</td><td class="files">components/shift/MyRequestsView.tsx, AdminRequestsView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「公休」表示 → 「希望休」。日曜一括ボタンも「希望休」に</td></tr>
+      <tr><td>シフト作成画面（公休・希望休 両方を選択可に）</td><td class="files">components/shift/ShiftFull.tsx, ShiftGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>セル編集モーダルに 出勤/公休/希望休/有給/休み の5択。グリッド色: 公休=青(--accent)・希望休=金(--gold)。職員行統計に「希望休n」追加</td></tr>
+      <tr><td>その他シフト系 UI</td><td class="files">components/shift/MyShiftsView.tsx, ApprovalQueueFull.tsx, AddShiftStaffPicker.tsx, ShiftChangeRequestForm.tsx, TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>requested_off ラベル・色対応。ShiftChangeRequestForm の社員申請選択肢は public_holiday を除外し requested_off に（公休は管理者専用のため）</td></tr>
+      <tr><td>型チェック / lint</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0 エラー / 変更ファイル eslint 新規エラーなし（既存6件は変更外）</td></tr>
+      <tr><td>動作確認（ローカルセッションで実施）</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>cloud セッションでは localhost に到達できず未確認。ローカルセッションで実機確認</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 社員の休み希望提出で「希望休」が requested_off として保存されるか ② シフト作成画面で公休(管理者)と希望休(社員)が別の色・別ボタンで区別表示されるか ③ generateShift で社員の希望休が requested_off セルになり、公休セルは生成されないか ④ 既存 public_holiday 16行が requested_off に移行済みか（migration 157 適用済） ⑤ ShiftChangeRequestForm で社員が公休を選べなくなっているか ⑥ TransportFull / AddShiftStaffPicker で希望休の人に警告バッジが出るか ⑦ full_day_available/am_off/pm_off の休み希望が保存できるようになったか（旧バグ修正）</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>
