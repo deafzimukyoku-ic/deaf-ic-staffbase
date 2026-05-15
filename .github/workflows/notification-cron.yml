@@ -32,16 +32,26 @@ jobs:
           CRON_TARGET_URL: ${{ secrets.CRON_TARGET_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           if [ -z "$CRON_TARGET_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "::error::CRON_TARGET_URL or CRON_SECRET secret is not set"
             exit 1
           fi
-          # -f: HTTP 4xx/5xx で fail。-S: エラー表示。-s: 進捗非表示。
+          # -f は付けない: 4xx/5xx でも body を表示してから判定する (デバッグ性優先)
           # --max-time 240: route handler のタイムアウト目安
-          response=$(curl -fsS --max-time 240 \
+          # status と body を別キャプチャ
+          http_code=$(curl -sS --max-time 240 \
             -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
+            -o /tmp/cron-response.json \
+            -w "%{http_code}" \
             "$CRON_TARGET_URL/api/cron/send-notifications")
-          echo "Response: $response"
+          echo "HTTP $http_code"
+          echo "Body:"
+          cat /tmp/cron-response.json || true
+          echo ""
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "::error::send-notifications returned HTTP $http_code"
+            exit 1
+          fi

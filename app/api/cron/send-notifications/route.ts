@@ -44,10 +44,15 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '';
-  if (!appUrl) {
-    return NextResponse.json({ error: 'APP_URL not configured' }, { status: 500 });
-  }
+  /* メール内の URL リンク用。優先順位:
+       env APP_URL → env NEXT_PUBLIC_APP_URL → req.nextUrl.origin (実際の Host)
+     Vercel に env 未設定でも、本番ドメインで叩いた場合は origin から取得して継続。
+     localhost で叩いた場合は localhost:6001 になるためメール内のリンクも localhost に
+     なるが、ローカル検証時の挙動として許容範囲。 */
+  const appUrl =
+    process.env.APP_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    req.nextUrl.origin;
 
   // service roleでRLSバイパス
   const supabase = createSupabaseClient(
