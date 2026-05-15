@@ -7,40 +7,45 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-/* モーダル誤閉対策 (ホワイトリスト方式 + base-ui cancel)
+/* モーダル誤閉対策 (限定ブロックリスト方式 + base-ui cancel)
    - 「開く」イベントはすべて通す
-   - 「閉じる」イベントは以下の reason のみ許可:
-     - close-press      … 「閉じる」「キャンセル」「保存」ボタン押下
-     - trigger-press    … トリガーボタンで toggle
-     - imperative-action … actionsRef.close() などプログラム呼び出し
-   - escape-key / outside-press / focus-out / close-watcher 等は すべて無視
-   - disablePointerDismissal=true で pointer 起因の close 自体を発火させない
+   - 「閉じる」イベントは下記の reason のみ明示的にブロック (cancel)
+       focus-out      … focus 外れただけで閉じるのは UX 上不要
+       close-watcher  … ブラウザ Close-Watcher API 由来 (PC では通常使われない)
+   - それ以外 (escape-key / outside-press / close-press / trigger-press /
+     imperative-action / none) はすべて通常通り閉じる
+   - disablePointerDismissal は base-ui の default (false) に従う → 外クリックで閉じる
 
-   重要: base-ui の DialogStore.setOpen は
+   ## なぜ「キーボード入力で閉じる」が以前は起きたのか (= 真因の記録)
+   - components/ui/dialog.tsx 側の問題ではなかった
+   - app/(employee)/my/trainings/page.tsx 内で `TrainingsGrid` を
+     `MyTrainingsPage` の **nested function として宣言** していたため、Textarea の
+     onChange が親 state (summaryTexts) を更新する → 親が再レンダー → 新しい
+     TrainingsGrid 関数参照 → React が型変更と判定して TrainingsGrid を
+     unmount + remount → useState(null) で openId が null に戻り Dialog が消える
+   - 修正: TrainingsGrid を module level に抽出 (page.tsx 側で対応)
+
+   ## base-ui の close フロー (cancel() が必要な理由は残しておく)
        this.context.onOpenChange?.(nextOpen, eventDetails);
        if (eventDetails.isCanceled) return;
-       this.update({ open: nextOpen });  ← ★ ここで内部 state を強制更新
-   という構造なので、onOpenChange 内で `return` するだけでは base-ui が
-   勝手に閉じてしまう（controlled open=true が無視される）。
-   ブロックしたい場合は必ず `eventDetails.cancel()` を呼び、isCanceled=true に
-   して setOpen 内部の早期 return パスを通す必要がある。
-   前回の修正が「キーボード入力で閉じる」を解決しきれなかった真因はこれ。 */
-const ALLOWED_CLOSE_REASONS = new Set([
-  'close-press',
-  'trigger-press',
-  'imperative-action',
+       this.update({ open: nextOpen });
+   onOpenChange 内で単に return しても isCanceled=false のままで base-ui が
+   内部 state を強制更新する。ブロックする reason については
+   eventDetails.cancel() を呼ぶ必要がある。 */
+const BLOCKED_CLOSE_REASONS = new Set([
+  'focus-out',
+  'close-watcher',
 ]);
 
 function Dialog({
-  disablePointerDismissal = true,
   onOpenChange,
   ...rest
 }: DialogPrimitive.Root.Props) {
   /* onOpenChange が未指定でも cancel() を呼ぶ必要があるため、常にハンドラを差し込む */
   const handleOpenChange = React.useCallback(
     (open: boolean, eventDetails: DialogPrimitive.Root.ChangeEventDetails) => {
-      if (!open && !ALLOWED_CLOSE_REASONS.has(eventDetails.reason as string)) {
-        eventDetails.cancel(); /* ★ base-ui の内部 state 更新も止める */
+      if (!open && BLOCKED_CLOSE_REASONS.has(eventDetails.reason as string)) {
+        eventDetails.cancel();
         return;
       }
       onOpenChange?.(open, eventDetails);
@@ -50,7 +55,6 @@ function Dialog({
   return (
     <DialogPrimitive.Root
       data-slot="dialog"
-      disablePointerDismissal={disablePointerDismissal}
       onOpenChange={handleOpenChange}
       {...rest}
     />

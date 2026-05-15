@@ -419,4 +419,65 @@
   - **「対症療法と根本治療を区別する」**: `disablePointerDismissal=true` で pointer dismissal は止まるが、base-ui の state 機構は依然として close を発火する。レイヤごとの責務を理解する
 
 ---
+## 研修感想文モーダルがキーボード入力で閉じる (真因は Dialog ではなく nested function component)
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `app/(employee)/my/trainings/page.tsx` line 338 で宣言された nested `TrainingsGrid` 関数
+- **フェーズ**: 本番運用中
+- **エラー内容**: 研修詳細モーダル内の Textarea (受講の感想) に 1 文字入力した瞬間にモーダルが閉じる
+- **原因 (真因)**:
+  ```tsx
+  function MyTrainingsPage() {   // 親
+    const [summaryTexts, setSummaryTexts] = useState({});
+    ...
+    function TrainingsGrid({...}) {  // ★ 親の中で宣言された nested function component
+      const [openId, setOpenId] = useState(null);
+      return (
+        <Dialog open={!!openId} ...>
+          <Textarea onChange={(e) => setSummaryTexts(...)} />  // ★ 親 state を更新
+        </Dialog>
+      );
+    }
+    return <TrainingsGrid ... />;
+  }
+  ```
+  Textarea で 1 文字打つたびに:
+  1. `setSummaryTexts` で **親** MyTrainingsPage が再レンダー
+  2. 親の render 関数本体が再評価される → `function TrainingsGrid(...) { ... }` が新しい関数オブジェクトとして再生成される (関数識別子は親 render ごとに別物)
+  3. React reconciler が `<TrainingsGrid />` の type プロップを `===` で比較 → 別関数 → 別のコンポーネントツリーと判定
+  4. **古い TrainingsGrid を unmount し、新しい TrainingsGrid を mount**
+  5. 新しい TrainingsGrid の `useState(null)` で `openId` が null に初期化される
+  6. Dialog の `open={!!openId}` が false → exit アニメーション → 閉じる
+
+  これは React の最頻出 anti-pattern の一つで、ESLint の `react/no-unstable-nested-components` が検出してくれるルールでもある。
+- **これまで気付かなかった理由**: 開発者 (自分) が「Dialog の close は base-ui の onOpenChange 経由でしか起きない」と思い込んでいた。実際には parent の controlled `open` プロップが false に変わることでも閉じる。nested function の remount で local state がリセットされる経路を完全に見落としていた。前回 ③ で `eventDetails.cancel()` を入れる修正に走ったが、Dialog ラッパーは無関係だった。
+- **解決方法**: `TrainingsGrid` を `MyTrainingsPage` の外 (module level) に抽出し、`tenantId` / `employeeId` / `viewSummaries` を props で渡す。`RESULT_LABEL` / `RESULT_COLOR` も module level の const に移動。これで親の再レンダーが TrainingsGrid を remount しなくなり、`openId` state が保持される。
+- **再発防止**:
+  - **コンポーネントは絶対に他コンポーネントの内側で宣言しない**。`function Parent() { function Child() {} }` のパターンは、子が state を持つ場合に必ず壊れる。Hooks も無効になる
+  - **`react/no-unstable-nested-components` ESLint ルールを有効化する**。eslint-plugin-react に含まれる
+  - **「state がリセットされる」現象を見たら、まず親コンポーネントが child を不安定に作っていないか疑う**。Dialog や useState 内部の挙動を疑う前に
+  - **同じバグの第二歩を間違えない**: 今回 ① 私は `disablePointerDismissal=true` の whitelist 方式で「閉じる reason をブロックすればよい」と決めつけた ② ユーザー報告で再発 → 「base-ui の cancel() を呼べばよい」と更に決めつけた ③ 再再発でようやく親で何が起きているかを調べた。**1 回目の修正で直らなかった時点で、症状の出方 (どのモーダル? どの入力? 親で何が起きてる?) を聞き、推論前提を全部疑うべきだった**
+
+---
+## Dialog 外クリックで閉じなくなった (前回 ③ 修正による regression)
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `components/ui/dialog.tsx` の `disablePointerDismissal = true` デフォルト + `ALLOWED_CLOSE_REASONS` whitelist
+- **フェーズ**: 本番運用中
+- **エラー内容**: モーダル外をクリックしても閉じない (ユーザー報告「不便」)
+- **原因**: 前回 ③ の修正で「キーボード入力で閉じる」を防ごうとして:
+  - `disablePointerDismissal = true` をデフォルトに → 外クリックの dismissal を base-ui レベルで無効化
+  - `ALLOWED_CLOSE_REASONS = { close-press, trigger-press, imperative-action }` whitelist で `outside-press` も `escape-key` も全部ブロック
+
+  実際には「キーボードで閉じる」の真因は別 (nested function の remount) で、Dialog ラッパーには何の責任もなかった。過剰防御が外クリック/ESC まで全部殺してしまった。
+- **解決方法**:
+  - `disablePointerDismissal` のデフォルトを base-ui の default (false) に戻す
+  - whitelist → ブロックリスト方式に切替: `BLOCKED_CLOSE_REASONS = { focus-out, close-watcher }` のみ明示的にブロック。それ以外 (outside-press / escape-key / close-press / trigger-press / imperative-action / none) は全部通過
+  - `eventDetails.cancel()` は引き続きブロック時に呼ぶ (base-ui の内部 state 更新を止めるため)
+- **再発防止**:
+  - **「原因不明 = 強力なロックを掛ける」をしない**。「キーボードで閉じる」現象に対して `disablePointerDismissal` を切るのは因果が繋がっていない (pointer ≠ keyboard)。症状と原因が一致するまで根拠なしに防御を増やさない
+  - **defaults はライブラリの defaults に近づける**: 上書きデフォルトを増やすほど予期せぬ場所で挙動が変わる。base-ui の default を尊重し、必要な箇所だけ呼び出し側で override する
+  - **regression テスト**: 「外クリックで閉じる」「ESC で閉じる」「× ボタンで閉じる」「Cancel で閉じる」など、基本動作は手動で確認するチェックリストを作る
+
+---
 *(以降、新規エラーがあれば追記)*

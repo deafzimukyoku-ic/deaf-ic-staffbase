@@ -28,6 +28,174 @@ interface TrainingWithSub {
   submission: TrainingSubmission | null;
 }
 
+/* 結果ラベル/色 はモジュールレベルに置く (TrainingsGrid を module level に出すため) */
+const RESULT_LABEL: Record<string, string> = { pending: '判定待ち', passed: '合格', failed: '不合格', resubmit: '再提出してください' };
+const RESULT_COLOR: Record<string, string> = {
+  pending: 'bg-diletto-gold/[0.08] text-diletto-gold',
+  passed: 'bg-diletto-green/10 text-diletto-green',
+  failed: 'bg-diletto-red/[0.06] text-diletto-red',
+  resubmit: 'bg-diletto-blue/[0.07] text-diletto-blue',
+};
+
+/* TrainingsGrid: 受講モーダルを含むカテゴリ別グリッド。
+   親 MyTrainingsPage の nested function として定義すると、Textarea の onChange で
+   親 state (summaryTexts) を更新するたびに親が再レンダー → React が新しい関数参照を
+   見て TrainingsGrid を unmount + remount → useState(null) で openId がリセット
+   → Dialog が閉じる、というバグになる。必ず module level に置くこと。 */
+function TrainingsGrid({
+  items, summaryTexts, setSummaryTexts, submittingId, onSubmit,
+  tenantId, employeeId, viewSummaries,
+}: {
+  items: TrainingWithSub[];
+  summaryTexts: Record<string, string>;
+  setSummaryTexts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  submittingId: string | null;
+  onSubmit: (id: string) => void;
+  tenantId: string | null;
+  employeeId: string | null;
+  viewSummaries: Map<string, ViewSummary>;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  /* モーダルを開いた瞬間の submission 有無を記録（同セッション中は変化しない） */
+  const [wasSubmittedAtOpen, setWasSubmittedAtOpen] = useState<boolean>(false);
+  const open = openId ? items.find((i) => i.training.id === openId) : null;
+
+  if (items.length === 0) {
+    return <p className="text-center py-20 text-diletto-gray-light">このカテゴリの研修はありません</p>;
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
+        {items.map(({ training, submission }) => {
+          const passed = submission?.result === 'passed';
+          const label = submission ? RESULT_LABEL[submission.result] : '未受講';
+          return (
+            <ItemGridCard
+              key={training.id}
+              title={training.title}
+              excerpt={blocksToExcerpt((training as any).content_blocks, (training as any).body)}
+              createdAt={training.created_at}
+              acknowledged={passed}
+              ackLabel="合格"
+              pendingLabel={label}
+              hasMedia={blocksHaveMedia((training as any).content_blocks) || !!training.youtube_url || !!training.pdf_storage_path}
+              onClick={() => {
+                setWasSubmittedAtOpen(!!submission);
+                setOpenId(training.id);
+              }}
+            />
+          );
+        })}
+      </div>
+
+      <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
+        <DialogContent className="!max-w-6xl sm:!max-w-6xl max-h-[90vh] overflow-y-auto">
+          {open && (() => {
+            const { training, submission } = open;
+            const canResubmit = submission?.result === 'resubmit' || submission?.result === 'failed';
+            const showForm = !submission || canResubmit;
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <DialogTitle className="text-lg font-bold">{training.title}</DialogTitle>
+                      <NewBadge createdAt={training.created_at} />
+                    </div>
+                    {submission && (
+                      <Badge className={`${RESULT_COLOR[submission.result]} border-none`}>
+                        {RESULT_LABEL[submission.result]}
+                      </Badge>
+                    )}
+                  </div>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-2">
+                  {(training as any).body && (
+                    <p className="text-sm text-diletto-ink/80 leading-relaxed">{(training as any).body}</p>
+                  )}
+
+                  {((training as any).content_blocks?.length || 0) > 0 ? (
+                    <div className="bg-white/80 rounded-md p-5 border border-diletto-gray/10">
+                      <BlockRenderer blocks={(training as any).content_blocks} />
+                    </div>
+                  ) : (
+                    <div className="rounded-md overflow-hidden shadow-lg border border-white">
+                      <TrainingPlayer
+                        title={training.title}
+                        youtubeUrl={training.youtube_url}
+                        pdfUrl={training.pdf_storage_path}
+                      />
+                    </div>
+                  )}
+
+                  {submission && submission.admin_comment && (
+                    <div className="bg-white/60 backdrop-blur-sm border border-diletto-blue/20 p-4 rounded-md text-sm flex gap-3">
+                      <span className="text-diletto-blue font-bold">💡 判定コメント:</span>
+                      <span className="text-diletto-ink">{submission.admin_comment}</span>
+                    </div>
+                  )}
+
+                  {showForm && (
+                    <Card className="border-none shadow-sm bg-white/80 backdrop-blur-sm">
+                      <CardContent className="py-6 space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-end">
+                            <Label className="text-sm font-bold">受講の感想</Label>
+                            <span className={`text-[10px] font-medium ${(summaryTexts[training.id] || '').length < TRAINING_SUMMARY_MIN_CHARS ? 'text-diletto-red' : 'text-diletto-green'}`}>
+                              {(summaryTexts[training.id] || '').length} / {TRAINING_SUMMARY_MIN_CHARS} 文字以上
+                            </span>
+                          </div>
+                          <Textarea
+                            value={summaryTexts[training.id] || ''}
+                            onChange={(e) => setSummaryTexts((prev) => ({ ...prev, [training.id]: e.target.value }))}
+                            rows={5}
+                            className="bg-white border-diletto-gray/10 rounded-md focus:ring-diletto-blue/20"
+                            placeholder="研修を終えて、学んだことや気づいたことを記入してください。"
+                          />
+                        </div>
+                        <Button
+                          onClick={() => onSubmit(training.id)}
+                          disabled={submittingId === training.id || (summaryTexts[training.id] || '').length < TRAINING_SUMMARY_MIN_CHARS}
+                          className="w-full h-12 bg-diletto-ink hover:bg-black text-white rounded-md shadow-md transition-all active:scale-[0.98]"
+                        >
+                          {submittingId === training.id ? '提出中...' : '研修完了を報告する'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 研修は ViewConfirmButton を撤去 (提出だけを閲覧回数としてカウントする方針)。
+                      他の 遵守事項/お知らせ/業務マニュアル は明示的な閲覧確認ボタンを残す。
+                      過去の閲覧回数表示 (前回確認日時 + これまで N 回確認済み) はそのまま参考表示。 */}
+                  {tenantId && employeeId && wasSubmittedAtOpen && (() => {
+                    const s = viewSummaries.get(training.id);
+                    if (!s || s.count === 0) return null;
+                    const lastViewedLabel = s.lastAt
+                      ? new Date(s.lastAt).toLocaleString('ja-JP', {
+                          year: 'numeric', month: 'numeric', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })
+                      : null;
+                    return (
+                      <div className="pt-3 border-t border-diletto-gray/10">
+                        <p className="text-xs text-diletto-gray-light text-right">
+                          これまで {s.count} 回 提出済み{lastViewedLabel ? `（最終 ${lastViewedLabel}）` : ''}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export default function MyTrainingsPage() {
   const [items, setItems] = useState<TrainingWithSub[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,14 +334,6 @@ export default function MyTrainingsPage() {
     toast.success('感想を提出しました');
     setSubmittingId(null);
   }
-
-  const resultLabel: Record<string, string> = { pending: '判定待ち', passed: '合格', failed: '不合格', resubmit: '再提出してください' };
-  const resultColor: Record<string, string> = {
-    pending: 'bg-diletto-gold/[0.08] text-diletto-gold',
-    passed: 'bg-diletto-green/10 text-diletto-green',
-    failed: 'bg-diletto-red/[0.06] text-diletto-red',
-    resubmit: 'bg-diletto-blue/[0.07] text-diletto-blue',
-  };
 
   if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
 
@@ -331,155 +491,10 @@ export default function MyTrainingsPage() {
         setSummaryTexts={setSummaryTexts}
         submittingId={submittingId}
         onSubmit={handleSubmit}
+        tenantId={tenantId}
+        employeeId={employeeId}
+        viewSummaries={viewSummaries}
       />
     </div>
   );
-
-  function TrainingsGrid({ items, summaryTexts, setSummaryTexts, submittingId, onSubmit }: {
-    items: TrainingWithSub[];
-    summaryTexts: Record<string, string>;
-    setSummaryTexts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-    submittingId: string | null;
-    onSubmit: (id: string) => void;
-  }) {
-    const [openId, setOpenId] = useState<string | null>(null);
-    /* モーダルを開いた瞬間の submission 有無を記録（同セッション中は変化しない） */
-    const [wasSubmittedAtOpen, setWasSubmittedAtOpen] = useState<boolean>(false);
-    const open = openId ? items.find((i) => i.training.id === openId) : null;
-
-    if (items.length === 0) {
-      return <p className="text-center py-20 text-diletto-gray-light">このカテゴリの研修はありません</p>;
-    }
-
-    return (
-      <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
-          {items.map(({ training, submission }) => {
-            const passed = submission?.result === 'passed';
-            const label = submission ? resultLabel[submission.result] : '未受講';
-            return (
-              <ItemGridCard
-                key={training.id}
-                title={training.title}
-                excerpt={blocksToExcerpt((training as any).content_blocks, (training as any).body)}
-                createdAt={training.created_at}
-                acknowledged={passed}
-                ackLabel="合格"
-                pendingLabel={label}
-                hasMedia={blocksHaveMedia((training as any).content_blocks) || !!training.youtube_url || !!training.pdf_storage_path}
-                onClick={() => {
-                  setWasSubmittedAtOpen(!!submission);
-                  setOpenId(training.id);
-                }}
-              />
-            );
-          })}
-        </div>
-
-        <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
-          <DialogContent className="!max-w-6xl sm:!max-w-6xl max-h-[90vh] overflow-y-auto">
-            {open && (() => {
-              const { training, submission } = open;
-              const canResubmit = submission?.result === 'resubmit' || submission?.result === 'failed';
-              const showForm = !submission || canResubmit;
-              return (
-                <>
-                  <DialogHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <DialogTitle className="text-lg font-bold">{training.title}</DialogTitle>
-                        <NewBadge createdAt={training.created_at} />
-                      </div>
-                      {submission && (
-                        <Badge className={`${resultColor[submission.result]} border-none`}>
-                          {resultLabel[submission.result]}
-                        </Badge>
-                      )}
-                    </div>
-                  </DialogHeader>
-
-                  <div className="space-y-4 pt-2">
-                    {(training as any).body && (
-                      <p className="text-sm text-diletto-ink/80 leading-relaxed">{(training as any).body}</p>
-                    )}
-
-                    {((training as any).content_blocks?.length || 0) > 0 ? (
-                      <div className="bg-white/80 rounded-md p-5 border border-diletto-gray/10">
-                        <BlockRenderer blocks={(training as any).content_blocks} />
-                      </div>
-                    ) : (
-                      <div className="rounded-md overflow-hidden shadow-lg border border-white">
-                        <TrainingPlayer
-                          title={training.title}
-                          youtubeUrl={training.youtube_url}
-                          pdfUrl={training.pdf_storage_path}
-                        />
-                      </div>
-                    )}
-
-                    {submission && submission.admin_comment && (
-                      <div className="bg-white/60 backdrop-blur-sm border border-diletto-blue/20 p-4 rounded-md text-sm flex gap-3">
-                        <span className="text-diletto-blue font-bold">💡 判定コメント:</span>
-                        <span className="text-diletto-ink">{submission.admin_comment}</span>
-                      </div>
-                    )}
-
-                    {showForm && (
-                      <Card className="border-none shadow-sm bg-white/80 backdrop-blur-sm">
-                        <CardContent className="py-6 space-y-4">
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-end">
-                              <Label className="text-sm font-bold">受講の感想</Label>
-                              <span className={`text-[10px] font-medium ${(summaryTexts[training.id] || '').length < TRAINING_SUMMARY_MIN_CHARS ? 'text-diletto-red' : 'text-diletto-green'}`}>
-                                {(summaryTexts[training.id] || '').length} / {TRAINING_SUMMARY_MIN_CHARS} 文字以上
-                              </span>
-                            </div>
-                            <Textarea
-                              value={summaryTexts[training.id] || ''}
-                              onChange={(e) => setSummaryTexts((prev) => ({ ...prev, [training.id]: e.target.value }))}
-                              rows={5}
-                              className="bg-white border-diletto-gray/10 rounded-md focus:ring-diletto-blue/20"
-                              placeholder="研修を終えて、学んだことや気づいたことを記入してください。"
-                            />
-                          </div>
-                          <Button
-                            onClick={() => onSubmit(training.id)}
-                            disabled={submittingId === training.id || (summaryTexts[training.id] || '').length < TRAINING_SUMMARY_MIN_CHARS}
-                            className="w-full h-12 bg-diletto-ink hover:bg-black text-white rounded-md shadow-md transition-all active:scale-[0.98]"
-                          >
-                            {submittingId === training.id ? '提出中...' : '研修完了を報告する'}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* 研修は ViewConfirmButton を撤去 (提出だけを閲覧回数としてカウントする方針)。
-                        他の 遵守事項/お知らせ/業務マニュアル は明示的な閲覧確認ボタンを残す。
-                        過去の閲覧回数表示 (前回確認日時 + これまで N 回確認済み) はそのまま参考表示。 */}
-                    {tenantId && employeeId && wasSubmittedAtOpen && (() => {
-                      const s = viewSummaries.get(training.id);
-                      if (!s || s.count === 0) return null;
-                      const lastViewedLabel = s.lastAt
-                        ? new Date(s.lastAt).toLocaleString('ja-JP', {
-                            year: 'numeric', month: 'numeric', day: 'numeric',
-                            hour: '2-digit', minute: '2-digit',
-                          })
-                        : null;
-                      return (
-                        <div className="pt-3 border-t border-diletto-gray/10">
-                          <p className="text-xs text-diletto-gray-light text-right">
-                            これまで {s.count} 回 提出済み{lastViewedLabel ? `（最終 ${lastViewedLabel}）` : ''}
-                          </p>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </>
-              );
-            })()}
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
 }
