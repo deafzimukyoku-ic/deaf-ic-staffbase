@@ -751,6 +751,11 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 - 両方 false / true: フル sidebar
 - フラグは事業所単位で独立。事業所セレクタで切り替えると即座に sidebar 再フィルタ
 
+### シフト生成ガード（mobile-responsiveness ブランチで変更）
+- `components/shift/ShiftFull.tsx` のシフト生成ボタンは **`staff.length === 0` のみ** で disabled 判定する。
+- 旧仕様（`!shiftOnlyMode && scheduleEntries.length === 0` で利用予定 0 件なら disabled）は撤廃。`generateShiftAssignments` は利用予定 0 件でも各日最低 3 名で正常生成できるため、全事業所で利用予定未登録のままシフト生成可能。
+- これに伴い ShiftFull.tsx は `facilities.shift_only_mode` を **参照しない**（旧: 生成可否判定のため fetch していた）。`shift_only_mode` は sidebar フィルタ専用フラグになった。
+
 ---
 
 ## 14c. 利用料金表 / イベント / 児童料金属性（Phase 66, migration 126〜128）

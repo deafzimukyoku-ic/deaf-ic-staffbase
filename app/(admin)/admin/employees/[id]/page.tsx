@@ -623,7 +623,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   return (
     <div>
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">
@@ -639,7 +639,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             {employee.employee_number} / {employee.email}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => router.push('/admin/employees')}>
             一覧に戻る
           </Button>
@@ -664,14 +664,17 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="h-10 bg-diletto-beige/30 p-1">
-          <TabsTrigger value="dashboard" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">ダッシュボード</TabsTrigger>
-          <TabsTrigger value="basic" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">基本情報</TabsTrigger>
-          <TabsTrigger value="about" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">自己紹介・働き方</TabsTrigger>
-          <TabsTrigger value="employment" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">所属・権限</TabsTrigger>
-          <TabsTrigger value="documents" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">書類</TabsTrigger>
-          <TabsTrigger value="ai" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">AI診断</TabsTrigger>
-        </TabsList>
+        {/* モバイル幅では 6 タブが収まらないため横スクロール可にする */}
+        <div className="overflow-x-auto -mx-1 px-1">
+          <TabsList className="h-10 bg-diletto-beige/30 p-1">
+            <TabsTrigger value="dashboard" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">ダッシュボード</TabsTrigger>
+            <TabsTrigger value="basic" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">基本情報</TabsTrigger>
+            <TabsTrigger value="about" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">自己紹介・働き方</TabsTrigger>
+            <TabsTrigger value="employment" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">所属・権限</TabsTrigger>
+            <TabsTrigger value="documents" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">書類</TabsTrigger>
+            <TabsTrigger value="ai" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">AI診断</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="dashboard" className="mt-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

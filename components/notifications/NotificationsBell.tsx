@@ -39,7 +39,10 @@ export function NotificationsBell() {
           {/* 背景 click outside で閉じる */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
 
-          <div className="absolute right-0 top-11 z-50 w-[360px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto rounded-lg border border-diletto-gray/15 bg-white shadow-xl">
+          {/* モバイル: ベルは画面右端ではなくヘッダー中央寄りにあるため absolute right-0 だと
+              画面左外にはみ出す。lg 未満は fixed で画面幅にフィットさせ、lg 以上は従来の
+              ベル基準ドロップダウンに戻す。 */}
+          <div className="fixed left-2 right-2 top-[60px] z-50 max-h-[70vh] overflow-y-auto rounded-lg border border-diletto-gray/15 bg-white shadow-xl lg:absolute lg:left-auto lg:right-0 lg:top-11 lg:w-[360px] lg:max-w-[calc(100vw-2rem)]">
             <div className="sticky top-0 bg-white border-b border-diletto-gray/10 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm">通知</span>

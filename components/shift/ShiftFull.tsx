@@ -87,9 +87,6 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   const [coreStartTime, setCoreStartTime] = useState<string | null>(null);
   const [coreEndTime, setCoreEndTime] = useState<string | null>(null);
   const [minQualifiedStaff, setMinQualifiedStaff] = useState<number>(2);
-  /* migration 125: シフトのみモードの事業所は利用表が存在しない前提でシフト生成可能にする */
-  const [shiftOnlyMode, setShiftOnlyMode] = useState(false);
-
   // 月全体の publish_status を集約。「全行 published」なら published、「全行 ready」なら ready、
   // 「全行 draft」なら draft、混在なら mixed。
   const [monthStatus, setMonthStatus] = useState<PublishStatus | 'mixed' | 'empty'>('empty');
@@ -250,14 +247,6 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       setCoreStartTime((fss?.core_start_time as string | null) ?? null);
       setCoreEndTime((fss?.core_end_time as string | null) ?? null);
       setMinQualifiedStaff((fss?.min_qualified_staff as number | null) ?? 2);
-
-      // facility.shift_only_mode（migration 125）: 利用表なしでシフト生成を許可
-      const { data: facRow } = await supabase
-        .from('facilities')
-        .select('shift_only_mode')
-        .eq('id', facilityId)
-        .maybeSingle();
-      setShiftOnlyMode((facRow?.shift_only_mode as boolean | null) === true);
 
       setStaff(staffRows);
       setScheduleEntries((entries ?? []) as ScheduleEntryRow[]);
@@ -633,7 +622,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
             <Button
               variant="primary"
               onClick={handleGenerate}
-              disabled={staff.length === 0 || (!shiftOnlyMode && scheduleEntries.length === 0)}
+              disabled={staff.length === 0}
             >
               シフト生成
             </Button>
@@ -789,19 +778,11 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                       </span>{' '}
                       登録職員: <b>{staff.length}名</b>
                     </div>
-                    {!shiftOnlyMode && (
-                      <div>
-                        <span style={{ color: scheduleEntries.length > 0 ? 'var(--green)' : 'var(--red)' }}>
-                          {scheduleEntries.length > 0 ? '✓' : '×'}
-                        </span>{' '}
-                        利用予定: <b>{scheduleEntries.length}件</b>
-                      </div>
-                    )}
-                    {shiftOnlyMode && (
-                      <div style={{ color: 'var(--ink-3)' }}>
-                        ※ シフトのみモード: 利用予定の登録は不要です
-                      </div>
-                    )}
+                    <div>
+                      <span style={{ color: 'var(--ink-3)' }}>○</span> 利用予定:{' '}
+                      <b>{scheduleEntries.length}件</b>{' '}
+                      <span style={{ color: 'var(--ink-3)' }}>（任意）</span>
+                    </div>
                     <div>
                       <span style={{ color: 'var(--ink-3)' }}>○</span> 休み希望:{' '}
                       <b>{shiftRequests.length}件</b>{' '}
@@ -812,7 +793,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                   <Button
                     variant="primary"
                     onClick={handleGenerate}
-                    disabled={staff.length === 0 || (!shiftOnlyMode && scheduleEntries.length === 0)}
+                    disabled={staff.length === 0}
                   >
                     シフト生成
                   </Button>
@@ -821,17 +802,13 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                     className="text-[11px] mt-5 text-left space-y-1"
                     style={{ color: 'var(--ink-3)', lineHeight: 1.6 }}
                   >
+                    <li>※ 利用予定が未登録でも生成できます（利用児童のいない日は各日 最低 3 名で生成）。</li>
                     <li>※ 休み希望は未提出でも生成できます。</li>
-                    <li>※ 後から再生成すれば最新の休み希望が反映されます。</li>
+                    <li>※ 後から再生成すれば最新の利用予定・休み希望が反映されます。</li>
                     <li>※ 生成後もセルをクリックして個別調整できます。</li>
-                    {shiftOnlyMode && (
-                      <li>※ シフトのみモード: 利用予定がなくても各日 最低 3 名で生成されます。</li>
-                    )}
-                    {(staff.length === 0 || (!shiftOnlyMode && scheduleEntries.length === 0)) && (
+                    {staff.length === 0 && (
                       <li style={{ color: 'var(--red)', fontWeight: 600, marginTop: 6 }}>
-                        {shiftOnlyMode
-                          ? '⚠ 職員が登録されている必要があります。'
-                          : '⚠ 職員と利用予定が両方登録されている必要があります。'}
+                        ⚠ 職員が登録されている必要があります。
                       </li>
                     )}
                   </ul>

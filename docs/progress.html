@@ -670,6 +670,24 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- モバイル対応 + シフト生成ガード緩和 -->
+<div class="phase">
+  <h2>モバイル対応 + シフト生成ガード緩和 <span class="phase-pct">完了 100%（npm run dev 確認済 / ユーザー視覚確認待ち）</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">背景: ① ベル通知ドロップダウンがモバイルで画面外にはみ出す ② シフト生成が利用予定未登録だと押せない ③ 社員詳細ページのヘッダー/タブがモバイル非対応</td></tr>
+      <tr><td>① ベル通知ドロップダウンのモバイル対応</td><td class="files">components/notifications/NotificationsBell.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>lg 未満は fixed left-2 right-2 top-[60px] で画面幅にフィット、lg 以上は従来の absolute right-0 top-11 w-[360px] を維持。ベルがヘッダー中央寄りのため absolute right-0 だと左にはみ出していた</td></tr>
+      <tr><td>② シフト生成ガード緩和（利用予定未登録でも生成可）</td><td class="files">components/shift/ShiftFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>生成ボタン disabled 条件を staff.length===0 のみに変更。旧 !shiftOnlyMode && scheduleEntries.length===0 を撤廃。shiftOnlyMode の state/fetch を ShiftFull から削除（sidebar 専用フラグに）。空状態カードの文言も「利用予定は任意」に更新。generateShiftAssignments は利用予定0件でも各日最低3名で正常生成</td></tr>
+      <tr><td>③ 社員詳細ページ ヘッダー + タブのモバイル対応</td><td class="files">app/(admin)/admin/employees/[id]/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ヘッダーを flex-col gap-3 sm:flex-row に（氏名とボタンが潰れる問題）。ボタン群に flex-wrap。6タブの TabsList を overflow-x-auto の div で包んで横スクロール可に</td></tr>
+      <tr><td>型チェック / lint / dev 起動確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc --noEmit 0 エラー / eslint 0 エラー（既存 warning のみ）/ npm run dev 起動・/login 200・保護ルート 307・コンパイルエラーなし</td></tr>
+      <tr><td>docs/reference-map.md 更新</td><td class="files">docs/reference-map.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>§14b にシフト生成ガード変更を追記（shift_only_mode は sidebar 専用フラグに）</td></tr>
+      <tr><td>ユーザー視覚確認</td><td class="files">—</td><td><span class="status prog">確認待ち</span></td><td class="pct">90%</td><td>実機/DevTools モバイル幅での見た目はユーザー確認待ち（当環境は Supabase 資格情報なしのため認証配下ページの実画面描画は不可）</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① ベル: lg 未満で画面内に収まるか / lg 以上で従来通りベル基準に出るか ② シフト生成: 利用予定0件の月で生成ボタンが押せ、各日最低3名の draft が生成されるか / 公開済み月は従来通り再生成不可か ③ 社員詳細: モバイル幅でヘッダーが縦積みになり崩れないか / タブが横スクロールで全6個到達できるか ④ shiftOnlyMode 削除で他の参照箇所が壊れていないか（grep 済: ShiftFull 内に残存なし）</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>
