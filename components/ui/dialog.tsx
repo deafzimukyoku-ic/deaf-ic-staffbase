@@ -7,10 +7,20 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-/* デフォルトで「閉じる/キャンセル/保存ボタンを押す」または「プログラム的に setOpen(false)」した時だけ閉じる。
-   - disablePointerDismissal=true で 外クリックで閉じない
-   - onOpenChange を ラップして reason='escapeKey' / 'focusOut' を無視
-   入力途中で誤って閉じてしまう事故を防ぐ (以前報告された「1文字入れたら閉まる」の対策)。 */
+/* モーダル誤閉対策 (ホワイトリスト方式)
+   - 「開く」イベントはすべて通す
+   - 「閉じる」イベントは以下の reason のみ許可:
+     - close-press      … 「閉じる」「キャンセル」「保存」ボタン押下
+     - trigger-press    … トリガーボタンで toggle
+     - imperative-action … setOpen(false) など明示的プログラム呼び出し
+   - escape-key / outside-press / focus-out / input-change 等は すべて無視
+   - disablePointerDismissal=true で外クリック起点の close 自体を発火させない */
+const ALLOWED_CLOSE_REASONS = new Set([
+  'close-press',
+  'trigger-press',
+  'imperative-action',
+]);
+
 function Dialog({
   disablePointerDismissal = true,
   onOpenChange,
@@ -19,8 +29,8 @@ function Dialog({
   const handleOpenChange = React.useMemo(() => {
     if (!onOpenChange) return undefined;
     return (open: boolean, eventDetails: DialogPrimitive.Root.ChangeEventDetails) => {
-      if (!open && (eventDetails.reason === 'escape-key' || eventDetails.reason === 'focus-out')) {
-        return;
+      if (!open && !ALLOWED_CLOSE_REASONS.has(eventDetails.reason as string)) {
+        return; /* 想定外の close reason は無視 */
       }
       onOpenChange(open, eventDetails);
     };
