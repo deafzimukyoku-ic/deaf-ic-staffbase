@@ -36,13 +36,17 @@ export function NotificationsBell() {
 
       {open && (
         <>
-          {/* 背景 click outside で閉じる */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          {/* 背景 click outside で閉じる。
+              シフト表 / 送迎表 / 利用表 の sticky 角セルが z-50 のため、背景は z-[80] に
+              引き上げないと sticky 越しに click が貫通せず外側クリックで閉じない。 */}
+          <div className="fixed inset-0 z-[80]" onClick={() => setOpen(false)} />
 
           {/* モバイル: ベルは画面右端ではなくヘッダー中央寄りにあるため absolute right-0 だと
               画面左外にはみ出す。lg 未満は fixed で画面幅にフィットさせ、lg 以上は従来の
-              ベル基準ドロップダウンに戻す。 */}
-          <div className="fixed left-2 right-2 top-[60px] z-50 max-h-[70vh] overflow-y-auto rounded-lg border border-diletto-gray/15 bg-white shadow-xl lg:absolute lg:left-auto lg:right-0 lg:top-11 lg:w-[360px] lg:max-w-[calc(100vw-2rem)]">
+              ベル基準ドロップダウンに戻す。
+              z-[90]: ShiftGridFull / ScheduleGridFull / ReportMatrix / StaffChildOverlapView の
+              sticky 列・角セル (z-30〜z-50) を確実に上書きする。背景 bg-white で完全に opaque。 */}
+          <div className="fixed left-2 right-2 top-[60px] z-[90] max-h-[70vh] overflow-y-auto rounded-lg border border-diletto-gray/15 bg-white shadow-xl lg:absolute lg:left-auto lg:right-0 lg:top-11 lg:w-[360px] lg:max-w-[calc(100vw-2rem)]">
             <div className="sticky top-0 bg-white border-b border-diletto-gray/10 px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm">通知</span>

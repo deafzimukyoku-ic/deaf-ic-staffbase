@@ -34,16 +34,27 @@ const CATEGORY_META: Record<CategoryKey, { label: string; reminder: ReminderCate
 
 type LastCompletedAt = Partial<Record<CategoryKey, Record<string, string>>>;
 
+/* dashboard-published-filter:
+   遵守事項 / 研修 / お知らせ / 業務マニュアル は is_published=true のみを母数に使う。
+   - publishedTotals: 達成率分母・ProgressBadge total・ReminderModal の total に使用
+   - allTotals: 概要カードの「公開件数 / 全件」表示の右側（分母）に使用
+   書類 (totalTemplates) は document_templates に is_published 列が無く、
+   audience rule で個別判定するため従来通り単一値で持つ。 */
+interface CategoryTotals {
+  compliance: number;
+  trainings: number;
+  announcements: number;
+  manuals: number;
+}
+
 interface Props {
   rows: ProgressRow[];
   totalTemplates: number;
   /* 社員別の対象書類数。書類の自動判定（ゲート付きタグの AND）で社員ごとに対象数が異なるため。
      未指定の社員は totalTemplates を分母として fallback。 */
   docTotalsByEmployee?: Record<string, number>;
-  totalCompliance: number;
-  totalTrainings: number;
-  totalAnnouncements: number;
-  totalManuals: number;
+  publishedTotals: CategoryTotals;
+  allTotals: CategoryTotals;
   facilities?: FacilityLite[];
   lastCompletedAt?: LastCompletedAt;
 }
@@ -74,7 +85,7 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: st
   );
 }
 
-export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = {}, totalCompliance, totalTrainings, totalAnnouncements, totalManuals, facilities = [], lastCompletedAt = {} }: Props) {
+export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = {}, publishedTotals, allTotals, facilities = [], lastCompletedAt = {} }: Props) {
   const active = rows.filter((r) => r.status === 'active');
 
   // モーダル状態
@@ -133,10 +144,10 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
   };
 
   const docRate = calcRate('docs_submitted', (r) => docTotalsByEmployee[r.employee_id] ?? totalTemplates);
-  const compRate = calcRate('compliance_done', () => totalCompliance);
-  const trainRate = calcRate('trainings_passed', () => totalTrainings);
-  const annRate = calcRate('announcements_read', () => totalAnnouncements);
-  const manualRate = calcRate('manuals_read', () => totalManuals);
+  const compRate = calcRate('compliance_done', () => publishedTotals.compliance);
+  const trainRate = calcRate('trainings_passed', () => publishedTotals.trainings);
+  const annRate = calcRate('announcements_read', () => publishedTotals.announcements);
+  const manualRate = calcRate('manuals_read', () => publishedTotals.manuals);
 
   return (
     <div className="space-y-5">
@@ -158,10 +169,10 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
         facilities={facilities}
         totals={{
           docs_submitted: totalTemplates,
-          compliance_done: totalCompliance,
-          trainings_passed: totalTrainings,
-          announcements_read: totalAnnouncements,
-          manuals_read: totalManuals,
+          compliance_done: publishedTotals.compliance,
+          trainings_passed: publishedTotals.trainings,
+          announcements_read: publishedTotals.announcements,
+          manuals_read: publishedTotals.manuals,
         }}
         docTotalsByEmployee={docTotalsByEmployee}
         lastCompletedAt={lastCompletedAt}
@@ -173,14 +184,15 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
         onSend={handleSend}
       />}
 
-      {/* サマリーカード — 5列レスポンシブ */}
+      {/* サマリーカード — 5列レスポンシブ。
+          書類は is_published 概念なしのため value のみ。それ以外は "公開件数 / 全件" 表示 */}
       <CollapsibleSection title="概要">
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
           <StatCard label="社員数" value={active.length} sub="在籍" />
-          <StatCard label="遵守事項" value={totalCompliance} sub="件" />
-          <StatCard label="研修" value={totalTrainings} sub="件" />
-          <StatCard label="お知らせ" value={totalAnnouncements} sub="件" />
-          <StatCard label="業務マニュアル" value={totalManuals} sub="件" />
+          <StatCard label="遵守事項"   value={publishedTotals.compliance}    total={allTotals.compliance}    sub="件" />
+          <StatCard label="研修"       value={publishedTotals.trainings}     total={allTotals.trainings}     sub="件" />
+          <StatCard label="お知らせ"   value={publishedTotals.announcements} total={allTotals.announcements} sub="件" />
+          <StatCard label="業務マニュアル" value={publishedTotals.manuals}   total={allTotals.manuals}       sub="件" />
         </div>
       </CollapsibleSection>
 
@@ -212,16 +224,16 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
                         <ProgressBadge current={Number(r.docs_submitted)} total={docTotalsByEmployee[r.employee_id] ?? totalTemplates} />
                       </td>
                       <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.compliance_done)} total={totalCompliance} />
+                        <ProgressBadge current={Number(r.compliance_done)} total={publishedTotals.compliance} />
                       </td>
                       <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.trainings_passed)} total={totalTrainings} />
+                        <ProgressBadge current={Number(r.trainings_passed)} total={publishedTotals.trainings} />
                       </td>
                       <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.announcements_read)} total={totalAnnouncements} />
+                        <ProgressBadge current={Number(r.announcements_read)} total={publishedTotals.announcements} />
                       </td>
                       <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number((r as { manuals_read?: number }).manuals_read ?? 0)} total={totalManuals} />
+                        <ProgressBadge current={Number((r as { manuals_read?: number }).manuals_read ?? 0)} total={publishedTotals.manuals} />
                       </td>
                     </tr>
                   ))}
@@ -238,11 +250,15 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: number; sub: string }) {
+/* total を渡すと "公開件数 / 全件" 表示、未指定なら従来の単一件数 (書類 / 社員数) */
+function StatCard({ label, value, total, sub }: { label: string; value: number; total?: number; sub: string }) {
   return (
     <Card>
       <CardContent className="py-4 text-center">
-        <p className="text-2xl font-bold">{value}</p>
+        <p className="text-2xl font-bold">
+          {value}
+          {total !== undefined && <span className="text-diletto-gray-light font-normal text-xl"> / {total}</span>}
+        </p>
         <p className="text-xs text-diletto-gray-light">{label} {sub}</p>
       </CardContent>
     </Card>

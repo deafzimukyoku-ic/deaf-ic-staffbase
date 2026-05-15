@@ -24,13 +24,20 @@ export default function AdminDashboardPage() {
 
       const tid = me.tenant_id;
 
-      const [progressRes, templatesRes, complianceRes, trainingsRes, announcementsRes, manualsRes, employeesRes, facilitiesRes, docSubsRes, compAcksRes, trainSubsRes, annReadsRes, manualReadsRes] = await Promise.all([
+      /* dashboard-published-filter:
+         遵守事項 / 研修 / お知らせ / 業務マニュアル は全件と公開件数を別々に取得する。
+         公開件数 = 達成率分母・ProgressBadge total / 全件 = 概要カード「公開 / 全件」表示の右側 */
+      const [progressRes, templatesRes, complianceRes, complianceAllRes, trainingsRes, trainingsAllRes, announcementsRes, announcementsAllRes, manualsRes, manualsAllRes, employeesRes, facilitiesRes, docSubsRes, compAcksRes, trainSubsRes, annReadsRes, manualReadsRes] = await Promise.all([
         supabase.from('employee_progress').select('*').eq('tenant_id', tid),
         /* mapping も含めて取得 — 社員別の対象書類数を計算するため */
         supabase.from('document_templates').select('id, mapping').eq('tenant_id', tid),
+        supabase.from('compliance_documents').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('compliance_documents').select('id').eq('tenant_id', tid),
+        supabase.from('trainings').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('trainings').select('id').eq('tenant_id', tid),
+        supabase.from('announcements').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('announcements').select('id').eq('tenant_id', tid),
+        supabase.from('manuals').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('manuals').select('id').eq('tenant_id', tid),
         /* gate 判定に必要な employee 列も取得 */
         supabase.from('employees').select('id, last_name, first_name, last_name_kana, first_name_kana, status, facility_id, has_car_commute, is_shuttle_driver').eq('tenant_id', tid),
@@ -85,10 +92,18 @@ export default function AdminDashboardPage() {
         rows,
         totalTemplates: templatesRes.data?.length || 0,
         docTotalsByEmployee,
-        totalCompliance: complianceRes.data?.length || 0,
-        totalTrainings: trainingsRes.data?.length || 0,
-        totalAnnouncements: announcementsRes.data?.length || 0,
-        totalManuals: manualsRes.data?.length || 0,
+        publishedTotals: {
+          compliance: complianceRes.data?.length || 0,
+          trainings: trainingsRes.data?.length || 0,
+          announcements: announcementsRes.data?.length || 0,
+          manuals: manualsRes.data?.length || 0,
+        },
+        allTotals: {
+          compliance: complianceAllRes.data?.length || 0,
+          trainings: trainingsAllRes.data?.length || 0,
+          announcements: announcementsAllRes.data?.length || 0,
+          manuals: manualsAllRes.data?.length || 0,
+        },
         facilities: facilitiesRes.data || [],
         lastCompletedAt,
       });

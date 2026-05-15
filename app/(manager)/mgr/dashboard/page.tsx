@@ -97,7 +97,13 @@ export default function ManagerDashboardPage() {
   const [me, setMe] = useState<{ id: string; tenant_id: string; facility_id: string | null } | null>(null);
   const [rows, setRows] = useState<ProgressRow[]>([]);
   const [facilities, setFacilities] = useState<FacilityLite[]>([]);
-  const [totals, setTotals] = useState({ docs: 0, compliance: 0, trainings: 0, announcements: 0, manuals: 0 });
+  /* dashboard-published-filter:
+     遵守事項 / 研修 / お知らせ / 業務マニュアル は publish 状態で母数を分ける。
+     - publishedTotals: 達成率分母・ProgressBadge total・ReminderModal の total
+     - allTotals: 概要カード「公開 / 全件」表示の右側
+     書類 (docs) は document_templates に is_published なしのため両 state とも同値。 */
+  const [publishedTotals, setPublishedTotals] = useState({ docs: 0, compliance: 0, trainings: 0, announcements: 0, manuals: 0 });
+  const [allTotals, setAllTotals] = useState({ docs: 0, compliance: 0, trainings: 0, announcements: 0, manuals: 0 });
   const [lastCompletedAt, setLastCompletedAt] = useState<Partial<Record<CategoryKey, Record<string, string>>>>({});
   const [loading, setLoading] = useState(true);
   const [facilityId] = useShiftFacilityId();
@@ -151,12 +157,17 @@ export default function ManagerDashboardPage() {
       // manager は submission 系テーブル / 他社員 employees 行に RLS 権限が無いため、
       // employee_progress ビュー（security_invoker）直読みでは全件 0 件になる。
       // コンテンツ件数（totals）はテナント共通の SELECT ポリシーで読めるので直クエリのまま。
-      const [progressRes, templatesRes, complianceRes, trainingsRes, announcementsRes, manualsRes] = await Promise.all([
+      // dashboard-published-filter: 4テーブルは is_published=true と全件の 2 系統を取得。
+      const [progressRes, templatesRes, complianceRes, complianceAllRes, trainingsRes, trainingsAllRes, announcementsRes, announcementsAllRes, manualsRes, manualsAllRes] = await Promise.all([
         supabase.rpc('get_my_subordinate_progress', { p_facility_id: null }),
         supabase.from('document_templates').select('id').eq('tenant_id', tid),
+        supabase.from('compliance_documents').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('compliance_documents').select('id').eq('tenant_id', tid),
+        supabase.from('trainings').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('trainings').select('id').eq('tenant_id', tid),
+        supabase.from('announcements').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('announcements').select('id').eq('tenant_id', tid),
+        supabase.from('manuals').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('manuals').select('id').eq('tenant_id', tid),
       ]);
 
@@ -184,12 +195,20 @@ export default function ManagerDashboardPage() {
       }));
 
       setRows(pRows);
-      setTotals({
-        docs: templatesRes.data?.length || 0,
+      const tplCount = templatesRes.data?.length || 0;
+      setPublishedTotals({
+        docs: tplCount, /* 書類は publish 概念なし → 全件と同値 */
         compliance: complianceRes.data?.length || 0,
         trainings: trainingsRes.data?.length || 0,
         announcements: announcementsRes.data?.length || 0,
         manuals: manualsRes.data?.length || 0,
+      });
+      setAllTotals({
+        docs: tplCount,
+        compliance: complianceAllRes.data?.length || 0,
+        trainings: trainingsAllRes.data?.length || 0,
+        announcements: announcementsAllRes.data?.length || 0,
+        manuals: manualsAllRes.data?.length || 0,
       });
 
       // 各カテゴリの最終完了日時マップ（リマインドモーダルの「完了」表示用）。
@@ -223,11 +242,12 @@ export default function ManagerDashboardPage() {
     return Math.round((sum / filteredActive.length) * 100);
   };
 
-  const docRate = calcRate('docs_submitted', totals.docs);
-  const compRate = calcRate('compliance_done', totals.compliance);
-  const trainRate = calcRate('trainings_passed', totals.trainings);
-  const annRate = calcRate('announcements_read', totals.announcements);
-  const manualRate = calcRate('manuals_read', totals.manuals);
+  /* 達成率の分母は publishedTotals (公開済み件数) を使う。書類は publish 概念なしのため同値 */
+  const docRate    = calcRate('docs_submitted',     publishedTotals.docs);
+  const compRate   = calcRate('compliance_done',    publishedTotals.compliance);
+  const trainRate  = calcRate('trainings_passed',   publishedTotals.trainings);
+  const annRate    = calcRate('announcements_read', publishedTotals.announcements);
+  const manualRate = calcRate('manuals_read',       publishedTotals.manuals);
 
   async function handleSendReminder() {
     if (!openKey || selectedIds.size === 0 || !me) return;
@@ -281,10 +301,10 @@ export default function ManagerDashboardPage() {
           <CollapsibleSection title="概要">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
               <StatCard label="社員数" value={active.length} sub="在籍" />
-              <StatCard label="遵守事項" value={totals.compliance} sub="件" />
-              <StatCard label="研修" value={totals.trainings} sub="件" />
-              <StatCard label="お知らせ" value={totals.announcements} sub="件" />
-              <StatCard label="業務マニュアル" value={totals.manuals} sub="件" />
+              <StatCard label="遵守事項"     value={publishedTotals.compliance}    total={allTotals.compliance}    sub="件" />
+              <StatCard label="研修"         value={publishedTotals.trainings}     total={allTotals.trainings}     sub="件" />
+              <StatCard label="お知らせ"     value={publishedTotals.announcements} total={allTotals.announcements} sub="件" />
+              <StatCard label="業務マニュアル" value={publishedTotals.manuals}     total={allTotals.manuals}       sub="件" />
             </div>
           </CollapsibleSection>
 
@@ -313,11 +333,11 @@ export default function ManagerDashboardPage() {
                               {r.last_name} {r.first_name}
                             </Link>
                           </td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.docs_submitted} total={totals.docs} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.compliance_done} total={totals.compliance} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.trainings_passed} total={totals.trainings} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.announcements_read} total={totals.announcements} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.manuals_read} total={totals.manuals} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.docs_submitted}      total={publishedTotals.docs} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.compliance_done}    total={publishedTotals.compliance} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.trainings_passed}   total={publishedTotals.trainings} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.announcements_read} total={publishedTotals.announcements} /></td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.manuals_read}       total={publishedTotals.manuals} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -334,7 +354,7 @@ export default function ManagerDashboardPage() {
               openKey={openKey}
               rows={filteredActive}
               facilities={facilities}
-              total={openKey === 'docs_submitted' ? totals.docs : openKey === 'compliance_done' ? totals.compliance : openKey === 'trainings_passed' ? totals.trainings : openKey === 'announcements_read' ? totals.announcements : totals.manuals}
+              total={openKey === 'docs_submitted' ? publishedTotals.docs : openKey === 'compliance_done' ? publishedTotals.compliance : openKey === 'trainings_passed' ? publishedTotals.trainings : openKey === 'announcements_read' ? publishedTotals.announcements : publishedTotals.manuals}
               lastCompletedAt={lastCompletedAt}
               selectedIds={selectedIds}
               onClose={() => setOpenKey(null)}
@@ -355,11 +375,15 @@ export default function ManagerDashboardPage() {
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: number; sub: string }) {
+/* total を渡すと "公開件数 / 全件" 表示、未指定なら従来の単一件数 (社員数のみ) */
+function StatCard({ label, value, total, sub }: { label: string; value: number; total?: number; sub: string }) {
   return (
     <Card>
       <CardContent className="py-4 text-center">
-        <p className="text-2xl font-bold">{value}</p>
+        <p className="text-2xl font-bold">
+          {value}
+          {total !== undefined && <span className="text-diletto-gray-light font-normal text-xl"> / {total}</span>}
+        </p>
         <p className="text-xs text-diletto-gray-light">{label} {sub}</p>
       </CardContent>
     </Card>

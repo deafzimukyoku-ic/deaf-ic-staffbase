@@ -33,8 +33,40 @@
 | 116 | 116_facility_core_time_and_meta.sql | (A) facility_shift_settings.core_start_time / core_end_time（コアタイム事業所別設定） / (B) facilities に display_order / shift_enabled / transport_enabled 追加（並び順 + シフト/送迎 ON/OFF） | 🆕 未適用 |
 | 130 | 130_employee_facilities.sql | **複数事業所所属（兼任）対応**。employee_facilities テーブル（兼任先のみ）+ ヘルパー関数 `get_my_facility_ids()` / `get_my_managed_facility_ids()` / `employee_belongs_to_facility(emp,fac)` + 主所属＝兼任の重複防止トリガ × 2 | 🆕 未適用 |
 | 131 | 131_multi_facility_rls.sql | RLS 大改修：facility-only テーブル (children/schedule_entries/events/billing/facility_shift_settings/transport_assignments) + employee-level cross-facility テーブル (shift_requests/shift_assignments/shift_change_requests) で兼任を考慮。manager の管轄施設は `get_my_managed_facility_ids()` ベース。`employee_in_my_managed_facilities()` 追加 + `get_manager_subordinate_ids()` 兼任対応に拡張 | 🆕 未適用 |
-| 156 | 156_get_my_subordinate_progress_rpc.sql | **`get_my_subordinate_progress(p_facility_id uuid)` RPC 新設**（SECURITY DEFINER）。/mgr/dashboard の部下達成率が全件 0% になる問題の修正。employee_progress（security_invoker ビュー）+ submission 系テーブル直読みは manager の RLS で 0 件になるため、RPC で部下ごとの完了件数 + 各カテゴリ最終完了日時を返す。migration 148/153 の ambiguous 対策（alias + `AS fid`）踏襲 | 🆕 未適用 |
+| 156 | 156_get_my_subordinate_progress_rpc.sql | **`get_my_subordinate_progress(p_facility_id uuid)` RPC 新設**（SECURITY DEFINER）。/mgr/dashboard の部下達成率が全件 0% になる問題の修正。employee_progress（security_invoker ビュー）+ submission 系テーブル直読みは manager の RLS で 0 件になるため、RPC で部下ごとの完了件数 + 各カテゴリ最終完了日時を返す。migration 148/153 の ambiguous 対策（alias + `AS fid`）踏襲 | ✅ 適用済 |
 | 157 | 157_split_public_holiday_and_requested_off.sql | **公休 / 希望休 の分離**。`shift_requests.request_type`: `public_holiday`→`requested_off` リネーム + CHECK を実使用値（`requested_off`/`paid_leave`/`full_day_available`/`am_off`/`pm_off`）に作り直し（旧 CHECK は `available_day` の3値のみで `full_day_available` 等の保存が失敗していた既存バグも修正）。`shift_assignments.assignment_type` に `requested_off` 追加 + 既存 `public_holiday` 16行を `requested_off` に移行 | ✅ 適用済 |
+
+---
+
+## 0.13 ダッシュボード 公開フィルタ（dashboard-published-filter, 2026-05-15）
+
+### 背景
+管理者 / マネージャー ダッシュボードの「達成率」「概要」「社員進捗一覧」は、`announcements` / `compliance_documents` / `trainings` / `manuals` の **`is_published` を考慮せず全件**を母数にしていた。未公開（ドラフト）コンテンツが達成率を不当に下げる現象が発生。
+
+### 変更点（仕様: [docs/features/dashboard-published-filter.md](features/dashboard-published-filter.md)）
+- 4 テーブル（announcements / compliance_documents / trainings / manuals）に対して `is_published=true` 件数と全件の **2 系統 SELECT** を発行
+- 達成率カードの**分母**を `publishedTotals.*` に置換
+- 概要カードを「**`{publishedTotals.x} / {allTotals.x} 件`**」表示に変更（書類のみ単一値 `{N} 件` のまま — `document_templates` に `is_published` 列なし）
+- 社員進捗テーブル ProgressBadge / リマインドモーダル の `total` も `publishedTotals.*` に追従
+- DB スキーマ・RPC・RLS 変更なし
+
+### 編集ファイル
+| ファイル | 変更 |
+|---|---|
+| `app/(admin)/admin/dashboard/page.tsx` | Promise.all に `*AllRes` 4 本追加（`.eq('is_published', true)` 版と無印版）。`setData` で `publishedTotals` / `allTotals` の 2 系統を渡す |
+| `app/(manager)/mgr/dashboard/page.tsx` | 同上 + state を `totals` → `publishedTotals` / `allTotals` に分割。`StatCard` に optional `total?: number` 追加（`{value} / {total}` 表示） |
+| `components/admin/ProgressDashboard.tsx` | Props 型を `totalCompliance` 等の単一値 → `publishedTotals` / `allTotals` `CategoryTotals` に変更。`StatCard` に optional `total?` 追加。`calcRate` / `ProgressBadge` / `ReminderModal` の `totals` を `publishedTotals.*` で配線 |
+| `docs/features/dashboard-published-filter.md` | 機能仕様書（新規） |
+
+### 参照される DB カラム
+- `announcements.is_published` (boolean) — 既存
+- `compliance_documents.is_published` (boolean) — 既存
+- `trainings.is_published` (boolean) — 既存
+- `manuals.is_published` (boolean) — 既存
+- `document_templates`: **`is_published` なし**（書類は `mapping` + audience rule の個別判定）
+
+### 互換性
+- `numerator / denominator` は引き続き `Math.min(num/denom, 1)` でクリップ。RPC `get_my_subordinate_progress` / view `employee_progress` の戻り値は **未変更**（公開・未公開の区別なし）。将来分子側も published 限定にする場合は migration + RPC 改修が必要
 
 ---
 
