@@ -1,5 +1,5 @@
 /**
- * 開発モード(localhost)のみ、API レスポンスの個人名フィールドを ●●×× にマスク。
+ * 開発モード(localhost)のみ、API レスポンスの個人名・メールフィールドを ●●×× にマスク。
  * 録画用 — 本番環境(NODE_ENV=production)では完全に bypass される。
  *
  * 対象フィールド (オブジェクトに last_name + first_name の両方がある時のみ):
@@ -7,12 +7,13 @@
  *   - first_name       → ××
  *   - last_name_kana   → マル
  *   - first_name_kana  → バツ
+ *   - email            → ●●@example.com  (employee 系オブジェクトのみ)
  *
  * 児童 (children テーブル, name + grade_type を持つオブジェクト):
  *   - name             → ●●××
  *
  * 子オブジェクト・配列は再帰的に処理。
- * facilities.name 等の "name" 単体フィールドは触らない (grade_type と一緒のときだけマスク)。
+ * facilities.name や tenants.email 等の単独フィールドは触らない (employee/child shape の時だけマスク)。
  */
 
 export const IS_DEV_MASK_ENABLED = process.env.NODE_ENV === 'development';
@@ -29,6 +30,7 @@ function maskObj(obj: unknown): unknown {
       else if (isEmpLike && k === 'first_name' && typeof o[k] === 'string') out[k] = '××';
       else if (isEmpLike && k === 'last_name_kana' && typeof o[k] === 'string') out[k] = 'マル';
       else if (isEmpLike && k === 'first_name_kana' && typeof o[k] === 'string') out[k] = 'バツ';
+      else if (isEmpLike && k === 'email' && typeof o[k] === 'string') out[k] = '●●@example.com';
       else if (isChildLike && k === 'name' && typeof o[k] === 'string') out[k] = '●●××';
       else out[k] = maskObj(o[k]);
     }
