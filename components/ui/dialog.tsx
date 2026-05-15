@@ -7,8 +7,32 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+/* デフォルトで「閉じる/キャンセル/保存ボタンを押す」または「プログラム的に setOpen(false)」した時だけ閉じる。
+   - disablePointerDismissal=true で 外クリックで閉じない
+   - onOpenChange を ラップして reason='escapeKey' / 'focusOut' を無視
+   入力途中で誤って閉じてしまう事故を防ぐ (以前報告された「1文字入れたら閉まる」の対策)。 */
+function Dialog({
+  disablePointerDismissal = true,
+  onOpenChange,
+  ...rest
+}: DialogPrimitive.Root.Props) {
+  const handleOpenChange = React.useMemo(() => {
+    if (!onOpenChange) return undefined;
+    return (open: boolean, eventDetails: DialogPrimitive.Root.ChangeEventDetails) => {
+      if (!open && (eventDetails.reason === 'escape-key' || eventDetails.reason === 'focus-out')) {
+        return;
+      }
+      onOpenChange(open, eventDetails);
+    };
+  }, [onOpenChange]);
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      disablePointerDismissal={disablePointerDismissal}
+      onOpenChange={handleOpenChange}
+      {...rest}
+    />
+  );
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
