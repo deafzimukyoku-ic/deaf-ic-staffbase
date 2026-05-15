@@ -47,7 +47,32 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-30（Phase D 在職/退職切替 + 退職者ログイン遮断 完了） / 全体完了率: 約 96%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-16（Phase 緊急バグ修正セッション ①〜⑨ + migrate 158/159 完了） / 全体完了率: 約 97%</p>
+
+<!-- 緊急バグ修正セッション (2026-05-16) -->
+<div class="phase">
+  <h2>緊急バグ修正セッション ①〜⑨ (2026-05-16) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>①</td><td>閲覧レポートから研修合否判定 (admin/mgr の閲覧レポートでセル内に「判定」ボタン + 合格/不合格/再提出 バッジ + コメント保存ダイアログ)</td><td class="files">components/admin/ReportMatrix.tsx, app/api/reports/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>研修タブのみ training_submissions を JOIN。判定保存は楽観更新 (submissionOverrides) で再 fetch なし</td></tr>
+      <tr><td>②</td><td>回数 tooltip (閲覧バッジ hover で「直近 10 回: YYYY/MM/DD HH:mm:ss × 10 行」を表示)</td><td class="files">components/admin/ReportMatrix.tsx, app/api/reports/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>API 側で recent_views = viewed_at DESC TOP 10 を集計返却。クライアント側で title 属性 + cursor:help</td></tr>
+      <tr><td>③</td><td>モーダル誤閉対策 (キーボード入力や Tab で意図せず閉じる)</td><td class="files">components/ui/dialog.tsx, components/ui/input.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ホワイトリスト方式: close-press / trigger-press / imperative-action のみ通す。disablePointerDismissal=true で外クリックも遮断。input.tsx は @base-ui/react/input → native input に置換 (「1 文字しか入力できない」バグ解消)</td></tr>
+      <tr><td>④</td><td>通知メール cron 未稼働 → 全 4 機能の遅延通知が本番で 1 通も飛ばない問題</td><td class="files">vercel.json (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>vercel.json が存在せず Vercel Cron が一切走っていなかった。`crons: [{ path: "/api/cron/send-notifications", schedule: "*/10 * * * *" }]` を新規追加。CRON_SECRET も Vercel env に追加要 (環境変数キー: e27b5f...)</td></tr>
+      <tr><td>⑤</td><td>公文代 → 教材印刷代 にリネーム (17 箇所)</td><td class="files">components/shift/BillingFull.tsx, lib/logic/computeBilling.ts, app/(admin)/admin/billing/*, /mgr/billing/*, 他</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>UI 文言・コメント・型コメントすべてリネーム。テーブル列名 (kumon_monthly_fee) は migration 不要のため据え置き (運用上は教材印刷代として扱う)</td></tr>
+      <tr><td>⑥</td><td>請求書に「参加費合計」列を追加</td><td class="files">components/shift/BillingFull.tsx, lib/logic/computeBilling.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>イベント設定で参加費を持つイベントの「出席分のみ合計」を新規列として表示。請求額 = copay + snack + kumon + eventTotal を継続 (eventTotal は内訳として可視化)</td></tr>
+      <tr><td>⑦</td><td>4 機能管理画面に編集/削除ボタン追加 + 視認性向上</td><td class="files">app/(admin)/admin/manuals/page.tsx (新規 CRUD), announcements/page.tsx (新規 CRUD), compliance/page.tsx (視認性), trainings/page.tsx (視認性 + 削除追加)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>manuals / announcements にあった「投稿のみ」フローを編集対応に。compliance / trainings の `h-8 text-xs` 廃止 → filled blue 編集 + 赤系 outline 削除で統一</td></tr>
+      <tr><td>⑧</td><td>個別メッセージ 本番 403 エラー (notifications テーブル INSERT 拒否)</td><td class="files">supabase/migrations/158_notifications_insert_policy.sql (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>migration 139 で RLS 有効化したが INSERT ポリシーが完全欠落していた。actor_employee_id 自分 + tenant_id 自分 の WITH CHECK で 158 を追加。pooler 経由で本番適用済</td></tr>
+      <tr><td>⑧B</td><td>158 適用後に顕在化した `facility_id ambiguous` エラー (個別メッセージ送信が新たに 42702 で失敗)</td><td class="files">supabase/migrations/159_fix_can_admin_view_thread_ambiguous.sql (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>142 の `can_admin_view_thread()` 138 行目で manager_facilities と employees の JOIN 内の `facility_id` が無修飾だった (両テーブルに同名カラム)。`mf.facility_id` に qualify。pooler 経由で本番適用 + pg_get_functiondef で本体検証済</td></tr>
+      <tr><td>⑨</td><td>研修モーダル既読カウント問題 + 合否履歴 tooltip</td><td class="files">app/(employee)/my/trainings/page.tsx, app/api/reports/route.ts, components/admin/ReportMatrix.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ViewConfirmButton を撤去し「これまで N 回 提出済み」の display-only テキストに。レポートの合否バッジに hover で全提出履歴 tooltip (【N 回目】 YYYY/MM/DD HH:mm:ss 提出 → 合格/再提出/不合格 (判定日時) コメント: ...)</td></tr>
+      <tr><td>追加</td><td>書類タブ・ホームカードに「要再提出」バッジ追加</td><td class="files">app/(employee)/layout.tsx, app/(employee)/my/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>document_submissions.result='resubmit' の件数を sidebar バッジ + dashboard 「書類提出」カードに表示</td></tr>
+      <tr><td>追加</td><td>dev-only 名前マスク (localhost で全員 ●●××) + メールアドレスマスク</td><td class="files">lib/supabase/dev-name-mask.ts (新規), client.ts, server.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>fetch interceptor で last_name / first_name / email を localhost のみマスク。本番は素通り</td></tr>
+      <tr><td>追加</td><td>デモアカウント作成スクリプト</td><td class="files">scripts/create-demo-account.js</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>--delete で削除も可能</td></tr>
+      <tr><td>静的マニュアル</td><td>使い方マニュアル (HTML) + 録音用ナレーション原稿</td><td class="files">deaf-ic-staff-manual リポジトリ (別管理), docs/help-manual.html, recording-script.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>GitHub Pages で公開。プレーンテキスト原稿は CMAN text-to-speech 用</td></tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① 閲覧レポートの研修タブで判定ダイアログが開き、保存後にバッジ色が変わるか ② バッジ hover で日時 tooltip が出るか ③ Dialog 内の Input でキーボード入力してもモーダルが閉じないか ④ Vercel Cron の send-notifications が */10min で発火しているか (production logs) ⑤ 請求書に「教材印刷代」表示 + 参加費合計列が出るか ⑥ /admin/manuals + /announcements で編集/削除ボタンが見えるか ⑦ 個別メッセージ送信が本番で 200 になるか (158/159 両方適用後) ⑧ 研修詳細を開いただけでは training_view_logs に行が増えないか ⑨ 合否バッジ hover で全履歴 tooltip が出るか</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- Phase D: 在職/退職切替 + 退職者ログイン遮断 -->
 <div class="phase">

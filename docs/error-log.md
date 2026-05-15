@@ -280,4 +280,104 @@
   - **PostgREST スキーマキャッシュは必ず NOTIFY で再ロードする**（`NOTIFY pgrst, 'reload schema';`）。新規 RPC 追加・関数削除時は migration 末尾に常に入れる
 
 ---
+## notifications テーブルへの INSERT が本番で 403 (個別メッセージ送信不可)
+
+- **発生日**: 2026-05-16
+- **発生箇所**: 個別メッセージ送信フロー (`/admin/messages`, `/mgr/messages`) → notifications テーブルへの INSERT
+- **フェーズ**: 本番運用中 (Phase G 以降)
+- **エラー内容**: `403 Forbidden / new row violates row-level security policy for table "notifications"`
+- **原因**: migration 139 で notifications に RLS を有効化したが、その時 `SELECT/UPDATE/DELETE` ポリシーのみ定義しており **INSERT ポリシーが完全に欠落** していた。RLS 有効 + INSERT ポリシー無し = 全 INSERT が拒否される（PostgreSQL の RLS のデフォルト動作: ポリシーが無いと「許可なし」と解釈）。これにより:
+  - 個別メッセージ (`message_threads → messages → notifications`) の通知発火が失敗
+  - シフト変更申請の admin 宛通知も失敗
+  - cron 経由のお知らせ/遵守事項/研修/業務マニュアル通知は service_role なので影響無し
+- **解決方法**: migration 158 で INSERT ポリシーを追加:
+  ```sql
+  create policy notif_actor_insert on public.notifications for insert
+    with check (
+      actor_employee_id = (select id from public.employees where auth_user_id = auth.uid() limit 1)
+      and tenant_id = (select tenant_id from public.employees where auth_user_id = auth.uid() limit 1)
+    );
+  ```
+  `actor_employee_id` が自分の employees.id と一致 + tenant 一致を WITH CHECK で強制。本番に直接 pooler 経由で適用済。
+- **再発防止**:
+  - **RLS を ENABLE TABLE する migration では SELECT/INSERT/UPDATE/DELETE の 4 ポリシー全てを定義する** か、不要なら明示的に `policy ... for all using (false)` 等で意図を残す
+  - 「クライアントから INSERT されるテーブル」と「service_role からのみ INSERT されるテーブル」を判別し、前者は必ず INSERT ポリシーを書く
+  - RLS 有効化と同 migration 内で 4 operation 全てのポリシーを列挙する規約にする
+
+---
+## `column reference "facility_id" is ambiguous` — 個別メッセージ送信時 (158 適用後に顕在化)
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `supabase/migrations/142_direct_messages.sql:138` の `can_admin_view_thread()` 関数内
+- **フェーズ**: 本番運用中
+- **エラー内容**: `column reference "facility_id" is ambiguous` (SQLSTATE 42702) — 個別メッセージ送信時の messages.insert.select() RETURNING 評価で発生
+- **原因**: `can_admin_view_thread()` 関数の manager 経路で以下の UNION サブクエリの 2 つ目のブランチ:
+  ```sql
+  select facility_id from public.manager_facilities mf
+  join public.employees e on e.id = mf.employee_id where e.auth_user_id = auth.uid()
+  ```
+  `manager_facilities` と `employees` の両テーブルに `facility_id` 列があるため、無修飾 `facility_id` は ambiguous で PG が 42702 を投げる。
+- **これまで顕在化しなかった理由**: 上記の notifications 403 バグで個別メッセージ送信が早期失敗 → can_admin_view_thread の manager 経路まで到達しなかった。**158 で notifications INSERT を通したことで初めて messages.insert.select() の RETURNING で RLS の OR 評価がフル実行され、潜在バグが顕在化した**。「片方を直したら隣の壊れていたバグが見える」典型ケース。
+- **解決方法**: migration 159 で関数を `CREATE OR REPLACE`、138 行目を `select mf.facility_id from public.manager_facilities mf` に変更 (テーブル修飾子を付与)。pooler 経由で本番適用 + `pg_get_functiondef` で本体を検証済。
+- **再発防止**:
+  - **JOIN を含むサブクエリでは全列を必ず table.col で qualify する**。SELECT リスト・WHERE 句・GROUP BY 全てに適用
+  - 既存の類似事例: migration 152/153 でも同じ ambiguous 問題があった (`get_my_subordinates`)。この種の bare column reference は **新規 migration 作成時に必ず JOIN 列を grep でチェック**
+  - **PostgreSQL の OR 条件は短絡評価されない**: `policy ... USING (foo OR bar)` で foo が true でも bar も評価されうる。RLS ポリシーで関数を OR 接続する場合、両関数とも例外を投げない実装にする
+  - **依存バグの「壁」を片方だけ直すと隣のバグが露出する**: 修正範囲を絞るときも「次に通る経路」を読み切ってから commit する。今回は migration 158 単独で 1 セッション完結させたのが甘く、158 適用直後に 159 が必要だと事前に検出できていなかった
+
+---
+## /admin/manuals + /admin/announcements に編集ボタンが存在しなかった
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `app/(admin)/admin/manuals/page.tsx`, `app/(admin)/admin/announcements/page.tsx`
+- **フェーズ**: 本番運用中
+- **エラー内容**: ユーザー指摘「業務マニュアルが編集できない、ボタンがない」「お知らせも同様」
+- **原因**: compliance / trainings は実装時に editingDoc / openEdit / handleSave (update branch) / handleDelete を入れていたが、manuals / announcements は新規投稿しかフローを書いていなかった。コード差分のレビュー時に「同じ 4 機能なのに 2 つにしか CRUD が無い」点が見過ごされた
+- **解決方法**: 両ページに以下を追加:
+  - `editingManual` / `editingAnnouncement` state
+  - `openEdit(row)` 関数 (form と blocks に値を流し込んで dialog 起動)
+  - `handleSave` を if (editing) update / else insert で分岐
+  - `handleDelete` 関数 + `cancelNotification('manual'|'announcement', id)` でキューもキャンセル
+  - Dialog タイトル「業務マニュアルの編集 / 業務マニュアルの追加」の出し分け
+  - `announcements` テーブルは `updated_at` 列が無い (007 で created_at のみ) ため、update payload には updated_by のみ含める
+  - card の右側ボタン群に `編集` (filled diletto-blue) + `削除` (赤 outline) を追加
+- **再発防止**:
+  - **4 機能 (compliance / training / announcement / manual) は同一の CRUD UI を持つはず**。新規追加時は 4 ページ横断で「投稿 / 編集 / 削除 / 公開トグル / 同意状況 (compliance のみ)」が揃っているかをチェックリスト化する
+  - compliance 側を「カノニカル」として、新機能はまず compliance に入れてから他 3 ページに展開する規約にする
+  - `git grep "openEdit\|handleDelete"` で 4 ページのどこに何が無いか即座に判別できる
+
+---
+## /admin/compliance + /admin/trainings の編集ボタンが小さくて見えない
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `app/(admin)/admin/compliance/page.tsx`, `app/(admin)/admin/trainings/page.tsx`
+- **フェーズ**: 本番運用中
+- **エラー内容**: ユーザー指摘「ボタンが小さく見えない」(視覚的な問題、機能エラーではない)
+- **原因**: 当初実装で `Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold"` というスタイルを適用していた。`h-8` (32px) + `text-xs` (12px) で「カード内の他バッジ群と並ぶと埋もれる」状態。outline で背景白 → カード白 → 境界線がほぼ見えない
+- **解決方法**: 統一ルールを設定 (4 機能横断):
+  - **編集**: `bg-diletto-blue text-white font-bold` (✎ アイコン付き) — filled で目立たせる
+  - **削除**: `text-diletto-red border-diletto-red/40 outline hover:bg-diletto-red/10` — 色で危険性を示す
+  - 共通: `h-8 text-xs` を撤廃し、Button のデフォルトサイズを使用 (size="sm" のみ残す)
+- **再発防止**:
+  - 「アクションボタンが情報バッジと同じ高さ・色だと埋もれる」を覚える。アクション系は背景色 + アイコン + 通常サイズで視覚的優先度を上げる
+  - shadcn ベース UI で size="sm" 以下を多用しない (h-8 や text-xs を上書きするのは特殊ケースのみ)
+
+---
+## 研修モーダルを開いただけで「閲覧」カウントが計上される
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `app/(employee)/my/trainings/page.tsx` の研修詳細モーダル
+- **フェーズ**: 本番運用中
+- **エラー内容**: ユーザー指摘「研修はモーダル開いたら既読カウントが外れてない、提出回数のみカウントにしてほしい」
+- **原因**: モーダルに `<ViewConfirmButton category="training" itemId={...} />` を埋めており、開いた時点で `training_view_logs` に行が追加され「閲覧回数」が増えていた。研修は他 3 機能と違って **「閲覧」ではなく「提出 (training_submissions)」が実質の受講記録** であるべき
+- **解決方法**:
+  - `<ViewConfirmButton>` をモーダルから削除
+  - 代わりに「これまで N 回 提出済み」の display-only テキストを表示 (submissions.filter(s => s.training_id === t.id).length)
+  - `/api/reports/route.ts` の training_submissions 取得を `.order('submitted_at', { ascending: false })` に変更 (履歴 tooltip 表示用)
+  - `ReportMatrix.tsx` で 合否バッジに `title` 属性で全提出履歴の tooltip を付与 (② の閲覧履歴 tooltip と同じ UX)
+- **再発防止**:
+  - **「閲覧」と「提出」を混同しない**: 4 機能のうち training だけ提出フローがある。研修は閲覧回数 ≠ 受講回数なので、UI/集計の両方で submissions を一次ソースに使う
+  - モーダル open イベントでログを書く UI コンポーネントは、その意味的妥当性を機能ごとに確認する
+
+---
 *(以降、新規エラーがあれば追記)*
