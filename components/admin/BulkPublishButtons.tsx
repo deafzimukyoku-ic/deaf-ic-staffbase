@@ -29,9 +29,13 @@ interface Props {
   onChanged?: () => void;
   /** "全体" / "このカテゴリ" など */
   scopeLabel?: string;
+  /** このロール (e.g. 'manager') では実行不可。クリック時に alert で通知してブロックする */
+  restrictedFor?: string;
+  /** 現在のユーザーのロール。restrictedFor との比較に使う */
+  currentUserRole?: string;
 }
 
-export function BulkPublishButtons({ table, items, onChanged, scopeLabel }: Props) {
+export function BulkPublishButtons({ table, items, onChanged, scopeLabel, restrictedFor, currentUserRole }: Props) {
   const supabase = createClient();
   const [busy, setBusy] = useState(false);
 
@@ -45,6 +49,12 @@ export function BulkPublishButtons({ table, items, onChanged, scopeLabel }: Prop
 
   const apply = async (next: boolean) => {
     if (busy) return;
+    /* 権限ガード: restrictedFor に指定されたロール (e.g. manager) は「全体公開/非公開」を実行不可。
+       同種の RLS が backend にあるはずだが UI で先回りしてブロックする */
+    if (restrictedFor && currentUserRole === restrictedFor) {
+      alert('権限がありません\n\n事業所の管理者または本部に変更をお願いしてください');
+      return;
+    }
     const word = next ? '公開' : '非公開';
     const warning = next
       ? `${scopeLabel ?? ''} ${total}件 を全て【公開】にします。\n\n⚠️ 社員画面に表示されます。本当によろしいですか？`

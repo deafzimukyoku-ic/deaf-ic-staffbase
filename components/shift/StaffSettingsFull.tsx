@@ -231,7 +231,17 @@ export default function StaffSettingsFull({ scope }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
-  const [me, setMe] = useState<{ id: string; tenant_id: string; facility_id: string | null } | null>(null);
+  const [me, setMe] = useState<{ id: string; tenant_id: string; facility_id: string | null; role: string } | null>(null);
+
+  /* shift_manager は職員情報の編集・並び替え不可（migration 140 + RLS）。
+     UI でブロックして alert で通知。同種ガードを ChildrenSettingsFull にも入れている */
+  const assertWritable = (): boolean => {
+    if (me?.role === 'shift_manager') {
+      alert('権限がありません\n\n事業所の管理者または本部に変更をお願いしてください');
+      return false;
+    }
+    return true;
+  };
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [shiftFacilityId, setShiftFacilityId] = useShiftFacilityId();
   // manager は自 facility 固定、admin は上部ヘッダーの選択に従う
@@ -251,7 +261,7 @@ export default function StaffSettingsFull({ scope }: Props) {
     if (!user) return;
     const { data: meRow } = await supabase
       .from('employees')
-      .select('id, tenant_id, facility_id')
+      .select('id, tenant_id, facility_id, role')
       .eq('auth_user_id', user.id)
       .single();
     if (!meRow) return;
@@ -325,6 +335,7 @@ export default function StaffSettingsFull({ scope }: Props) {
   };
 
   const handleEdit = (s: StaffRow) => {
+    if (!assertWritable()) return;
     setEditing({
       id: s.id,
       facility_id: s.facility_id,
@@ -345,6 +356,7 @@ export default function StaffSettingsFull({ scope }: Props) {
 
   const handleSave = async () => {
     if (!editing) return;
+    if (!assertWritable()) return;
     setSaving(true);
     setError('');
     setInfo('');
@@ -387,6 +399,7 @@ export default function StaffSettingsFull({ scope }: Props) {
   };
 
   const handleReorderStaff = async (from: number, to: number) => {
+    if (!assertWritable()) return;
     if (from === to || from < 0 || to < 0 || from >= staffList.length || to >= staffList.length) return;
     const next = [...staffList];
     const [moved] = next.splice(from, 1);

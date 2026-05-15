@@ -15,7 +15,7 @@ import type { ShiftRequestRow, ShiftRequestType } from '@/lib/types';
 /**
  * 自分の休み希望提出カレンダー（タスクC）
  *
- * - 各日に status を設定: none / requested_off / paid_leave / full_day_available / am_off / pm_off
+ * - 各日に status を設定: none / public_holiday / paid_leave / full_day_available / am_off / pm_off
  * - 「保存する」で shift_requests に upsert（既存の自分の月行を全部消して入れ直し）
  * - shift_request_comments は使わない（案Z で削除済み）
  * - 既に shift がready/published になった月は提出不可（読み取り専用）
@@ -156,7 +156,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
   };
 
   // 一括: 全日曜を希望休
-  const setAllSundaysRequestedOff = () => {
+  const setAllSundaysPublic = () => {
     const next = { ...dayStatuses };
     for (const week of weeks) {
       for (const c of week) {
@@ -273,7 +273,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
         })}
         {!readOnly && (
           <>
-            <button onClick={setAllSundaysRequestedOff} className="ml-auto text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-blue/5">
+            <button onClick={setAllSundaysPublic} className="ml-auto text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-blue/5">
               日曜を一括「希望休」に
             </button>
             <button onClick={clearAll} className="text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-red/5">
@@ -338,9 +338,9 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
                   )}
                 </button>
 
-                {/* インラインピッカー */}
+                {/* インラインピッカー: 木〜土のセルは right-0 にして画面右端の見切れ防止（モバイル対応） */}
                 {isEditing && !readOnly && (
-                  <div className="absolute z-30 top-full left-0 mt-1 w-56 p-2 rounded-md shadow-lg bg-white border border-diletto-gray/15">
+                  <div className={`absolute z-30 top-full mt-1 w-56 p-2 rounded-md shadow-lg bg-white border border-diletto-gray/15 ${dow >= 4 ? 'right-0' : 'left-0'}`}>
                     <div className="text-[11px] font-bold mb-1.5 text-diletto-gray">
                       {format(new Date(c.date), 'M月d日(E)', { locale: ja })}
                     </div>

@@ -75,6 +75,15 @@ export default function InviteAcceptPage() {
     handleAuth();
   }, [supabase]);
 
+  /* リアルタイム判定: 確認欄に入力があれば一致/不一致を即時表示。
+     送信ボタンも一致しないと押せない。 */
+  const matchStatus: 'empty' | 'match' | 'mismatch' =
+    confirmPassword.length === 0 ? 'empty'
+    : password === confirmPassword ? 'match'
+    : 'mismatch';
+  const lengthOK = password.length >= 8;
+  const canSubmit = lengthOK && matchStatus === 'match' && !loading;
+
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
 
@@ -162,9 +171,13 @@ export default function InviteAcceptPage() {
           <CardDescription>職員ステーション — 初回パスワード設定</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="rounded-md border border-diletto-blue/30 bg-blue-50 p-3 mb-4 text-sm leading-relaxed">
+            💡 <strong>ご自身でパスワードを決めてください。</strong><br />
+            お好きな文字列を <strong>8文字以上</strong> で入力 → <strong>同じパスワードをもう一度</strong> 入力して「決定する」を押してください。
+          </div>
           <form onSubmit={handleSetPassword} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">パスワード</Label>
+              <Label htmlFor="password">あなたが決めるパスワード（8文字以上）</Label>
               <Input
                 id="password"
                 type="password"
@@ -172,11 +185,18 @@ export default function InviteAcceptPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                placeholder="8文字以上"
+                placeholder="8文字以上で自由に決めて入力"
+                className={password.length > 0 && !lengthOK ? 'border-amber-400 focus-visible:ring-amber-400' : ''}
+                autoComplete="new-password"
               />
+              {password.length > 0 && !lengthOK && (
+                <p className="text-xs text-amber-700" aria-live="polite">
+                  あと <strong>{8 - password.length}</strong> 文字必要です
+                </p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm">パスワード確認</Label>
+              <Label htmlFor="confirm">もう一度同じパスワードを入力（確認）</Label>
               <Input
                 id="confirm"
                 type="password"
@@ -184,11 +204,27 @@ export default function InviteAcceptPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={8}
-                placeholder="もう一度入力"
+                placeholder="上で入力したのと同じパスワード"
+                className={
+                  matchStatus === 'match' ? 'border-emerald-500 focus-visible:ring-emerald-500'
+                  : matchStatus === 'mismatch' ? 'border-red-500 focus-visible:ring-red-500'
+                  : ''
+                }
+                autoComplete="new-password"
               />
+              {matchStatus === 'match' && (
+                <p className="text-xs text-emerald-700 font-bold" aria-live="polite">
+                  ✅ 一致しています
+                </p>
+              )}
+              {matchStatus === 'mismatch' && (
+                <p className="text-xs text-red-600 font-bold" aria-live="polite">
+                  ⚠ 入力内容が一致しません。もう一度確認してください
+                </p>
+              )}
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? '設定中...' : 'パスワードを設定'}
+            <Button type="submit" className="w-full" disabled={!canSubmit}>
+              {loading ? '設定中...' : 'このパスワードに決定する'}
             </Button>
           </form>
         </CardContent>
