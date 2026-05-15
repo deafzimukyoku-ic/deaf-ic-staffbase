@@ -14,9 +14,9 @@
  *      この純関数は「初期値」を返すだけ。手動入力された値があれば呼び出し側で上書きする想定。
  *
  *   おやつ消耗品代 = 出席日数 × SNACK_FEE_PER_DAY
- *   公文代       = kumonMonthlyFee ?? 0（児童ごと、施設ごとに金額違うため）
+ *   教材印刷代   = kumonMonthlyFee ?? 0（児童ごと、施設ごとに金額違うため）
  *   イベント代   = Σ(参加した event の price)
- *   請求額       = (利用負担額 ?? 0) + おやつ + 公文 + イベント代
+ *   請求額       = (利用負担額 ?? 0) + おやつ + 教材印刷代 + イベント代
  */
 
 import {
@@ -35,7 +35,7 @@ export interface BillingChildInput {
   municipality: string | null;
   copayTier: CopayTier;
   copayFreeformAmount: number | null;
-  /** 公文代の月額（円、null=計上しない） */
+  /** 教材印刷代の月額（円、null=計上しない） */
   kumonMonthlyFee: number | null;
 }
 

@@ -27,7 +27,7 @@ const ADMIN_CARDS: DashboardCard[] = [
   /* シフト設定（旧「設定」カードを 4 枚に展開）*/
   { href: '/admin/shifts/facility-settings', title: '事業所設定', desc: 'コアタイム・エリア・最低出勤数', icon: '🏢' },
   { href: '/admin/shifts/staff-settings', title: '職員管理', desc: '出勤予定・有資格者・送迎エリア', icon: '👔' },
-  { href: '/admin/children', title: '児童管理', desc: '学年・上限負担額・公文代', icon: '👶' },
+  { href: '/admin/children', title: '児童管理', desc: '学年・上限負担額・教材印刷代', icon: '👶' },
   { href: '/admin/shifts/events', title: 'イベント設定', desc: '月次の有料イベント登録', icon: '🎉' },
 ];
 

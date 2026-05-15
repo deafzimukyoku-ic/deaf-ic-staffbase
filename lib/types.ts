@@ -329,7 +329,7 @@ export interface ChildRow {
   municipality?: string | null;
   copay_tier?: CopayTier;
   copay_freeform_amount?: number | null;
-  /** 公文代の月額（円、自然数）。null = 計上しない。施設・児童ごとに金額を変えられる。 */
+  /** 教材印刷代の月額（円、自然数）。null = 計上しない。施設・児童ごとに金額を変えられる。DB列名 kumon_monthly_fee は旧称のまま。 */
   kumon_monthly_fee?: number | null;
   created_at: string;
 }

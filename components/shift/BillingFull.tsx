@@ -4,12 +4,12 @@
  * 利用料金表（月次）出力ページ — Phase 66-C
  *
  * - 月選択 → 児童一覧 + 当月イベント列を取得
- * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 公文 / イベント参加（既定 false）
+ * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 教材印刷代 / イベント参加（既定 false）
  * - 手動オーバーライド可: 利用負担額 / イベント参加チェック / 受取日
  * - 「保存」で billing_summaries + billing_event_participations を upsert（再印刷時は同じ値）
  * - 「印刷」で A4 横レイアウト
  *
- * PDF 列構成: # / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ消耗品代 / 公文代 / 各イベント / 請求額 / 受取日
+ * PDF 列構成: # / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ消耗品代 / 教材印刷代 / 各イベント / 請求額 / 受取日
  */
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
@@ -583,7 +583,7 @@ export default function BillingFull({ scope }: Props) {
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>おやつ等</th>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '90px' }}>公文代</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '90px' }}>教材印刷代</th>
                 {events.map((ev) => {
                   /* イベント名が長いと列幅で折り返してしまうので、文字数に応じて自動縮小して 1 行に収める。
                      scaleX 系よりフォントサイズ縮小 + 微妙なトラッキング詰めの方が読みやすい。 */

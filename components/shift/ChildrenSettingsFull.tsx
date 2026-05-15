@@ -59,7 +59,7 @@ type EditableChild = {
   municipality: string | null;
   copay_tier: CopayTier;
   copay_freeform_amount: number | null;
-  /** 公文代の月額（円、自然数）。null = 計上しない */
+  /** 教材印刷代の月額（円、自然数）。null = 計上しない */
   kumon_monthly_fee: number | null;
   isNew?: boolean;
 };
@@ -488,7 +488,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
               >
                 ↕
               </th>
-              {['氏名', '学年', '上限', '公文', '迎マーク', '送マーク', '専用エリア', 'ステータス'].map((h) => (
+              {['氏名', '学年', '上限', '教材印刷代', '迎マーク', '送マーク', '専用エリア', 'ステータス'].map((h) => (
                 <th key={h} className="px-3 py-2 text-left font-semibold" style={{ background: 'var(--ink)', color: '#fff' }}>{h}</th>
               ))}
             </tr>
@@ -602,7 +602,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                       );
                     })()}
                   </td>
-                  {/* 公文代 */}
+                  {/* 教材印刷代 */}
                   <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)', fontVariantNumeric: 'tabular-nums' }}>
                     {c.kumon_monthly_fee != null && c.kumon_monthly_fee > 0 ? (
                       <span style={{ color: 'var(--red)', fontWeight: 700 }}>
@@ -710,7 +710,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span style={{ color: 'var(--ink-3)' }}>公文</span>
+                    <span style={{ color: 'var(--ink-3)' }}>教材印刷代</span>
                     <span className="tabular-nums">
                       {c.kumon_monthly_fee != null && c.kumon_monthly_fee > 0
                         ? <span style={{ color: 'var(--red)', fontWeight: 700 }}>¥{c.kumon_monthly_fee.toLocaleString('ja-JP')}</span>
@@ -939,13 +939,13 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   </p>
                 </div>
 
-                {/* 公文代 — 赤系（red） */}
+                {/* 教材印刷代 — 赤系（red） */}
                 <div
                   className="flex flex-col gap-1.5 p-3 rounded"
                   style={{ background: 'var(--white)', borderLeft: '3px solid var(--red)' }}
                 >
                   <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--red)' }}>
-                    ✏️ 公文代（教材印刷代）月額
+                    ✏️ 教材印刷代 月額
                   </label>
                   <input
                     type="text"
@@ -966,7 +966,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     placeholder="例）¥2,000 ／ 空欄=計上しない"
                   />
                   <p className="text-[11px]" style={{ color: 'var(--red)', fontWeight: 500 }}>
-                    💡 施設・児童ごとに金額が違うため自由入力。空欄なら料金表の「公文代」列は空白
+                    💡 施設・児童ごとに金額が違うため自由入力。空欄なら料金表の「教材印刷代」列は空白
                   </p>
                 </div>
               </div>
