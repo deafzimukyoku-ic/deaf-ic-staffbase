@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
-import MyRequestsView from '@/components/shift/MyRequestsView';
+import MyRequestsAndShiftTabs from '@/components/employee/MyRequestsAndShiftTabs';
 
 export const dynamic = 'force-dynamic';
 
-// employee 自身の休み希望提出（タスクC-1）
+// employee 自身の休み希望提出 + 施設シフト閲覧 (2 タブ構成)
+// 休み希望: 来月 (today 換算)、シフト: 今月 (today 換算)
 export default async function EmployeeRequestsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -27,7 +28,7 @@ export default async function EmployeeRequestsPage() {
 
   return (
     <Suspense fallback={null}>
-      <MyRequestsView employeeId={me.id} tenantId={me.tenant_id} facilityId={me.facility_id} />
+      <MyRequestsAndShiftTabs employeeId={me.id} tenantId={me.tenant_id} facilityId={me.facility_id} />
     </Suspense>
   );
 }

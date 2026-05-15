@@ -35,6 +35,9 @@
 | 131 | 131_multi_facility_rls.sql | RLS 大改修：facility-only テーブル (children/schedule_entries/events/billing/facility_shift_settings/transport_assignments) + employee-level cross-facility テーブル (shift_requests/shift_assignments/shift_change_requests) で兼任を考慮。manager の管轄施設は `get_my_managed_facility_ids()` ベース。`employee_in_my_managed_facilities()` 追加 + `get_manager_subordinate_ids()` 兼任対応に拡張 | 🆕 未適用 |
 | 156 | 156_get_my_subordinate_progress_rpc.sql | **`get_my_subordinate_progress(p_facility_id uuid)` RPC 新設**（SECURITY DEFINER）。/mgr/dashboard の部下達成率が全件 0% になる問題の修正。employee_progress（security_invoker ビュー）+ submission 系テーブル直読みは manager の RLS で 0 件になるため、RPC で部下ごとの完了件数 + 各カテゴリ最終完了日時を返す。migration 148/153 の ambiguous 対策（alias + `AS fid`）踏襲 | ✅ 適用済 |
 | 157 | 157_split_public_holiday_and_requested_off.sql | **公休 / 希望休 の分離**。`shift_requests.request_type`: `public_holiday`→`requested_off` リネーム + CHECK を実使用値（`requested_off`/`paid_leave`/`full_day_available`/`am_off`/`pm_off`）に作り直し（旧 CHECK は `available_day` の3値のみで `full_day_available` 等の保存が失敗していた既存バグも修正）。`shift_assignments.assignment_type` に `requested_off` 追加 + 既存 `public_holiday` 16行を `requested_off` に移行 | ✅ 適用済 |
+| 158 | 158_notifications_insert_policy.sql | notifications テーブルに INSERT ポリシー (`notif_actor_insert`) 追加。139 で RLS 有効化したが INSERT ポリシー欠落 → 個別メッセージ送信が本番 403。actor_employee_id 自分 + tenant_id 自分の WITH CHECK で許可 | ✅ 適用済 |
+| 159 | 159_fix_can_admin_view_thread_ambiguous.sql | 142 の `can_admin_view_thread()` 関数 138 行目の `facility_id` 無修飾 (manager_facilities ⋈ employees JOIN で ambiguous 42702) を `mf.facility_id` に修飾。CREATE OR REPLACE で関数置換 + NOTIFY pgrst | ✅ 適用済 |
+| 160 | 160_employee_facility_shift_select.sql | **employee が同 facility (主+兼任先) の published シフトを他人分も SELECT 可能に**。新規 policy `sa_employee_facility_shifts`: `get_my_facility_ids()` (130 で定義済) と一致する facility の publish_status='published' shift_assignments を全社員分閲覧可。/my/requests ページの「施設のシフト」タブ用 | ✅ 適用済 |
 
 ---
 

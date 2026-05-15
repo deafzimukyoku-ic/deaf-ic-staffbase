@@ -49,6 +49,22 @@
 <h1>deaf-ic 統合実装 進捗表</h1>
 <p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-16（Phase 緊急バグ修正セッション ①〜⑨ + migrate 158/159 完了） / 全体完了率: 約 97%</p>
 
+<!-- 新機能: 休み希望ページに施設シフト表示タブ (2026-05-16) -->
+<div class="phase">
+  <h2>新機能 — 休み希望ページに施設シフト表示タブ (2026-05-16) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景・要件</td><td class="files">—</td><td><span class="status done">承認済</span></td><td class="pct">100%</td><td>「休み希望だけだと不便」「休み希望ページ内でシフトを見れるようにしてほしい」とのユーザー要望。ユーザー回答で確定: タブ切替 / 休み希望 = 来月 (today 換算) / シフト = 今月 (today 換算) / 自分のシフトではなく <strong>施設のシフト</strong> を表で見せる / 兼任先 (manager_facilities) も含めて見せる / RLS 緩和 OK</td></tr>
+      <tr><td>/my/requests に Tabs 追加 (休み希望 / 施設のシフト)</td><td class="files">app/(employee)/my/requests/page.tsx, components/employee/MyRequestsAndShiftTabs.tsx (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shadcn Tabs を採用。デフォルト「休み希望」タブ。Server component (page.tsx) で auth check 後、props を渡して client component (MyRequestsAndShiftTabs) で Tabs 状態保持</td></tr>
+      <tr><td>新規 MyFacilityShiftView (表形式・読み取り専用)</td><td class="files">components/employee/MyFacilityShiftView.tsx (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>今月固定 (月セレクタなし)。行 = 自分の所属 facility (主+兼任先) の active 社員、列 = 日付。セル = 時刻 or 公休/希望休/有給/休み ラベル。色分け。published のみ。sticky 左カラム + 横スクロール対応。自分の行はハイライト。今日の列もハイライト</td></tr>
+      <tr><td>migration 160: employee SELECT 拡張 (同 facility published)</td><td class="files">supabase/migrations/160_employee_facility_shift_select.sql (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>新規 policy <code>sa_employee_facility_shifts</code>: get_my_facility_ids() (130 で定義済) と一致する facility の published shift_assignments を全社員分閲覧可。本番 pooler 経由で適用済 + pg_policy で確認 (sa_employee_facility_shifts が存在)。既存ポリシー (107/131) は無変更で残置</td></tr>
+      <tr><td>型チェック / lint</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0 エラー</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 休み希望タブを開いて来月の希望提出が出来るか ② 施設のシフトタブを開いて今月の facility 全社員シフトが見えるか ③ 兼任先で勤務する場合、兼任先 facility の社員も見えるか ④ ready 状態 (未公開仮シフト) は他人分は見えないか ⑤ 自分の ready は引き続き見えるか (既存ポリシー温存) ⑥ 他テナント・他 facility の社員は見えないか (RLS 漏れ無し)</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 緊急バグ修正セッション (2026-05-16) -->
 <div class="phase">
   <h2>緊急バグ修正セッション ①〜⑨ (2026-05-16) <span class="phase-pct">100%</span></h2>
