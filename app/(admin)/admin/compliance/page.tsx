@@ -385,13 +385,13 @@ export default function AdminCompliancePage() {
                         isPublished={doc.is_published ?? true}
                         onChanged={loadDocs}
                       />
-                      <Button variant="outline" size="sm" onClick={() => openAckStatus(doc)} className="h-8 rounded-md text-xs font-bold">
+                      <Button variant="outline" size="sm" onClick={() => openAckStatus(doc)} className="rounded-md font-bold">
                         同意状況
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => openEdit(doc)} className="h-8 rounded-md text-xs font-bold">
-                        編集
+                      <Button size="sm" onClick={() => openEdit(doc)} className="rounded-md font-bold bg-diletto-blue hover:bg-diletto-blue/90 text-white">
+                        ✎ 編集
                       </Button>
-                      <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-diletto-red" onClick={() => handleDelete(doc.id)}>
+                      <Button variant="outline" size="sm" className="rounded-md font-bold text-diletto-red border-diletto-red/40 hover:bg-diletto-red/10" onClick={() => handleDelete(doc.id)}>
                         削除
                       </Button>
                     </div>

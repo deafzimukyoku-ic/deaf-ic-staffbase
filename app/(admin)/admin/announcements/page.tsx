@@ -21,7 +21,7 @@ import { FacilityScopeSelector, TargetScopeBadge } from '@/components/admin/Faci
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
-import { enqueueNotification } from '@/lib/notifications/queue';
+import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
 import type { Announcement, Category, Facility, TargetType, Position } from '@/lib/types';
 
@@ -43,6 +43,7 @@ export default function AdminAnnouncementsPage() {
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const supabase = createClient();
 
   /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
@@ -94,7 +95,7 @@ export default function AdminAnnouncementsPage() {
     load();
   }, []);
 
-  async function handleCreate() {
+  async function handleSave() {
     if (!tenantId || !form.title.trim()) return;
     if (blocks.length === 0) {
       toast.error('コンテンツを1ブロック以上追加してください');
@@ -108,6 +109,37 @@ export default function AdminAnnouncementsPage() {
 
     const { data: { user } } = await supabase.auth.getUser();
     const { data: me } = await supabase.from('employees').select('id').eq('auth_user_id', user?.id).single();
+
+    if (editingAnnouncement) {
+      /* announcements は updated_at カラム無し（007 で作成 + 後から追加されていない）。
+         updated_by のみ記録、created_at は再公開判定に使われないので問題なし。 */
+      const { error } = await supabase
+        .from('announcements')
+        .update({
+          title: form.title.trim(),
+          content_blocks: blocks,
+          category_id: form.category_id,
+          target_type: form.target_type,
+          target_facility_ids: form.target_facility_ids,
+          target_position_ids: form.target_position_ids,
+          updated_by: me?.id,
+        })
+        .eq('id', editingAnnouncement.id);
+      if (error) {
+        toast.error('保存に失敗しました', { description: error.message });
+        setSaving(false);
+        return;
+      }
+      await enqueueNotification('announcement', editingAnnouncement.id);
+      await reloadAnnouncements(tenantId);
+      setDialogOpen(false);
+      setEditingAnnouncement(null);
+      setForm({ title: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
+      setBlocks([]);
+      toast.success('お知らせを更新しました。2時間後に対象社員へメール通知されます。');
+      setSaving(false);
+      return;
+    }
 
     const nextOrder = await nextSortOrder(supabase, 'announcements', tenantId);
     const insertPayload: Record<string, unknown> = {
@@ -138,6 +170,28 @@ export default function AdminAnnouncementsPage() {
     await enqueueNotification('announcement', (data as Announcement).id);
     toast.success('お知らせを投稿しました。2時間後に対象社員へメール通知されます。');
     setSaving(false);
+  }
+
+  function openEdit(a: Announcement) {
+    setEditingAnnouncement(a);
+    setForm({
+      title: a.title,
+      category_id: a.category_id,
+      target_type: a.target_type,
+      target_facility_ids: a.target_facility_ids || [],
+      target_position_ids: a.target_position_ids || [],
+    });
+    setBlocks(Array.isArray(a.content_blocks) ? a.content_blocks as ContentBlock[] : []);
+    setDialogOpen(true);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('このお知らせを削除しますか？')) return;
+    const { error } = await supabase.from('announcements').delete().eq('id', id);
+    if (error) { toast.error('削除に失敗しました', { description: error.message }); return; }
+    await cancelNotification('announcement', id);
+    if (tenantId) await reloadAnnouncements(tenantId);
+    toast.success('お知らせを削除しました');
   }
 
   const catMap = new Map(categories.map(c => [c.id, c]));
@@ -230,6 +284,7 @@ export default function AdminAnnouncementsPage() {
             onChanged={() => tenantId && reloadAnnouncements(tenantId)}
           />
           <Button onClick={() => {
+            setEditingAnnouncement(null);
             setForm({ title: '', category_id: selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
             setBlocks([]);
             setDialogOpen(true);
@@ -266,6 +321,12 @@ export default function AdminAnnouncementsPage() {
                   <NewBadge createdAt={a.created_at} />
                   <CategoryBadge category={a.category_id ? catMap.get(a.category_id) : null} />
                 </div>
+                <div className="flex items-center gap-2 flex-wrap order-3 md:order-none">
+                  <Button size="sm" onClick={() => openEdit(a)} className="rounded-md font-bold bg-diletto-blue hover:bg-diletto-blue/90 text-white">✎ 編集</Button>
+                  <Button variant="outline" size="sm" className="rounded-md font-bold text-diletto-red border-diletto-red/40 hover:bg-diletto-red/10" onClick={() => handleDelete(a.id)}>
+                    削除
+                  </Button>
+                </div>
               </div>
               <p className="text-sm text-diletto-gray mt-1 whitespace-pre-wrap line-clamp-3 leading-relaxed">{a.body}</p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -288,9 +349,9 @@ export default function AdminAnnouncementsPage() {
         )}
       </DragSortList>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditingAnnouncement(null); setBlocks([]); } }}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>お知らせの追加</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAnnouncement ? 'お知らせの編集' : 'お知らせの追加'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
             <AttributeTargetSelector
               tenantId={tenantId}
@@ -315,8 +376,8 @@ export default function AdminAnnouncementsPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>キャンセル</Button>
-            <Button onClick={handleCreate} disabled={saving || !form.title.trim() || blocks.length === 0}>
+            <Button variant="outline" onClick={() => { setDialogOpen(false); setEditingAnnouncement(null); setBlocks([]); }}>キャンセル</Button>
+            <Button onClick={handleSave} disabled={saving || !form.title.trim() || blocks.length === 0}>
               {saving ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>

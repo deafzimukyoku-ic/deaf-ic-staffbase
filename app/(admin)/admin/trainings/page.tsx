@@ -174,6 +174,14 @@ export default function AdminTrainingsPage() {
     setSaving(false);
   }
 
+  async function handleDelete(id: string) {
+    if (!confirm('この研修を削除しますか？\n\n提出済みのデータも一緒に削除されます。')) return;
+    const { error } = await supabase.from('trainings').delete().eq('id', id);
+    if (error) { toast.error('削除に失敗しました', { description: error.message }); return; }
+    if (tenantId) await reloadTrainings(tenantId);
+    toast.success('研修を削除しました');
+  }
+
   function openEdit(t: Training) {
     setEditingTraining(t);
     setForm({
@@ -328,10 +336,13 @@ export default function AdminTrainingsPage() {
                   isPublished={t.is_published ?? true}
                   onChanged={() => tenantId && reloadTrainings(tenantId)}
                 />
-                <Button variant="ghost" size="sm" onClick={() => openEdit(t)} className="h-8 rounded-md text-xs font-bold">編集</Button>
+                <Button size="sm" onClick={() => openEdit(t)} className="rounded-md font-bold bg-diletto-blue hover:bg-diletto-blue/90 text-white">✎ 編集</Button>
                 <Link href={`/admin/trainings/${t.id}/submissions`}>
-                  <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold">提出一覧</Button>
+                  <Button variant="outline" size="sm" className="rounded-md font-bold">提出一覧</Button>
                 </Link>
+                <Button variant="outline" size="sm" className="rounded-md font-bold text-diletto-red border-diletto-red/40 hover:bg-diletto-red/10" onClick={() => handleDelete(t.id)}>
+                  削除
+                </Button>
               </div>
             </CardContent>
           </Card>
