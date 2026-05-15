@@ -17,6 +17,8 @@ interface TodoItem {
   current: number;
   total: number;
   icon: string;
+  /* 提出済みのうち基本情報変更後の「要再提出」件数（書類カード専用） */
+  resubmitCount?: number;
 }
 
 type UpdateKind = 'announcement' | 'compliance' | 'training' | 'manual';
@@ -172,7 +174,8 @@ export default function EmployeeDashboardPage() {
 
       const [templates, submissions, compliance, compAcks, trainings, trainSubs, announcements, annReads, manuals, manualReads, shiftReqs] = await Promise.all([
         supabase.from('document_templates').select('id').eq('tenant_id', tid),
-        supabase.from('document_submissions').select('id').eq('employee_id', eid).eq('status', 'submitted'),
+        /* submitted_at も取得して、基本情報更新後の要再提出件数を判定する */
+        supabase.from('document_submissions').select('id, submitted_at').eq('employee_id', eid).eq('status', 'submitted'),
         // is_published=true のみ進捗カウント対象に。非公開分はダッシュボードにも反映しない（migration 141）
         supabase.from('compliance_documents').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('compliance_acknowledgments').select('compliance_document_id').eq('employee_id', eid),
@@ -187,6 +190,12 @@ export default function EmployeeDashboardPage() {
 
       const tTotal = templates.data?.length || 0;
       const tDone = submissions.data?.length || 0;
+      /* 提出済みかつ、submitted_at より後に基本情報(employees.updated_at)が更新された件数。
+         /my/documents 側の needsResubmit 判定と一致させる。 */
+      const empUpdatedAt = (me.updated_at as string) ?? null;
+      const docResubmitCount = ((submissions.data || []) as { submitted_at: string | null }[])
+        .filter((s) => s.submitted_at && empUpdatedAt && new Date(empUpdatedAt) > new Date(s.submitted_at))
+        .length;
       const cTotal = compliance.data?.length || 0;
       const cDone = compAcks.data?.length || 0;
       const trTotal = trainings.data?.length || 0;
@@ -258,7 +267,7 @@ export default function EmployeeDashboardPage() {
       setTodos([
         { label: '基本情報', href: '/my/profile', done: basicFilled >= basicFields.length, current: basicFilled, total: basicFields.length, icon: '👤' },
         { label: '自己紹介', href: '/my/about', done: aboutFilled >= aboutFields.length, current: aboutFilled, total: aboutFields.length, icon: '📝' },
-        { label: '書類提出', href: '/my/documents', done: tDone >= tTotal && tTotal > 0, current: tDone, total: tTotal, icon: '📄' },
+        { label: '書類提出', href: '/my/documents', done: tDone >= tTotal && tTotal > 0 && docResubmitCount === 0, current: tDone, total: tTotal, icon: '📄', resubmitCount: docResubmitCount },
         { label: '遵守事項の確認', href: '/my/compliance', done: cDone >= cTotal && cTotal > 0, current: cDone, total: cTotal, icon: '✅' },
         { label: '研修の受講', href: '/my/trainings', done: trDone >= trTotal && trTotal > 0, current: trDone, total: trTotal, icon: '📚' },
         { label: 'お知らせの確認', href: '/my/announcements', done: aDone >= aTotal && aTotal > 0, current: aDone, total: aTotal, icon: '🔔' },
@@ -350,14 +359,19 @@ export default function EmployeeDashboardPage() {
           // 未消化がある(=total>0 かつ current<total)かつ通知対象(遵守/研修/お知らせ)ならハイライト
           const unreadCount = t.total - t.current;
           const isNotifKind = t.href === '/my/compliance' || t.href === '/my/trainings' || t.href === '/my/announcements' || t.href === '/my/manuals' || t.href === '/my/requests';
-          const hasUnread = isNotifKind && unreadCount > 0;
+          /* 書類カードは「要再提出」件数だけ赤バッジで表示する (未提出件数では表示しない)。
+             /my/documents 側で submitted_at < employees.updated_at の判定と一致。 */
+          const resubmitCount = t.resubmitCount ?? 0;
+          const isResubmit = t.href === '/my/documents' && resubmitCount > 0;
+          const hasUnread = (isNotifKind && unreadCount > 0) || isResubmit;
+          const badgeCount = isResubmit ? resubmitCount : unreadCount;
 
           return (
             <Link key={t.href} href={t.href}>
               <Card className={`relative transition-all hover:border-diletto-blue h-full ${t.done ? 'opacity-60' : ''} ${hasUnread ? 'border-diletto-red/50 bg-diletto-red/[0.02]' : ''}`}>
                 {hasUnread && (
                   <span className="absolute top-1.5 right-1.5 z-10 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-diletto-red text-white text-[10px] font-bold leading-none shadow-sm">
-                    <span className="relative">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                    <span className="relative">{badgeCount > 99 ? '99+' : badgeCount}</span>
                   </span>
                 )}
                 <CardContent className="py-4 px-3 sm:px-4">

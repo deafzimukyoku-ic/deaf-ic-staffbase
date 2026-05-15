@@ -10,13 +10,13 @@ import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
 import type { TargetType } from '@/lib/types';
 
-type UnreadKey = 'compliance' | 'training' | 'announcement' | 'manual' | 'message';
+type UnreadKey = 'document' | 'compliance' | 'training' | 'announcement' | 'manual' | 'message';
 
 const tabs: { href: string; label: string; unreadKey?: UnreadKey }[] = [
   { href: '/my/dashboard', label: 'ホーム' },
   { href: '/my/profile', label: '基本情報' },
   { href: '/my/about', label: '自己紹介' },
-  { href: '/my/documents', label: '書類' },
+  { href: '/my/documents', label: '書類', unreadKey: 'document' },
   { href: '/my/compliance', label: '遵守事項', unreadKey: 'compliance' },
   { href: '/my/trainings', label: '研修', unreadKey: 'training' },
   { href: '/my/announcements', label: 'お知らせ', unreadKey: 'announcement' },
@@ -29,20 +29,20 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const router = useRouter();
   const [userRole, setUserRole] = useState<string>('employee');
-  const [unread, setUnread] = useState<Record<UnreadKey, number>>({ compliance: 0, training: 0, announcement: 0, manual: 0, message: 0 });
+  const [unread, setUnread] = useState<Record<UnreadKey, number>>({ document: 0, compliance: 0, training: 0, announcement: 0, manual: 0, message: 0 });
 
   useEffect(() => {
     async function loadCompany() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: me } = await supabase.from('employees').select('id, tenant_id, role, facility_id').eq('auth_user_id', user.id).single();
+      const { data: me } = await supabase.from('employees').select('id, tenant_id, role, facility_id, updated_at').eq('auth_user_id', user.id).single();
       if (!me) return;
       setUserRole(me.role);
 
       // 未確認/未読/未合格のカウント計算（施設スコープ考慮）
       type Row = { id: string; updated_at?: string; target_type: TargetType; target_facility_ids: string[] };
-      const [compRes, trainRes, annRes, manRes, ackRes, subRes, readRes, manReadRes, threadRes, msgReadRes] = await Promise.all([
+      const [compRes, trainRes, annRes, manRes, ackRes, subRes, readRes, manReadRes, threadRes, msgReadRes, docSubRes] = await Promise.all([
         // 非公開分はバッジ件数からも除外（admin/manager が社員画面を閲覧した際にも正しく動かすため明示フィルタ。employee は RLS でも除外される）
         supabase.from('compliance_documents').select('id, updated_at, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
         supabase.from('trainings').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
@@ -56,6 +56,8 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
            自分以外が送信し、まだ message_reads に記録が無いもの */
         supabase.from('message_thread_members').select('thread_id').eq('employee_id', me.id),
         supabase.from('message_reads').select('message_id').eq('employee_id', me.id),
+        /* 書類: 提出済みのうち、その後で基本情報が更新された(=要再提出)もの */
+        supabase.from('document_submissions').select('id, submitted_at').eq('employee_id', me.id).eq('status', 'submitted'),
       ]);
 
       const scopedComp = applyScopeFilter((compRes.data || []) as Row[], me.facility_id);
@@ -90,7 +92,15 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         messageUnread = ((pending || []) as { id: string }[]).filter((m) => !myReadMsgIds.has(m.id)).length;
       }
 
+      /* 書類: 提出後に基本情報(employees.updated_at)が変わったら要再提出。
+         /my/documents/page.tsx と同じロジック。 */
+      const empUpdatedAt = (me.updated_at as string) ?? null;
+      const docResubmit = ((docSubRes.data || []) as { submitted_at: string | null }[])
+        .filter((s) => s.submitted_at && empUpdatedAt && new Date(empUpdatedAt) > new Date(s.submitted_at))
+        .length;
+
       setUnread({
+        document: docResubmit,
         compliance: scopedComp.filter((c) => c.updated_at && !confirmedSet.has(`${c.id}::${c.updated_at}`)).length,
         training: scopedTrain.filter((t) => !passedTrainIds.has(t.id)).length,
         announcement: scopedAnn.filter((a) => !readAnnIds.has(a.id)).length,
