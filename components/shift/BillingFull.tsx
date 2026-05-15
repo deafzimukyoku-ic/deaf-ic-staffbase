@@ -4,12 +4,13 @@
  * 利用料金表（月次）出力ページ — Phase 66-C
  *
  * - 月選択 → 児童一覧 + 当月イベント列を取得
- * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 教材印刷代 / イベント参加（既定 false）
+ * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 教材印刷代 / 参加費合計 / イベント参加（既定 false）
+ * - 参加費合計 (eventTotal) は別列で表示するが、請求額にも含む
  * - 手動オーバーライド可: 利用負担額 / イベント参加チェック / 受取日
  * - 「保存」で billing_summaries + billing_event_participations を upsert（再印刷時は同じ値）
  * - 「印刷」で A4 横レイアウト
  *
- * PDF 列構成: # / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ消耗品代 / 教材印刷代 / 各イベント / 請求額 / 受取日
+ * PDF 列構成: # / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ消耗品代 / 教材印刷代 / 各イベント / 参加費合計 / 請求額 / 受取日
  */
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
@@ -262,7 +263,8 @@ export default function BillingFull({ scope }: Props) {
     return () => ro.disconnect();
   }, [rows.length, events.length]);
 
-  /* 行の派生値（snack/kumon/event_total/total）*/
+  /* 行の派生値（snack/kumon/eventTotal/total）。
+     参加費合計 (eventTotal) は別列「参加費合計」として表示すると同時に、請求額 (total) にも含める。 */
   const computed = useMemo(() => {
     return rows.map((r) => {
       const snackFee = Math.max(0, r.attendanceDays) * SNACK_FEE_PER_DAY;
@@ -282,7 +284,7 @@ export default function BillingFull({ scope }: Props) {
     [computed],
   );
 
-  /* 合計（footer）*/
+  /* 合計（footer）。eventGrand は参加費合計列の総和、grand は請求額の総和。 */
   const totals = useMemo(() => {
     let attendanceDays = 0;
     let copay = 0;
@@ -290,6 +292,7 @@ export default function BillingFull({ scope }: Props) {
     let kumon = 0;
     const eventTotals: Record<string, number> = {};
     for (const ev of events) eventTotals[ev.id] = 0;
+    let eventGrand = 0;
     let grand = 0;
     for (const r of rows) {
       const c = computedById.get(r.childId);
@@ -301,9 +304,10 @@ export default function BillingFull({ scope }: Props) {
       for (const ev of events) {
         if (r.participations[ev.id]) eventTotals[ev.id] += Math.max(0, Math.floor(ev.price));
       }
+      eventGrand += c.eventTotal;
       grand += c.total;
     }
-    return { attendanceDays, copay, snack, kumon, eventTotals, grand };
+    return { attendanceDays, copay, snack, kumon, eventTotals, eventGrand, grand };
   }, [rows, computedById, events]);
 
   const updateRow = (childId: string, patch: Partial<RowState>) => {
@@ -609,6 +613,13 @@ export default function BillingFull({ scope }: Props) {
                     </th>
                   );
                 })}
+                <th
+                  className="px-2 py-2 text-center font-semibold whitespace-nowrap"
+                  style={{ width: '100px', background: 'var(--bg)' }}
+                  title="各イベントの参加(チェック入り)の合計。請求額にも含まれます。"
+                >
+                  参加費合計
+                </th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>請求額</th>
               </tr>
             </thead>
@@ -676,6 +687,10 @@ export default function BillingFull({ scope }: Props) {
                         </td>
                       );
                     })}
+                    {/* 参加費合計 (各イベント参加チェックの合計を集約表示。請求額にも含まれる) */}
+                    <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums', background: 'var(--bg)', color: 'var(--ink-3)' }}>
+                      {c && c.eventTotal > 0 ? fmtYen(c.eventTotal) : ''}
+                    </td>
                     <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {c ? fmtYen(c.total) : ''}
                     </td>
@@ -694,6 +709,7 @@ export default function BillingFull({ scope }: Props) {
                     {fmtYen(totals.eventTotals[ev.id] ?? 0)}
                   </td>
                 ))}
+                <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums', background: 'var(--bg)', color: 'var(--ink-3)' }}>{fmtYen(totals.eventGrand)}</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.grand)}</td>
               </tr>
             </tbody>
