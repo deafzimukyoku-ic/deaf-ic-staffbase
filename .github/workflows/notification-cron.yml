@@ -1,0 +1,47 @@
+name: notification-cron
+
+# Vercel Hobby プランは cron jobs を 1 日 1 回しか実行できないため、
+# 10 分毎の通知配信は GitHub Actions の schedule で代用する。
+#
+# 必要な GitHub Secrets:
+#   - CRON_TARGET_URL : 例 https://www.deaf-ic-nagoya.org (末尾スラッシュ無し)
+#   - CRON_SECRET     : Vercel env と同じ値。Authorization: Bearer ${CRON_SECRET} で検証される
+#
+# 動作: 10 分毎に POST /api/cron/send-notifications を叩き、
+# notification_queue から scheduled_at <= now() の行を Resend で送信する。
+
+on:
+  schedule:
+    # GitHub Actions cron は UTC で評価される。10 分間隔は問題なく使える。
+    # ただし高負荷時に数分の遅延が出る場合がある (公式仕様)。
+    - cron: '*/10 * * * *'
+  workflow_dispatch:  # 手動トリガーも可能 (デバッグ用)
+
+# 重複実行を抑止 (前のジョブが長引いていても次の cron を待たせる)
+concurrency:
+  group: notification-cron
+  cancel-in-progress: false
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Invoke send-notifications endpoint
+        env:
+          CRON_TARGET_URL: ${{ secrets.CRON_TARGET_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CRON_TARGET_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_TARGET_URL or CRON_SECRET secret is not set"
+            exit 1
+          fi
+          # -f: HTTP 4xx/5xx で fail。-S: エラー表示。-s: 進捗非表示。
+          # --max-time 240: route handler のタイムアウト目安
+          response=$(curl -fsS --max-time 240 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            "$CRON_TARGET_URL/api/cron/send-notifications")
+          echo "Response: $response"
