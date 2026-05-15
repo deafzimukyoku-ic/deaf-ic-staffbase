@@ -21,6 +21,16 @@ import type {
 const BATCH_SIZE = 50; // 1回のCron実行で処理する最大行数
 const RESEND_BATCH_SIZE = 100; // Resend batch API の上限
 
+/* Resend は to に non-ASCII (●● 等) が混ざるとバッチ全体を 422 で拒否する。
+   1 件の不正アドレスのために残り 49 件が巻き添えになる事故が起きたため、
+   submit 前に簡易検証して non-ASCII / 空文字を弾く。 */
+function isValidEmail(addr: string | null | undefined): addr is string {
+  if (!addr) return false;
+  if (!/^[\x20-\x7E]+$/.test(addr)) return false; /* ASCII printable のみ */
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return false;
+  return true;
+}
+
 const CONTENT_TABLE: Record<LegacyNotificationContentType, string> = {
   announcement: 'announcements',
   compliance: 'compliance_documents',
@@ -157,6 +167,11 @@ async function processRow(supabase: any, row: QueueRow, appUrl: string): Promise
   const { data: allEmployees } = await empQuery;
 
   const recipients = (allEmployees || []).filter((e: { facility_id: string | null; email: string }) => {
+    /* ★ non-ASCII / 不正形式の email は除外 (Resend が 422 で全件巻き添えになる事故防止) */
+    if (!isValidEmail(e.email)) {
+      console.warn('[cron] skip invalid email:', e.email);
+      return false;
+    }
     if (content.target_type === 'all') return true;
     if (!e.facility_id) return false;
     return content.target_facility_ids.includes(e.facility_id);
@@ -191,6 +206,8 @@ async function processRow(supabase: any, row: QueueRow, appUrl: string): Promise
   });
 
   // Resend バッチ送信（最大100件ずつ）
+  // ★ resend.batch.send は { data, error } を返す。error を check しないと
+  //   422 (validation_error) 等で全件失敗してても sent_at がセットされて再送不能になる。
   for (let i = 0; i < recipients.length; i += RESEND_BATCH_SIZE) {
     const chunk = recipients.slice(i, i + RESEND_BATCH_SIZE);
     const emails = chunk.map((r: { email: string }) => ({
@@ -200,7 +217,11 @@ async function processRow(supabase: any, row: QueueRow, appUrl: string): Promise
       html,
       text,
     }));
-    await resend.batch.send(emails);
+    const res = await resend.batch.send(emails);
+    if (res.error) {
+      console.error('[cron] resend batch failed', { id: row.id, error: res.error });
+      throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+    }
   }
 
   await supabase.from('notification_queue').update({ sent_at: new Date().toISOString() }).eq('id', row.id);
@@ -261,7 +282,7 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       .eq('role', 'admin')
       .eq('status', 'active')
       .not('email', 'is', null);
-    recipients = (admins ?? []).filter((a: { email: string | null }) => !!a.email) as { email: string }[];
+    recipients = (admins ?? []).filter((a: { email: string | null }) => isValidEmail(a.email)) as { email: string }[];
   } else {
     // shift_ready: 該当 facility の active employee 全員
     const { data: emps } = await supabase
@@ -272,7 +293,7 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       .eq('role', 'employee')
       .eq('status', 'active')
       .not('email', 'is', null);
-    recipients = (emps ?? []).filter((e: { email: string | null }) => !!e.email) as { email: string }[];
+    recipients = (emps ?? []).filter((e: { email: string | null }) => isValidEmail(e.email)) as { email: string }[];
   }
 
   if (recipients.length === 0) {
@@ -302,7 +323,11 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       html,
       text,
     }));
-    await resend.batch.send(emails);
+    const res = await resend.batch.send(emails);
+    if (res.error) {
+      console.error('[cron/shift] resend batch failed', { id: row.id, error: res.error });
+      throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+    }
   }
 
   await supabase.from('notification_queue').update({ sent_at: new Date().toISOString() }).eq('id', row.id);
