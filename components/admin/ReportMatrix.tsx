@@ -17,6 +17,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { TRAINING_RESULT } from '@/lib/constants';
+import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
 
 type Category = 'compliance' | 'training' | 'announcement' | 'manual';
 
@@ -47,6 +53,8 @@ interface ViewAgg {
   item_id: string;
   count: number;
   last_viewed_at: string;
+  /* 直近10件の閲覧日時 (新しい順, ISO)。② tooltip 表示用 */
+  recent_views: string[];
 }
 interface CategoryRow {
   id: string;
@@ -54,11 +62,23 @@ interface CategoryRow {
   icon: string | null;
   color: string | null;
 }
+/* ① 研修の合否判定 用: category='training' のときのみ含まれる */
+interface SubmissionRow {
+  id: string;
+  training_id: string;
+  employee_id: string;
+  result: string;       /* 'pending' | 'passed' | 'failed' | 'resubmit' */
+  summary_text: string | null;
+  admin_comment: string | null;
+  submitted_at: string;
+  reviewed_at: string | null;
+}
 interface ReportData {
   items: ItemRow[];
   employees: EmpRow[];
   views: ViewAgg[];
   categories: CategoryRow[];
+  submissions?: SubmissionRow[];
 }
 
 const PERIOD_OPTIONS = [
@@ -223,6 +243,71 @@ function ReportBody({
     for (const v of views) m.set(`${v.employee_id}__${v.item_id}`, v);
     return m;
   }, [views]);
+
+  /* ① 研修の合否判定: (training_id, employee_id) → SubmissionRow ルックアップ
+     submissionOverrides は判定保存後の楽観更新 (server refetch なしで UI を即時反映するため) */
+  const submissions = data?.submissions ?? [];
+  const [submissionOverrides, setSubmissionOverrides] = useState<Record<string, Partial<SubmissionRow>>>({});
+  const submissionMap = useMemo(() => {
+    const m = new Map<string, SubmissionRow>();
+    for (const s of submissions) {
+      const override = submissionOverrides[s.id];
+      m.set(`${s.employee_id}__${s.training_id}`, override ? { ...s, ...override } : s);
+    }
+    return m;
+  }, [submissions, submissionOverrides]);
+
+  /* ① 研修の合否判定 モーダル */
+  const [reviewTarget, setReviewTarget] = useState<{
+    employeeId: string;
+    employeeName: string;
+    trainingId: string;
+    trainingTitle: string;
+    submission: SubmissionRow | undefined;
+  } | null>(null);
+  const [reviewResult, setReviewResult] = useState('pending');
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSaving, setReviewSaving] = useState(false);
+
+  function openReview(employeeId: string, employeeName: string, trainingId: string, trainingTitle: string) {
+    const submission = submissionMap.get(`${employeeId}__${trainingId}`);
+    setReviewTarget({ employeeId, employeeName, trainingId, trainingTitle, submission });
+    setReviewResult(submission?.result || 'pending');
+    setReviewComment(submission?.admin_comment || '');
+  }
+
+  async function handleReviewSave() {
+    if (!reviewTarget || !reviewTarget.submission) {
+      toast.error('提出データがありません');
+      return;
+    }
+    setReviewSaving(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('training_submissions')
+      .update({
+        result: reviewResult,
+        admin_comment: reviewComment || null,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', reviewTarget.submission.id);
+    setReviewSaving(false);
+    if (error) {
+      toast.error('保存に失敗しました', { description: error.message });
+      return;
+    }
+    toast.success('判定を保存しました');
+    /* 楽観更新: 子コンポーネントなので親 state を再 fetch せず、ローカル overrides に反映 */
+    setSubmissionOverrides((prev) => ({
+      ...prev,
+      [reviewTarget.submission!.id]: {
+        result: reviewResult,
+        admin_comment: reviewComment || null,
+        reviewed_at: new Date().toISOString(),
+      },
+    }));
+    setReviewTarget(null);
+  }
 
   /* 各アイテムについて、対象オーディエンス（その施設の社員）を返す。
      target_type='all' は全員、'facility' は target_facility_ids に含まれる社員のみ。 */
@@ -467,14 +552,52 @@ function ReportBody({
                         </td>
                       );
                     }
+                    /* ② tooltip 用に最近の閲覧履歴を YYYY/MM/DD HH:mm:ss で連結 */
+                    const tooltipText = v.recent_views && v.recent_views.length > 0
+                      ? `直近${v.recent_views.length}回:\n` + v.recent_views.map((iso) => formatDateTime(iso)).join('\n')
+                      : `最終閲覧: ${formatDateTime(v.last_viewed_at)}`;
+                    /* ① 研修のみ: 提出データから合否バッジ + 判定ボタンを表示 */
+                    const sub = category === 'training' ? submissionMap.get(`${e.id}__${it.id}`) : undefined;
                     return (
                       <td
                         key={it.id}
                         className="px-2 py-2 whitespace-nowrap bg-white"
                         style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
                       >
-                        <div className="text-diletto-blue font-medium">✓ {v.count} 回</div>
+                        <div className="text-diletto-blue font-medium" title={tooltipText} style={{ cursor: 'help' }}>
+                          ✓ {v.count} 回
+                        </div>
                         <div className="text-[10px] text-diletto-gray-light">{formatDate(v.last_viewed_at)}</div>
+                        {category === 'training' && (
+                          <div className="mt-1 flex items-center gap-1">
+                            {sub ? (
+                              <Badge
+                                variant="outline"
+                                className={
+                                  sub.result === 'passed' ? 'bg-diletto-green/10 text-diletto-green border-diletto-green/30' :
+                                  sub.result === 'failed' ? 'bg-diletto-red/10 text-diletto-red border-diletto-red/30' :
+                                  sub.result === 'resubmit' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                                  'bg-diletto-gray/10 text-diletto-gray border-diletto-gray/20'
+                                }
+                              >
+                                {sub.result === 'passed' ? '合格' :
+                                 sub.result === 'failed' ? '不合格' :
+                                 sub.result === 'resubmit' ? '再提出' : '未判定'}
+                              </Badge>
+                            ) : (
+                              <span className="text-[10px] text-diletto-gray-light">提出待ち</span>
+                            )}
+                            {sub && (
+                              <button
+                                type="button"
+                                onClick={() => openReview(e.id, e.name, it.id, it.title)}
+                                className="text-[10px] underline text-diletto-blue hover:text-diletto-ink"
+                              >
+                                判定
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                     );
                   })}
@@ -484,8 +607,74 @@ function ReportBody({
           </table>
         </CardContent>
       </Card>
+
+      {/* ① 研修合否判定モーダル */}
+      <Dialog open={reviewTarget != null} onOpenChange={(o) => { if (!o) setReviewTarget(null); }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {reviewTarget?.employeeName}「{reviewTarget?.trainingTitle}」の判定
+            </DialogTitle>
+          </DialogHeader>
+          {reviewTarget?.submission ? (
+            <div className="space-y-4 py-2">
+              <div>
+                <div className="text-xs text-diletto-gray-light mb-1">受講の感想 ({reviewTarget.submission.summary_text?.length || 0} 文字)</div>
+                <div className="rounded-md border border-diletto-gray/15 bg-diletto-beige/30 p-3 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                  {reviewTarget.submission.summary_text || '（記入なし）'}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold mb-2">判定</div>
+                <div className="flex gap-2 flex-wrap">
+                  {TRAINING_RESULT.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setReviewResult(r)}
+                      className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                        reviewResult === r
+                          ? r === 'passed' ? 'bg-diletto-green text-white border-diletto-green'
+                          : r === 'failed' ? 'bg-diletto-red text-white border-diletto-red'
+                          : r === 'resubmit' ? 'bg-amber-500 text-white border-amber-500'
+                          : 'bg-diletto-gray text-white border-diletto-gray'
+                          : 'bg-white text-diletto-ink border-diletto-gray/30 hover:bg-diletto-beige'
+                      }`}
+                    >
+                      {r === 'passed' ? '合格' : r === 'failed' ? '不合格' : r === 'resubmit' ? '再提出' : '未判定'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold mb-1">コメント (任意)</div>
+                <Textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  rows={3}
+                  placeholder="再提出を依頼する場合は何を直してほしいか書いてください"
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="py-4 text-sm text-diletto-gray">提出データがありません。</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewTarget(null)}>キャンセル</Button>
+            <Button onClick={handleReviewSave} disabled={reviewSaving || !reviewTarget?.submission}>
+              {reviewSaving ? '保存中...' : '判定を保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function SummaryCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {

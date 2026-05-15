@@ -125,19 +125,60 @@ export async function GET(req: NextRequest) {
   const { data: rawViews, error: viewsErr } = await viewsQuery;
   if (viewsErr) return NextResponse.json({ error: viewsErr.message }, { status: 500 });
 
-  /* (employee_id, item_id) で集計: count と最終閲覧日時 */
-  const aggMap = new Map<string, { employee_id: string; item_id: string; count: number; last_viewed_at: string }>();
+  /* (employee_id, item_id) で集計: count, 最終閲覧日時, 直近10件の閲覧日時 (新しい順)
+     recent_viewed_at は ② tooltip 表示用 (ホバー時に最新10件を YYYY/MM/DD HH:mm:ss で表示) */
+  const aggMap = new Map<string, { employee_id: string; item_id: string; count: number; last_viewed_at: string; viewed_at_list: string[] }>();
   for (const v of (rawViews || []) as { employee_id: string; item_id: string; viewed_at: string }[]) {
     const key = `${v.employee_id}__${v.item_id}`;
     const cur = aggMap.get(key);
     if (cur) {
       cur.count += 1;
       if (v.viewed_at > cur.last_viewed_at) cur.last_viewed_at = v.viewed_at;
+      cur.viewed_at_list.push(v.viewed_at);
     } else {
-      aggMap.set(key, { employee_id: v.employee_id, item_id: v.item_id, count: 1, last_viewed_at: v.viewed_at });
+      aggMap.set(key, {
+        employee_id: v.employee_id,
+        item_id: v.item_id,
+        count: 1,
+        last_viewed_at: v.viewed_at,
+        viewed_at_list: [v.viewed_at],
+      });
     }
   }
-  const views = Array.from(aggMap.values());
+  /* 各セルの viewed_at_list を 新しい順にソート → 上位 10 件のみ残す */
+  const views = Array.from(aggMap.values()).map((v) => ({
+    employee_id: v.employee_id,
+    item_id: v.item_id,
+    count: v.count,
+    last_viewed_at: v.last_viewed_at,
+    recent_views: v.viewed_at_list.sort((a, b) => b.localeCompare(a)).slice(0, 10),
+  }));
+
+  /* category=='training' のときだけ、研修提出データを追加で取得して ① 判定ボタン用に返す。
+     セルから直接 合格/不合格/再提出 を判定できるようにする。 */
+  type SubmissionRow = {
+    id: string;
+    training_id: string;
+    employee_id: string;
+    result: string;
+    summary_text: string | null;
+    admin_comment: string | null;
+    submitted_at: string;
+    reviewed_at: string | null;
+  };
+  let submissions: SubmissionRow[] = [];
+  if (category === 'training') {
+    const trainingIds = (itemsData || []).map((it) => (it as unknown as { id: string }).id);
+    const employeeIds = (employeesData || []).map((e) => e.id);
+    if (trainingIds.length > 0 && employeeIds.length > 0) {
+      const { data: subData } = await supabase
+        .from('training_submissions')
+        .select('id, training_id, employee_id, result, summary_text, admin_comment, submitted_at, reviewed_at')
+        .in('training_id', trainingIds)
+        .in('employee_id', employeeIds);
+      submissions = (subData as SubmissionRow[]) || [];
+    }
+  }
 
   return NextResponse.json({
     items: ((itemsData || []) as unknown as Record<string, unknown>[]).map((it) => ({
@@ -157,5 +198,6 @@ export async function GET(req: NextRequest) {
       role: e.role,
     })),
     views,
+    submissions, /* category='training' のみ非空。判定ボタン UI で利用 */
   });
 }
