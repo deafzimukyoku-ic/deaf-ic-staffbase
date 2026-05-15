@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { withDevNameMask, IS_DEV_MASK_ENABLED } from './dev-name-mask';
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -22,6 +23,9 @@ export async function createClient() {
           }
         },
       },
+      ...(IS_DEV_MASK_ENABLED
+        ? { global: { fetch: withDevNameMask(fetch.bind(globalThis)) } }
+        : {}),
     },
   );
 }
