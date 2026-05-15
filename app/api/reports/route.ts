@@ -171,11 +171,13 @@ export async function GET(req: NextRequest) {
     const trainingIds = (itemsData || []).map((it) => (it as unknown as { id: string }).id);
     const employeeIds = (employeesData || []).map((e) => e.id);
     if (trainingIds.length > 0 && employeeIds.length > 0) {
+      /* submitted_at DESC: 配列の先頭が最新。クライアント側で latest = [0]、history = 全体 として使う */
       const { data: subData } = await supabase
         .from('training_submissions')
         .select('id, training_id, employee_id, result, summary_text, admin_comment, submitted_at, reviewed_at')
         .in('training_id', trainingIds)
-        .in('employee_id', employeeIds);
+        .in('employee_id', employeeIds)
+        .order('submitted_at', { ascending: false });
       submissions = (subData as SubmissionRow[]) || [];
     }
   }

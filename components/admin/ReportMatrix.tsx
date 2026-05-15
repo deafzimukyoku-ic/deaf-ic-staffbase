@@ -244,18 +244,32 @@ function ReportBody({
     return m;
   }, [views]);
 
-  /* ① 研修の合否判定: (training_id, employee_id) → SubmissionRow ルックアップ
+  /* ① 研修の合否判定: (training_id, employee_id) → SubmissionRow[] ルックアップ
+     API 側で submitted_at DESC ソート済みなので、配列の [0] が最新。
      submissionOverrides は判定保存後の楽観更新 (server refetch なしで UI を即時反映するため) */
   const submissions = data?.submissions ?? [];
   const [submissionOverrides, setSubmissionOverrides] = useState<Record<string, Partial<SubmissionRow>>>({});
-  const submissionMap = useMemo(() => {
-    const m = new Map<string, SubmissionRow>();
+  /* (emp, training) → 全提出履歴の配列 (新しい順)。Tooltip 表示と最新値取得に使う */
+  const submissionHistoryMap = useMemo(() => {
+    const m = new Map<string, SubmissionRow[]>();
     for (const s of submissions) {
       const override = submissionOverrides[s.id];
-      m.set(`${s.employee_id}__${s.training_id}`, override ? { ...s, ...override } : s);
+      const merged = override ? { ...s, ...override } : s;
+      const key = `${s.employee_id}__${s.training_id}`;
+      const arr = m.get(key) ?? [];
+      arr.push(merged);
+      m.set(key, arr);
     }
     return m;
   }, [submissions, submissionOverrides]);
+  /* (emp, training) → 最新の SubmissionRow (バッジ・判定モーダル用) */
+  const submissionMap = useMemo(() => {
+    const m = new Map<string, SubmissionRow>();
+    for (const [key, arr] of submissionHistoryMap) {
+      if (arr.length > 0) m.set(key, arr[0]);
+    }
+    return m;
+  }, [submissionHistoryMap]);
 
   /* ① 研修の合否判定 モーダル */
   const [reviewTarget, setReviewTarget] = useState<{
@@ -558,6 +572,21 @@ function ReportBody({
                       : `最終閲覧: ${formatDateTime(v.last_viewed_at)}`;
                     /* ① 研修のみ: 提出データから合否バッジ + 判定ボタンを表示 */
                     const sub = category === 'training' ? submissionMap.get(`${e.id}__${it.id}`) : undefined;
+                    /* ⑨ 合否履歴 tooltip: 全提出履歴（新しい順）を 提出日時 → 判定結果 → 判定日時 → コメント の形で連結 */
+                    const subHistory = category === 'training' ? (submissionHistoryMap.get(`${e.id}__${it.id}`) || []) : [];
+                    const resultLabel = (r: string) => r === 'passed' ? '合格' : r === 'failed' ? '不合格' : r === 'resubmit' ? '再提出' : '未判定';
+                    const subTooltipText = subHistory.length > 0
+                      ? `提出${subHistory.length}回:\n` + subHistory.map((s, i) => {
+                          const lines = [`【${subHistory.length - i}回目】 ${formatDateTime(s.submitted_at)} 提出`];
+                          if (s.reviewed_at) {
+                            lines.push(`  → ${formatDateTime(s.reviewed_at)} ${resultLabel(s.result)}`);
+                          } else {
+                            lines.push(`  → ${resultLabel(s.result)} (未判定)`);
+                          }
+                          if (s.admin_comment) lines.push(`  コメント: ${s.admin_comment}`);
+                          return lines.join('\n');
+                        }).join('\n')
+                      : '';
                     return (
                       <td
                         key={it.id}
@@ -573,6 +602,8 @@ function ReportBody({
                             {sub ? (
                               <Badge
                                 variant="outline"
+                                title={subTooltipText}
+                                style={{ cursor: 'help' }}
                                 className={
                                   sub.result === 'passed' ? 'bg-diletto-green/10 text-diletto-green border-diletto-green/30' :
                                   sub.result === 'failed' ? 'bg-diletto-red/10 text-diletto-red border-diletto-red/30' :

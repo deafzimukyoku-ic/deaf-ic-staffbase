@@ -453,27 +453,26 @@ export default function MyTrainingsPage() {
                       </Card>
                     )}
 
-                    {/* 「✓ 確認しました」ボタン: 開いた瞬間 提出済だったときだけ表示。
-                        1 回目（未受講 → 提出 → カウント 1）は同セッション中ボタン非表示、
-                        閉じて再度開くと「2 回目」として表示される。 */}
-                    {tenantId && employeeId && wasSubmittedAtOpen && (
-                      <div className="pt-3 border-t border-diletto-gray/10">
-                        <ViewConfirmButton
-                          table="training_view_logs"
-                          tenantId={tenantId}
-                          employeeId={employeeId}
-                          itemId={training.id}
-                          initialSummary={viewSummaries.get(training.id)}
-                          onConfirmed={(count, viewedAt) => {
-                            setViewSummaries((prev) => {
-                              const next = new Map(prev);
-                              next.set(training.id, { count, lastAt: viewedAt });
-                              return next;
-                            });
-                          }}
-                        />
-                      </div>
-                    )}
+                    {/* 研修は ViewConfirmButton を撤去 (提出だけを閲覧回数としてカウントする方針)。
+                        他の 遵守事項/お知らせ/業務マニュアル は明示的な閲覧確認ボタンを残す。
+                        過去の閲覧回数表示 (前回確認日時 + これまで N 回確認済み) はそのまま参考表示。 */}
+                    {tenantId && employeeId && wasSubmittedAtOpen && (() => {
+                      const s = viewSummaries.get(training.id);
+                      if (!s || s.count === 0) return null;
+                      const lastViewedLabel = s.lastAt
+                        ? new Date(s.lastAt).toLocaleString('ja-JP', {
+                            year: 'numeric', month: 'numeric', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })
+                        : null;
+                      return (
+                        <div className="pt-3 border-t border-diletto-gray/10">
+                          <p className="text-xs text-diletto-gray-light text-right">
+                            これまで {s.count} 回 提出済み{lastViewedLabel ? `（最終 ${lastViewedLabel}）` : ''}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </>
               );
