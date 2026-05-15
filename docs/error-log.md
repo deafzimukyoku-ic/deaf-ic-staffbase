@@ -380,4 +380,43 @@
   - モーダル open イベントでログを書く UI コンポーネントは、その意味的妥当性を機能ごとに確認する
 
 ---
+## モーダル誤閉対策の whitelist 方式が効かなかった (キーボード入力で閉じる問題が解消しない)
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `components/ui/dialog.tsx` の Dialog ラッパー
+- **フェーズ**: 本番運用中 (前回 ③ 修正の不完全さがユーザー指摘で発覚)
+- **エラー内容**: キーボード入力 (escape-key / focus-out など) でモーダルが閉じる問題に対し、`onOpenChange` 内で `return` するだけの whitelist 方式を入れたが解消しなかった
+- **原因 (真因)**: `@base-ui/react` の `DialogStore.setOpen()` (`node_modules/@base-ui/react/dialog/store/DialogStore.js:37-69`) の構造を読み切れていなかった:
+  ```js
+  setOpen = (nextOpen, eventDetails) => {
+    ...
+    this.context.onOpenChange?.(nextOpen, eventDetails);  // 親の onOpenChange を呼ぶ
+    if (eventDetails.isCanceled) {                         // ★ cancel() 呼ばれてれば早期 return
+      return;
+    }
+    ...
+    this.update(updatedState);  // ← 呼ばれてなければ open=false に強制更新（controlled open=true を無視）
+  };
+  ```
+  親の `onOpenChange` (= my whitelist wrapper) が `return` するだけでは `eventDetails.isCanceled` が `false` のままなので、base-ui が内部 state を強制的に `open=false` に上書きしてダイアログが閉じる。controlled の `open` プロップは内部 state を上書きするためのものだが、`useControlledProp` は次のレンダー時にしか syncronize しない (`useIsoLayoutEffect` 経由)。つまり ① base-ui が `update({ open: false })` を呼んで内部 state が即座に false になり ② React レンダーが走り親の open=true がまだあるので useIsoLayoutEffect が一瞬後に open=true に戻すが、③ その間に exit アニメーションが走ってモーダルが消失 (= ユーザー視点では「閉じた」)。
+- **解決方法**: `eventDetails.cancel()` を必ず呼ぶ。`@base-ui/react/utils/createBaseUIEventDetails.d.ts:53` に `cancel: () => void` が定義されており、これを呼ぶと `isCanceled=true` になって base-ui の内部 state 更新がスキップされる:
+  ```tsx
+  const handleOpenChange = React.useCallback(
+    (open, eventDetails) => {
+      if (!open && !ALLOWED_CLOSE_REASONS.has(eventDetails.reason)) {
+        eventDetails.cancel();  // ★ これが無いと base-ui が勝手に閉じる
+        return;
+      }
+      onOpenChange?.(open, eventDetails);
+    },
+    [onOpenChange],
+  );
+  ```
+- **再発防止**:
+  - **3rd party UI ライブラリの「親の onChange を呼んだ後の処理」を読み切る**。`onOpenChange` のような callback は単なる通知ではなく、internal state 更新と並列で走る可能性がある。`return` で「親に伝えない」だけでは不十分なケースが多い
+  - **API ドキュメント (TypeScript 型定義) で `cancel` / `preventDefault` / `stopPropagation` 系メソッドの存在を確認する**。`BaseUIChangeEventDetail` 型に `cancel: () => void` という明示的なメソッドがあった。一度型定義を読めば見つけられた
+  - **修正後の動作確認はユーザー任せにしない**。前回「ホワイトリスト方式に強化」とコミットメッセージを書いて push したが、実機での動作テストをユーザーに丸投げした結果、不完全な修正のまま 2 セッション跨ぐことになった。動作確認できない場合は `npm run dev` を起動して console.log でイベント reason を実観測すべきだった
+  - **「対症療法と根本治療を区別する」**: `disablePointerDismissal=true` で pointer dismissal は止まるが、base-ui の state 機構は依然として close を発火する。レイヤごとの責務を理解する
+
+---
 *(以降、新規エラーがあれば追記)*

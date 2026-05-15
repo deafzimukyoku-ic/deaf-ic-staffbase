@@ -7,14 +7,24 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-/* モーダル誤閉対策 (ホワイトリスト方式)
+/* モーダル誤閉対策 (ホワイトリスト方式 + base-ui cancel)
    - 「開く」イベントはすべて通す
    - 「閉じる」イベントは以下の reason のみ許可:
      - close-press      … 「閉じる」「キャンセル」「保存」ボタン押下
      - trigger-press    … トリガーボタンで toggle
-     - imperative-action … setOpen(false) など明示的プログラム呼び出し
-   - escape-key / outside-press / focus-out / input-change 等は すべて無視
-   - disablePointerDismissal=true で外クリック起点の close 自体を発火させない */
+     - imperative-action … actionsRef.close() などプログラム呼び出し
+   - escape-key / outside-press / focus-out / close-watcher 等は すべて無視
+   - disablePointerDismissal=true で pointer 起因の close 自体を発火させない
+
+   重要: base-ui の DialogStore.setOpen は
+       this.context.onOpenChange?.(nextOpen, eventDetails);
+       if (eventDetails.isCanceled) return;
+       this.update({ open: nextOpen });  ← ★ ここで内部 state を強制更新
+   という構造なので、onOpenChange 内で `return` するだけでは base-ui が
+   勝手に閉じてしまう（controlled open=true が無視される）。
+   ブロックしたい場合は必ず `eventDetails.cancel()` を呼び、isCanceled=true に
+   して setOpen 内部の早期 return パスを通す必要がある。
+   前回の修正が「キーボード入力で閉じる」を解決しきれなかった真因はこれ。 */
 const ALLOWED_CLOSE_REASONS = new Set([
   'close-press',
   'trigger-press',
@@ -26,15 +36,17 @@ function Dialog({
   onOpenChange,
   ...rest
 }: DialogPrimitive.Root.Props) {
-  const handleOpenChange = React.useMemo(() => {
-    if (!onOpenChange) return undefined;
-    return (open: boolean, eventDetails: DialogPrimitive.Root.ChangeEventDetails) => {
+  /* onOpenChange が未指定でも cancel() を呼ぶ必要があるため、常にハンドラを差し込む */
+  const handleOpenChange = React.useCallback(
+    (open: boolean, eventDetails: DialogPrimitive.Root.ChangeEventDetails) => {
       if (!open && !ALLOWED_CLOSE_REASONS.has(eventDetails.reason as string)) {
-        return; /* 想定外の close reason は無視 */
+        eventDetails.cancel(); /* ★ base-ui の内部 state 更新も止める */
+        return;
       }
-      onOpenChange(open, eventDetails);
-    };
-  }, [onOpenChange]);
+      onOpenChange?.(open, eventDetails);
+    },
+    [onOpenChange],
+  );
   return (
     <DialogPrimitive.Root
       data-slot="dialog"
