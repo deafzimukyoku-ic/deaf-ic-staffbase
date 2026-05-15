@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import type { Employee } from '@/lib/types';
 import { MANAGER_VISIBLE_FIELDS } from '@/lib/manager-visible-fields';
+import { profileOptionLabel } from '@/lib/profile-options';
 
 type VisibleEmployee = Pick<Employee, (typeof MANAGER_VISIBLE_FIELDS)[number]>;
 
@@ -86,12 +87,12 @@ export function SubordinateDetail({ employee: e }: Props) {
         <Card>
           <CardHeader><CardTitle className="text-base">働き方の好み</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <InfoRow label="個人 vs チーム" value={e.work_style_solo_vs_team || '-'} />
-            <InfoRow label="指示明確 vs 裁量" value={e.work_style_clear_vs_autonomy || '-'} />
-            <InfoRow label="安定 vs 変化" value={e.work_style_stable_vs_change || '-'} />
-            <InfoRow label="熟考 vs 行動" value={e.work_style_think_vs_act || '-'} />
-            <InfoRow label="マルチタスク" value={e.multitask_ability || '-'} />
-            <InfoRow label="細部へのこだわり" value={e.detail_orientation || '-'} />
+            <InfoRow label="個人 vs チーム" value={profileOptionLabel('work_style_solo_vs_team', e.work_style_solo_vs_team)} />
+            <InfoRow label="指示明確 vs 裁量" value={profileOptionLabel('work_style_clear_vs_autonomy', e.work_style_clear_vs_autonomy)} />
+            <InfoRow label="安定 vs 変化" value={profileOptionLabel('work_style_stable_vs_change', e.work_style_stable_vs_change)} />
+            <InfoRow label="熟考 vs 行動" value={profileOptionLabel('work_style_think_vs_act', e.work_style_think_vs_act)} />
+            <InfoRow label="マルチタスク" value={profileOptionLabel('multitask_ability', e.multitask_ability)} />
+            <InfoRow label="細部へのこだわり" value={profileOptionLabel('detail_orientation', e.detail_orientation)} />
           </CardContent>
         </Card>
       )}
@@ -101,11 +102,11 @@ export function SubordinateDetail({ employee: e }: Props) {
         <Card>
           <CardHeader><CardTitle className="text-base">コミュニケーション傾向</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <InfoRow label="結論先 vs 背景先" value={e.comm_conclusion_vs_context || '-'} />
-            <InfoRow label="相談タイミング" value={e.comm_consult_timing || '-'} />
-            <InfoRow label="フィードバック" value={e.comm_feedback_preference || '-'} />
-            <InfoRow label="チャネル" value={e.comm_channel_preference || '-'} />
-            <InfoRow label="会議での傾向" value={e.meeting_behavior || '-'} />
+            <InfoRow label="結論先 vs 背景先" value={profileOptionLabel('comm_conclusion_vs_context', e.comm_conclusion_vs_context)} />
+            <InfoRow label="相談タイミング" value={profileOptionLabel('comm_consult_timing', e.comm_consult_timing)} />
+            <InfoRow label="フィードバック" value={profileOptionLabel('comm_feedback_preference', e.comm_feedback_preference)} />
+            <InfoRow label="チャネル" value={profileOptionLabel('comm_channel_preference', e.comm_channel_preference)} />
+            <InfoRow label="会議での傾向" value={profileOptionLabel('meeting_behavior', e.meeting_behavior)} />
             <TextBlock label="人間関係メモ" value={e.relationship_notes} />
           </CardContent>
         </Card>

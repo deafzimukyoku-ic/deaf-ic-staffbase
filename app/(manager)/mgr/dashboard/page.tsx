@@ -29,6 +29,37 @@ interface ProgressRow {
   manuals_read: number;
 }
 
+/* migration 156: get_my_subordinate_progress RPC の戻り行。
+   manager は submission 系テーブル / 他社員 employees 行の RLS 権限が無いため、
+   部下進捗は SECURITY DEFINER RPC 経由で取得する。 */
+interface SubordinateProgressRow {
+  employee_id: string;
+  tenant_id: string;
+  last_name: string | null;
+  first_name: string | null;
+  last_name_kana: string | null;
+  first_name_kana: string | null;
+  status: string | null;
+  facility_id: string | null;
+  docs_submitted: number;
+  compliance_done: number;
+  trainings_passed: number;
+  announcements_read: number;
+  manuals_read: number;
+  last_doc_submitted_at: string | null;
+  last_compliance_at: string | null;
+  last_training_at: string | null;
+  last_announcement_at: string | null;
+  last_manual_at: string | null;
+}
+
+type TimestampKey =
+  | 'last_doc_submitted_at'
+  | 'last_compliance_at'
+  | 'last_training_at'
+  | 'last_announcement_at'
+  | 'last_manual_at';
+
 interface FacilityLite { id: string; name: string; }
 
 type CategoryKey = 'docs_submitted' | 'compliance_done' | 'trainings_passed' | 'announcements_read' | 'manuals_read';
@@ -116,35 +147,41 @@ export default function ManagerDashboardPage() {
 
       const tid = meData.tenant_id;
 
-      // 各種データ取得
-      const [progressRes, templatesRes, complianceRes, trainingsRes, announcementsRes, manualsRes, employeesRes, docSubsRes, compAcksRes, trainSubsRes, annReadsRes, manualReadsRes] = await Promise.all([
-        supabase.from('employee_progress').select('*').eq('tenant_id', tid).in('facility_id', facilityIds).neq('employee_id', meData.id),
+      // 部下進捗は SECURITY DEFINER RPC 経由（migration 156）。
+      // manager は submission 系テーブル / 他社員 employees 行に RLS 権限が無いため、
+      // employee_progress ビュー（security_invoker）直読みでは全件 0 件になる。
+      // コンテンツ件数（totals）はテナント共通の SELECT ポリシーで読めるので直クエリのまま。
+      const [progressRes, templatesRes, complianceRes, trainingsRes, announcementsRes, manualsRes] = await Promise.all([
+        supabase.rpc('get_my_subordinate_progress', { p_facility_id: null }),
         supabase.from('document_templates').select('id').eq('tenant_id', tid),
         supabase.from('compliance_documents').select('id').eq('tenant_id', tid),
         supabase.from('trainings').select('id').eq('tenant_id', tid),
         supabase.from('announcements').select('id').eq('tenant_id', tid),
         supabase.from('manuals').select('id').eq('tenant_id', tid),
-        supabase.from('employees').select('id, last_name, first_name, last_name_kana, first_name_kana, status, facility_id').eq('tenant_id', tid).in('facility_id', facilityIds).neq('id', meData.id),
-        supabase.from('document_submissions').select('employee_id, submitted_at').eq('status', 'submitted'),
-        supabase.from('compliance_acknowledgments').select('employee_id, acknowledged_at'),
-        supabase.from('training_submissions').select('employee_id, submitted_at').eq('result', 'passed'),
-        supabase.from('announcement_reads').select('employee_id, read_at'),
-        supabase.from('manual_reads').select('employee_id, read_at'),
       ]);
 
-      const empMap = new Map((employeesRes.data || []).map((e: any) => [e.id, e]));
-      const pRows = (progressRes.data || []).map((p: any) => {
-        const emp = empMap.get(p.employee_id) || {};
-        return {
-          ...p,
-          last_name: emp.last_name || '-',
-          first_name: emp.first_name || '',
-          last_name_kana: emp.last_name_kana,
-          first_name_kana: emp.first_name_kana,
-          status: emp.status || 'active',
-          facility_id: emp.facility_id
-        };
-      });
+      if (progressRes.error) {
+        console.error('get_my_subordinate_progress failed', progressRes.error);
+        setLoading(false);
+        return;
+      }
+      const rpcRows = (progressRes.data ?? []) as SubordinateProgressRow[];
+
+      const pRows: ProgressRow[] = rpcRows.map((p) => ({
+        employee_id: p.employee_id,
+        tenant_id: p.tenant_id,
+        last_name: p.last_name || '-',
+        first_name: p.first_name || '',
+        last_name_kana: p.last_name_kana ?? undefined,
+        first_name_kana: p.first_name_kana ?? undefined,
+        status: p.status || 'active',
+        facility_id: p.facility_id,
+        docs_submitted: Number(p.docs_submitted) || 0,
+        compliance_done: Number(p.compliance_done) || 0,
+        trainings_passed: Number(p.trainings_passed) || 0,
+        announcements_read: Number(p.announcements_read) || 0,
+        manuals_read: Number(p.manuals_read) || 0,
+      }));
 
       setRows(pRows);
       setTotals({
@@ -155,22 +192,22 @@ export default function ManagerDashboardPage() {
         manuals: manualsRes.data?.length || 0,
       });
 
-      function buildLastMap(records: any[] | null | undefined, dateCol: string): Record<string, string> {
+      // 各カテゴリの最終完了日時マップ（リマインドモーダルの「完了」表示用）。
+      // RPC が部下ごとに max() 済みの値を返すのでそのまま employee_id でマップ化する。
+      function buildLastMap(col: TimestampKey): Record<string, string> {
         const map: Record<string, string> = {};
-        for (const r of records || []) {
-          const ts = r[dateCol];
-          if (!ts) continue;
-          const cur = map[r.employee_id];
-          if (!cur || ts > cur) map[r.employee_id] = ts;
+        for (const r of rpcRows) {
+          const ts = r[col];
+          if (ts) map[r.employee_id] = ts;
         }
         return map;
       }
       setLastCompletedAt({
-        docs_submitted: buildLastMap(docSubsRes.data, 'submitted_at'),
-        compliance_done: buildLastMap(compAcksRes.data, 'acknowledged_at'),
-        trainings_passed: buildLastMap(trainSubsRes.data, 'submitted_at'),
-        announcements_read: buildLastMap(annReadsRes.data, 'read_at'),
-        manuals_read: buildLastMap(manualReadsRes.data, 'read_at'),
+        docs_submitted: buildLastMap('last_doc_submitted_at'),
+        compliance_done: buildLastMap('last_compliance_at'),
+        trainings_passed: buildLastMap('last_training_at'),
+        announcements_read: buildLastMap('last_announcement_at'),
+        manuals_read: buildLastMap('last_manual_at'),
       });
       setLoading(false);
     }

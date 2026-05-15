@@ -688,6 +688,26 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- /mgr/dashboard 部下進捗 + プロフィール表示ラベル -->
+<div class="phase">
+  <h2>/mgr/dashboard 部下進捗ゼロ修正 + プロフィール表示ラベル統一 <span class="phase-pct">実装完了（migration 156 未適用 / 動作確認待ち）</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">背景: ④ /mgr/dashboard の達成率が全件 0%（部下の進捗が出ない）⑤ /mgr/subordinates/[id] の働き方・コミュ傾向が英語の生値表示</td></tr>
+      <tr><td>④ 原因特定: employee_progress は security_invoker ビュー。内部 count(*) が manager の RLS で実行され、manager は subordinate の submission 系テーブル / employees 行を読めない（migration 145 で employees の manager SELECT をロールバック済、以降 146〜149 は SECURITY DEFINER RPC 方式）</td><td class="files">調査</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>admin ダッシュボードが正常なのは admin RLS がテナント全体可のため</td></tr>
+      <tr><td>④ migration 156: get_my_subordinate_progress RPC 新設</td><td class="files">supabase/migrations/156_get_my_subordinate_progress_rpc.sql</td><td><span class="status prog">未適用</span></td><td class="pct">80%</td><td>SECURITY DEFINER。部下ごとの完了件数 + 各カテゴリ最終完了日時を返す。migration 148/153 の ambiguous 対策（alias + AS fid）を踏襲。<b>deaf-ic Supabase に未適用 — 適用が必要</b></td></tr>
+      <tr><td>④ mgr/dashboard を RPC 方式に書き換え</td><td class="files">app/(manager)/mgr/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>employee_progress 直読み + 12 直クエリ → RPC 1 本 + コンテンツ件数クエリ 5 本に整理。/mgr/subordinates と同じ設計に統一</td></tr>
+      <tr><td>⑤ プロフィール選択肢の単一真実源を新設</td><td class="files">lib/profile-options.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>働き方 6 項目 + コミュ 5 項目の value→日本語ラベル。入力フォームと表示側がここを共有して drift を防ぐ。profileOptionLabel() ヘルパ提供</td></tr>
+      <tr><td>⑤ 入力フォームを共有定義に移行</td><td class="files">components/employee/ProfileSection3WorkStyle.tsx, ProfileSection4Comm.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ローカル selectFields を削除し lib/profile-options から import</td></tr>
+      <tr><td>⑤ SubordinateDetail の生値表示を修正</td><td class="files">components/manager/SubordinateDetail.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>働き方 6 + コミュ 5 の InfoRow を profileOptionLabel() 経由に。comm_channel_preference（text/verbal）も正しく日本語化</td></tr>
+      <tr><td>型チェック / lint / dev 起動確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0 エラー / 変更ファイル eslint 0 エラー / dev で /mgr/dashboard・/mgr/subordinates/[id]・/my/about コンパイル成功</td></tr>
+      <tr><td>migration 156 の適用 + 動作確認</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>当環境の Supabase MCP は別プロジェクト接続のため適用不可。deaf-ic プロジェクトへの MCP 再接続 or ダッシュボード SQL 実行が必要。適用後に manager ログインで達成率が実数表示されるか確認</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① migration 156 適用後、manager で達成率が 0% でなく実数になるか ② リマインドモーダルの「完了」タブで最終完了日が出るか ③ admin ダッシュボード（ProgressDashboard）に影響が無いか ④ p_facility_id=null 全件取得 + クライアント側 facility フィルタの挙動が従来通りか ⑤ /mgr/subordinates/[id] で英語値が消え日本語表記になるか ⑥ 入力フォーム（/my/about）の選択肢が従来通り保存できるか ⑦ comm_consult_timing と comm_feedback_preference が同 value でも別ラベルで出るか</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>

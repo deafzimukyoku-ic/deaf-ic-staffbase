@@ -33,6 +33,37 @@
 | 116 | 116_facility_core_time_and_meta.sql | (A) facility_shift_settings.core_start_time / core_end_time（コアタイム事業所別設定） / (B) facilities に display_order / shift_enabled / transport_enabled 追加（並び順 + シフト/送迎 ON/OFF） | 🆕 未適用 |
 | 130 | 130_employee_facilities.sql | **複数事業所所属（兼任）対応**。employee_facilities テーブル（兼任先のみ）+ ヘルパー関数 `get_my_facility_ids()` / `get_my_managed_facility_ids()` / `employee_belongs_to_facility(emp,fac)` + 主所属＝兼任の重複防止トリガ × 2 | 🆕 未適用 |
 | 131 | 131_multi_facility_rls.sql | RLS 大改修：facility-only テーブル (children/schedule_entries/events/billing/facility_shift_settings/transport_assignments) + employee-level cross-facility テーブル (shift_requests/shift_assignments/shift_change_requests) で兼任を考慮。manager の管轄施設は `get_my_managed_facility_ids()` ベース。`employee_in_my_managed_facilities()` 追加 + `get_manager_subordinate_ids()` 兼任対応に拡張 | 🆕 未適用 |
+| 156 | 156_get_my_subordinate_progress_rpc.sql | **`get_my_subordinate_progress(p_facility_id uuid)` RPC 新設**（SECURITY DEFINER）。/mgr/dashboard の部下達成率が全件 0% になる問題の修正。employee_progress（security_invoker ビュー）+ submission 系テーブル直読みは manager の RLS で 0 件になるため、RPC で部下ごとの完了件数 + 各カテゴリ最終完了日時を返す。migration 148/153 の ambiguous 対策（alias + `AS fid`）踏襲 | 🆕 未適用 |
+
+---
+
+## 0.12 /mgr/dashboard 部下進捗修正 + プロフィール選択肢の真実源化（2026-05-15）
+
+### ④ /mgr/dashboard 達成率が全件 0%
+- **原因**: `employee_progress` は `security_invoker=true` ビュー（migration 013/046/110）。内部 `count(*)` サブクエリが呼び出し元（manager）の RLS で実行されるが、manager は subordinate の `document_submissions` / `compliance_acknowledgments` / `announcement_reads` / `manual_reads` / `employees` 行を読む RLS を持たない（migration 144 で employees の manager SELECT を追加 → 145 で「全員ログアウト」発生のためロールバック。以降 146〜149 は SECURITY DEFINER RPC 方式）。
+- **修正**: migration 156 で `get_my_subordinate_progress` RPC を新設し、`app/(manager)/mgr/dashboard/page.tsx` を `employee_progress` 直読み + 12 直クエリ → RPC 1 本 + コンテンツ件数クエリ 5 本に書き換え。/mgr/subordinates と同じ設計に統一。RLS は一切変更しない。
+- コンテンツ件数（`document_templates` / `compliance_documents` / `trainings` / `announcements` / `manuals` の count）は「tenant members can read」ポリシーで manager も読めるため直クエリのまま。
+
+### ⑤ /mgr/subordinates/[id] の働き方・コミュ傾向が英語生値表示
+- **原因**: 表示側 `components/manager/SubordinateDetail.tsx` が `work_style_*` / `comm_*` / `multitask_ability` / `detail_orientation` / `meeting_behavior` の DB 値（solo / proactive 等）をそのまま表示。日本語ラベルは入力フォーム（`ProfileSection3WorkStyle` / `ProfileSection4Comm`）にローカル定義されていたが共有されていなかった（admin 側 `WORK_STYLE_LABELS` / `COMM_LABELS` も別コピーで一部 stale）。
+- **修正**: `lib/profile-options.ts` を単一の真実源として新設。入力フォーム 2 つを共有定義（`WORK_STYLE_FIELDS` / `COMM_SELECT_FIELDS`）import に移行。`SubordinateDetail` は `profileOptionLabel(fieldKey, value)` 経由で日本語化。
+
+### 新規ファイル
+| ファイル | 内容 |
+|---|---|
+| `supabase/migrations/156_get_my_subordinate_progress_rpc.sql` | `get_my_subordinate_progress` RPC |
+| `lib/profile-options.ts` | 働き方 6 + コミュ 5 項目の選択肢定義（単一真実源）+ `profileOptionLabel()` ヘルパ |
+
+### 編集ファイル
+| ファイル | 変更 |
+|---|---|
+| `app/(manager)/mgr/dashboard/page.tsx` | 部下進捗取得を `get_my_subordinate_progress` RPC 経由に。`SubordinateProgressRow` 型追加 |
+| `components/employee/ProfileSection3WorkStyle.tsx` | ローカル `selectFields` 削除 → `lib/profile-options` の `WORK_STYLE_FIELDS` import |
+| `components/employee/ProfileSection4Comm.tsx` | ローカル `selectFields` 削除 → `COMM_SELECT_FIELDS` import |
+| `components/manager/SubordinateDetail.tsx` | 働き方 6 + コミュ 5 の InfoRow を `profileOptionLabel()` 経由に |
+
+### 参照テーブル・RPC
+- RPC: `get_my_subordinate_progress(p_facility_id uuid)` — 参照テーブル `employees` / `employee_facilities` / `manager_facilities` / `document_submissions` / `compliance_acknowledgments` / `training_submissions` / `announcement_reads` / `manual_reads`
 
 ---
 
