@@ -324,9 +324,9 @@ export default function ManagerManualsPage() {
                 </Button>
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="text-xl shrink-0">{selectedCategory.icon}</span>
-                    <h1 className="text-lg sm:text-2xl font-bold break-words">{selectedCategory.name}</h1>
+                    <h1 className="text-lg sm:text-2xl font-bold truncate">{selectedCategory.name}</h1>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap ml-auto">
+                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto sm:ml-auto">
                     <BulkPublishButtons
                         table="manuals"
                         items={visible.map((m) => ({ id: m.id, is_published: m.is_published ?? true }))}

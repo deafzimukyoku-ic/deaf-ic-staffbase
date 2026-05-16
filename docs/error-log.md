@@ -23,6 +23,58 @@
 
 ---
 
+## 業務日報 ChildrenTable 左右振り分けが設計時点でルール違反
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `components/shift/DailyReportFull.tsx:425-436`（旧コード）
+- **フェーズ**: バグ修正セッション
+- **エラー内容**: 「左 = 児童発達支援、右 = 放課後等デイサービス」というルールにもかかわらず、放デイ児童のみ利用がある日に放デイが左列に表示される。
+- **原因**: 旧実装は `preschool.length > 0` でその日の児発児童数を判定していた。preschool 0 件の日は else 分岐で「放デイを左右に流し込み」(`left = all.slice(0, ROWS); right = all.slice(ROWS, ROWS*2)`)。12 名以下の日は全員左に入って右列が空になる。日単位の判定なので、放デイのみの日があると毎回ルール違反になっていた。コード内コメント（旧 L416-421）も「preschool が居ない施設は放課後を左から流し込み」と意図的にこの設計で書かれていた = 設計判断ミス。
+- **解決方法**: 事業所単位（`children` テーブル全件）で「児発児童が 1 人でも登録されているか」を `useMemo` で計算 (`facilityHasPreschool`)。
+  ```ts
+  const facilityHasPreschool = useMemo(
+    () => children.some((c) => classifyService(c.grade_type) === '児童発達'),
+    [children],
+  );
+  ```
+  ChildrenTable に prop で渡し、`facilityHasPreschool === true` なら左右固定（preschool 0 名の日は左列が空でも右列に放デイ表示）、`false` なら放デイ専門事業所として左から流し込み（現状維持）。
+- **再発防止**: 「その日のデータ」と「事業所として持つ属性」は別の概念。表示ルールを「日単位の有無」で分岐すると、設計意図とズレた瞬間に視覚的にバレる。事業所属性で分岐する判定は `children`/`facilities` 等のマスタテーブルを根拠にする。
+
+---
+
+## 4 カテゴリ管理画面のカテゴリ詳細ヘッダーがモバイルで縦書き化
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `app/(admin)/admin/{announcements,compliance,trainings,manuals}/page.tsx` + `app/(manager)/mgr/同` 計 8 ファイル のカテゴリ詳細ビュー（`selectedCategory` がセットされた後の return）
+- **フェーズ**: バグ修正セッション
+- **エラー内容**: モバイル幅 (≤640px) でカテゴリに入った後のヘッダー（`← 戻る` + アイコン + カテゴリ名 + 一括公開 + 投稿ボタン）でカテゴリ名が 1 文字ずつ縦に並ぶ。
+- **原因**: 外側 `flex flex-wrap` の中で右側の操作ボタン群 (`<div className="flex items-center gap-2 flex-wrap ml-auto">`) が `ml-auto` で右端固定。中央の `flex-1` （アイコン + h1）が右ブロックに space を奪われて squeeze され、h1 の `break-words` が日本語を 1 文字ずつ折り返した（CJK は default で word boundary 扱いされるため）。
+- **解決方法**:
+  - h1: `break-words` → `truncate`（1 行強制）
+  - 右ブロック: `ml-auto` → `w-full sm:w-auto sm:ml-auto`（モバイルで w-full にすると flex-wrap で次行に強制 wrap される）
+  8 ファイル同パターンを一斉 replace_all。
+- **再発防止**: `flex-wrap` 内の `ml-auto` は「space があれば右、なければ次行に wrap」とは限らない。隣の `flex-1` が先に squeeze される。モバイルで意図的に次行送りしたい場合は `w-full sm:w-auto` で明示する。日本語タイトルに `break-words` を使うと CJK が 1 文字ずつ縦に並ぶので、`truncate` か固定 width + `whitespace-nowrap` を推奨。
+
+---
+
+## Turbopack が worktree 配下で next package を解決できず dev server 起動失敗
+
+- **発生日**: 2026-05-16
+- **発生箇所**: `.claude/worktrees/clever-wiles-003af3/` 配下で `npm run dev` 実行時
+- **フェーズ**: 動作確認のための dev server 起動
+- **エラー内容**:
+  ```
+  Error: Turbopack build failed with 1 errors:
+  Error: Next.js inferred your workspace root, but it may not be correct.
+  We couldn't find the Next.js package (next/package.json) from the project directory:
+  C:\Users\2han2\Projects\deaf-ic\.claude\worktrees\clever-wiles-003af3\app
+  ```
+- **原因**: git worktree は `.claude/worktrees/<name>/` に作られるが node_modules を持たず、親リポジトリ (`deaf-ic/node_modules/`) を参照する想定。`next.config.ts` の `turbopack.root: '..'` は worktree から見て `.claude/worktrees/` 止まりで親プロジェクトに届かない。Turbopack の filesystem root がそこで切れて next package が見つからない。
+- **解決方法**: junction を作って親の node_modules を参照させようとしたら Turbopack が "Symlink ... is invalid, it points out of the filesystem root" で拒否。最終的に worktree 内で `npm install --prefer-offline --no-audit --no-fund` (762 packages, 36 秒) して self-contained に。`.env.local` も親から `Copy-Item` で複製。
+- **再発防止**: worktree で初めて dev server を起動する時は (a) `npm install` を worktree 内で実行 (b) 親の `.env.local` を Copy-Item でコピー (PowerShell) — の 2 ステップを最初にやる。これで以降は普通に `npm run dev` で動く。junction / symlink は Turbopack が拒否するので避ける。
+
+---
+
 ## 運用ルール
 
 1. エラーが発生して解決したら、作業完了前に必ず記録
