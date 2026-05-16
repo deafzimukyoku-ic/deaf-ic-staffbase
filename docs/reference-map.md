@@ -38,6 +38,8 @@
 | 158 | 158_notifications_insert_policy.sql | notifications テーブルに INSERT ポリシー (`notif_actor_insert`) 追加。139 で RLS 有効化したが INSERT ポリシー欠落 → 個別メッセージ送信が本番 403。actor_employee_id 自分 + tenant_id 自分の WITH CHECK で許可 | ✅ 適用済 |
 | 159 | 159_fix_can_admin_view_thread_ambiguous.sql | 142 の `can_admin_view_thread()` 関数 138 行目の `facility_id` 無修飾 (manager_facilities ⋈ employees JOIN で ambiguous 42702) を `mf.facility_id` に修飾。CREATE OR REPLACE で関数置換 + NOTIFY pgrst | ✅ 適用済 |
 | 160 | 160_employee_facility_shift_select.sql | **employee が同 facility (主+兼任先) の published シフトを他人分も SELECT 可能に**。新規 policy `sa_employee_facility_shifts`: `get_my_facility_ids()` (130 で定義済) と一致する facility の publish_status='published' shift_assignments を全社員分閲覧可。/my/requests ページの「施設のシフト」タブ用 | ✅ 適用済 |
+| 169 | 169_backfill_announcement_reads_for_new_employees.sql | **新人入社時の未読バッジ大量発生問題の解消**。employees INSERT で `is_published=true` の announcements を `announcement_reads` に一括 INSERT（既読扱い）。バックフィル中の通知爆発を抑止するため、139 の `trg_notify_announcement_read` を `app.suppress_announcement_read_notify` GUC で skip 可能な版に差し替え。新人 1 名作成で admin 通知欄が 100+ 件爆発する副作用を回避。compliance / training / manual は新人も読まされる必要があるため意図的に対象外 | ✅ 適用済 |
+| 170 | 170_documents_bucket_allow_heic.sql | **`documents` バケット allowed_mime_types 拡張**。iPhone (iOS 11+) の HEIC が拒否されてお知らせ / 遵守事項 / 研修 / 業務マニュアルの画像アップロードが BlockEditor 経由で全て失敗していた問題の修正。`image/heic` / `image/heif` / `image/gif` を追加し employee-images / message-attachments バケットと足並み統一。20MB 上限は据え置き | ✅ 適用済 |
 
 ---
 
@@ -424,8 +426,8 @@ A 施設で勤務時間を登録 → B 施設のシフト表に「A 勤務」と
 ### 編集したファイル
 | ファイル | 変更内容 |
 |---|---|
-| `lib/email/notification-email.ts` | 引数型を `LegacyNotificationContentType` に絞る（5タイプ展開対応） |
-| `app/api/cron/send-notifications/route.ts` | `processShiftRow` 追加で shift_ready/shift_publish ディスパッチ |
+| `lib/email/notification-email.ts` | 引数型を `LegacyNotificationContentType` に絞る（5タイプ展開対応）。**2026-05-16: `bodySnippet` 撤廃**（メールは件名 + CTA のみ。本文はアプリ内で確認させて `announcement_reads` を蓄積させる狙い） |
+| `app/api/cron/send-notifications/route.ts` | `processShiftRow` 追加で shift_ready/shift_publish ディスパッチ。**2026-05-16: `rawBody` / `snippet` 生成と `bodySnippet` 引数渡しを削除** |
 
 ---
 
