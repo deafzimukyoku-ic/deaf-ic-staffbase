@@ -17,12 +17,15 @@ const TYPE_PATH: Record<LegacyNotificationContentType, string> = {
 interface BuildArgs {
   contentType: LegacyNotificationContentType;
   title: string;
-  bodySnippet?: string; // 200文字程度の抜粋（任意）
   companyName: string;
   appUrl: string; // https://…
 }
 
-export function buildNotificationEmail({ contentType, title, bodySnippet, companyName, appUrl }: BuildArgs) {
+// 本文スニペットは意図的に同梱しない。
+// メールで先食いされるとアプリ内で「✓ 確認しました」が押されず
+// announcement_reads が蓄積しないため、管理側の唯一の指標である未読バッジが
+// 機能不全になる。ろう者向け納品で視覚通知が頼りなので、件名 + CTA のみで運用する。
+export function buildNotificationEmail({ contentType, title, companyName, appUrl }: BuildArgs) {
   const label = TYPE_LABEL[contentType];
   const link = `${appUrl.replace(/\/$/, '')}${TYPE_PATH[contentType]}`;
   const subject = `[${label}] ${title}`;
@@ -40,12 +43,11 @@ export function buildNotificationEmail({ contentType, title, bodySnippet, compan
         </td></tr>
         <tr><td style="padding:24px 28px;">
           <p style="margin:0 0 8px;font-size:11px;color:#1a3eb8;font-weight:600;letter-spacing:0.05em;">${label.toUpperCase()}</p>
-          <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;line-height:1.5;">${escapeHtml(title)}</h1>
-          ${bodySnippet ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#5a5a55;white-space:pre-wrap;">${escapeHtml(bodySnippet)}</p>` : ''}
-          <a href="${link}" style="display:inline-block;background:#1a3eb8;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:600;">内容を確認する →</a>
+          <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;line-height:1.5;">${escapeHtml(title)}</h1>
+          <a href="${link}" style="display:inline-block;background:#1a3eb8;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:600;">アプリで内容を確認する →</a>
         </td></tr>
         <tr><td style="padding:16px 28px 24px;border-top:1px solid rgba(0,0,0,0.08);">
-          <p style="margin:0;font-size:11px;color:#a8a8a0;">このメールは 名古屋ろう国際センター 職員ステーション から自動送信されています。</p>
+          <p style="margin:0;font-size:11px;color:#a8a8a0;">本文はアプリ内のみ表示されます。このメールは 名古屋ろう国際センター 職員ステーション から自動送信されています。</p>
         </td></tr>
       </table>
     </td></tr>
@@ -55,9 +57,9 @@ export function buildNotificationEmail({ contentType, title, bodySnippet, compan
 
   const text = `【${label}】${title}
 
-${bodySnippet || ''}
+新しい${label}が投稿されました。本文はアプリで確認してください。
 
-内容を確認する: ${link}
+アプリで内容を確認する: ${link}
 
 ---
 ${companyName}

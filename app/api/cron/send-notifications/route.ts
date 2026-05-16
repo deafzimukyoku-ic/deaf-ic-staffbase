@@ -190,17 +190,11 @@ async function processRow(supabase: any, row: QueueRow, appUrl: string): Promise
     .single();
 
   const title = content.title || (row.content_type === 'announcement' ? '（無題のお知らせ）' : '（無題）');
-  const rawBody =
-    row.content_type === 'announcement' ? content.body :
-    row.content_type === 'compliance' ? content.content :
-    row.content_type === 'manual' ? content.body :
-    '';
-  const snippet = rawBody ? String(rawBody).slice(0, 200) + (rawBody.length > 200 ? '…' : '') : undefined;
 
+  // 本文はメールに同梱しない（buildNotificationEmail 側コメント参照）。
   const { subject, html, text } = buildNotificationEmail({
     contentType: row.content_type,
     title,
-    bodySnippet: snippet,
     companyName: tenant?.company_name || 'staffbase',
     appUrl,
   });
