@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { InviteUrlDialog } from '@/components/admin/InviteUrlDialog';
 import { toast } from 'sonner';
 
 interface Facility {
@@ -26,6 +27,9 @@ export default function NewEmployeePage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
+  /* Resend 送信失敗時に API が返してくる招待 URL を保持して
+     InviteUrlDialog で表示する。閉じたら一覧へ遷移。 */
+  const [pendingInviteLink, setPendingInviteLink] = useState<{ url: string; name: string } | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -148,6 +152,15 @@ export default function NewEmployeePage() {
     } else {
       toast.success(`${form.last_name} ${form.first_name} さんを招待しました`);
     }
+
+    /* Resend 失敗で inviteLink が返ってきたらダイアログ表示。
+       閉じたタイミングで一覧へ遷移するため、ここでは push しない。 */
+    if (result.inviteLink) {
+      setPendingInviteLink({ url: result.inviteLink, name: `${form.last_name} ${form.first_name}` });
+      setLoading(false);
+      return;
+    }
+
     router.push('/admin/employees');
     router.refresh();
   }
@@ -391,6 +404,17 @@ export default function NewEmployeePage() {
           </form>
         </CardContent>
       </Card>
+
+      <InviteUrlDialog
+        open={!!pendingInviteLink}
+        url={pendingInviteLink?.url ?? null}
+        employeeName={pendingInviteLink?.name}
+        onClose={() => {
+          setPendingInviteLink(null);
+          router.push('/admin/employees');
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

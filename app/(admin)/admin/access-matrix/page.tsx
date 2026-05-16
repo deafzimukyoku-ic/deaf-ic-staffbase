@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { InviteUrlDialog } from '@/components/admin/InviteUrlDialog';
 import { toast } from 'sonner';
 
 /**
@@ -456,6 +457,8 @@ function AddManagerDialog({
   onAdded: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  /* Resend 失敗時の招待 URL を後段でモーダル表示するため。 */
+  const [pendingInviteLink, setPendingInviteLink] = useState<{ url: string; name: string } | null>(null);
   const [form, setForm] = useState({
     email: '',
     employee_number: '',
@@ -519,7 +522,21 @@ function AddManagerDialog({
         toast.error('追加に失敗しました', { description: result.detail || result.error });
         return;
       }
-      toast.success(`${form.last_name} ${form.first_name} さんを招待しました`);
+
+      if (result.warning) {
+        toast.warning(result.warning);
+      } else {
+        toast.success(`${form.last_name} ${form.first_name} さんを招待しました`);
+      }
+
+      /* Resend 失敗で inviteLink が返ってきた場合は、追加ダイアログを閉じて
+         URL モーダルを開く。employees は作成済なので onAdded() で一覧 refresh。 */
+      if (result.inviteLink) {
+        setPendingInviteLink({ url: result.inviteLink, name: `${form.last_name} ${form.first_name}` });
+        onAdded();
+        return;
+      }
+
       onAdded();
     } finally {
       setSubmitting(false);
@@ -650,6 +667,15 @@ function AddManagerDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Resend 送信失敗時の URL 表示用。AddManagerDialog の中に同居させると
+          AddManagerDialog 自体は閉じてから URL モーダルが上に乗る形になる。 */}
+      <InviteUrlDialog
+        open={!!pendingInviteLink}
+        url={pendingInviteLink?.url ?? null}
+        employeeName={pendingInviteLink?.name}
+        onClose={() => setPendingInviteLink(null)}
+      />
     </Dialog>
   );
 }

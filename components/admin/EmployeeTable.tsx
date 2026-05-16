@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { InviteUrlDialog } from '@/components/admin/InviteUrlDialog';
 import type { Employee } from '@/lib/types';
 
 interface Props {
@@ -21,6 +22,9 @@ interface Props {
 
 export function EmployeeTable({ employees, facilityMap }: Props) {
   const [resending, setResending] = useState<string | null>(null);
+  /* Resend daily limit 等で送信失敗した場合、API が返してくる inviteLink を
+     ダイアログで表示して手動配布できるようにする。 */
+  const [pendingInviteLink, setPendingInviteLink] = useState<{ url: string; name: string } | null>(null);
 
   async function handleResendInvite(emp: Employee) {
     setResending(emp.id);
@@ -36,7 +40,16 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
       toast.error('再送信に失敗しました', { description: json.error });
       return;
     }
-    toast.success(`${emp.last_name} ${emp.first_name}さんに招待メールを再送信しました`);
+
+    if (json.warning) {
+      toast.warning(json.warning);
+    } else {
+      toast.success(`${emp.last_name} ${emp.first_name}さんに招待メールを再送信しました`);
+    }
+
+    if (json.inviteLink) {
+      setPendingInviteLink({ url: json.inviteLink, name: `${emp.last_name} ${emp.first_name}` });
+    }
   }
 
   /** 初回ログイン未完了の判定: 招待済み かつ まだ誓約未確認 かつ admin以外 */
@@ -138,6 +151,13 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
         </TableBody>
       </Table>
       </div>
+
+      <InviteUrlDialog
+        open={!!pendingInviteLink}
+        url={pendingInviteLink?.url ?? null}
+        employeeName={pendingInviteLink?.name}
+        onClose={() => setPendingInviteLink(null)}
+      />
     </div>
   );
 }

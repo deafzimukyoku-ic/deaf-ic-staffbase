@@ -47,7 +47,26 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-16（業務日報/日次出力 モバイル対応 + 4 カテゴリ画面 + dev-mask escape hatch 完了） / 全体完了率: 約 97%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-16（招待 URL 手動配布 fallback + 業務日報/日次出力 モバイル対応 完了） / 全体完了率: 約 97%</p>
+
+<!-- 招待 URL 手動配布 fallback (2026-05-16) -->
+<div class="phase">
+  <h2>招待 URL 手動配布 fallback (2026-05-16) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景・要件</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>Resend の Daily Limit に到達した時、招待メールが送れないと employee 行と auth.user は作られるのに URL が UI に出ず admin がアクセス手段を失う。「URL だけもらえる？」という運用要望から、Resend 失敗時に generateLink で取得済の招待 URL を UI モーダルで返して手動配布できるようにする</td></tr>
+      <tr><td>API: <code>/api/employees/invite</code> Resend 失敗時に <code>inviteLink</code> をレスポンスに含める</td><td class="files">app/api/employees/invite/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>resendInviteOnly</code> (既存社員の再送信) + <code>createEmployeeAndSendInvite</code> (新規作成) 両方の <code>mailErr</code> 分岐で <code>inviteLink</code> を含めて 200 を返す。レスポンス shape: <code>{ success: true, warning: '...1 時間以内に共有...', inviteLink }</code></td></tr>
+      <tr><td>API: <code>/api/employees/resend-invite</code> Resend 失敗時を 500 → 200 + <code>inviteLink</code></td><td class="files">app/api/employees/resend-invite/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>従来は <code>{ status: 500 }</code> で UI に何も渡せていなかった。今回 <code>invited_at</code> を mailErr ブランチでも更新（手動配布フローでは「送信失敗」ではなく「リンク発行済み」として扱うため）</td></tr>
+      <tr><td>UI: 共通 <code>InviteUrlDialog</code> モーダル新設</td><td class="files">components/admin/InviteUrlDialog.tsx (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>readOnly textarea + 「URL をコピー」ボタン。クリックで <code>navigator.clipboard.writeText</code>。1 時間で失効する旨を明示。社員名を渡すと「●● さん 向けの招待メール...」とパーソナライズ</td></tr>
+      <tr><td>UI: <code>/admin/employees/new</code> でモーダル表示</td><td class="files">app/(admin)/admin/employees/new/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>result.inviteLink</code> あればモーダル開いて <strong>リダイレクトを保留</strong>。閉じたタイミングで <code>/admin/employees</code> へ遷移</td></tr>
+      <tr><td>UI: <code>EmployeeTable</code> 再送信ボタンでモーダル表示</td><td class="files">components/admin/EmployeeTable.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>従来は 500 を toast.error で消化していたが、API 改造で 200 + <code>inviteLink</code> が来るのでモーダル表示</td></tr>
+      <tr><td>UI: <code>/admin/access-matrix</code> <code>AddManagerDialog</code> でモーダル表示</td><td class="files">app/(admin)/admin/access-matrix/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>追加ダイアログ自体は閉じて URL モーダルを上に重ねる。社員行は <code>onAdded()</code> で一覧 refresh</td></tr>
+      <tr><td>型チェック</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0 エラー</td></tr>
+      <tr class="check"><td colspan="5">別視点確認: ① Resend daily limit 状態で /admin/employees/new から招待 → URL モーダルが出てコピー可能か / 1 時間以内に開くと初回ログイン完了するか ② 既存社員に対して EmployeeTable の「招待再送信」を叩いた時、Resend 失敗で URL モーダルが出るか ③ /admin/access-matrix から admin/manager 追加で同じく URL モーダルが出るか ④ Resend 成功時は従来通り URL モーダル出さない（success toast のみ）か ⑤ <code>invited_at</code> が resend-invite の Resend 失敗時にも更新されているか（手動配布で完結したので「リンク発行済」扱い）</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 業務日報 / 4 カテゴリ画面 / モバイル対応 修正 (2026-05-16 後) -->
 <div class="phase">
