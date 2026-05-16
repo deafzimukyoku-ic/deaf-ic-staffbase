@@ -432,6 +432,12 @@ A 施設で勤務時間を登録 → B 施設のシフト表に「A 勤務」と
 | `components/shift/DailyOutputFull.tsx` | **2026-05-16**: 既存 `@media (max-width: 1023px)` に `.transport-three-col` 1 列化 + `.transport-block` `max-width: 100%` を追加。`@media (max-width: 639px)` で `.daily-output-controls`/`.daily-output-body` の `px-6 → px-2` 上書き。ThreeColGrid に `transport-three-col` クラス、外枠 div に `daily-output-controls`/`daily-output-body` クラスを付与 |
 | `app/(admin)/admin/{announcements,compliance,trainings,manuals}/page.tsx`, `app/(manager)/mgr/同 4 つ` | **2026-05-16**: カテゴリ詳細ヘッダーで h1 を `break-words → truncate`、右ブロックを `ml-auto → w-full sm:w-auto sm:ml-auto` に変更。モバイル幅でカテゴリ名が縦書き化する問題の修正。計 8 ファイル同パターン |
 | `lib/supabase/dev-name-mask.ts` | **2026-05-16**: `NEXT_PUBLIC_DEV_NAME_MASK_OFF=1` でマスクを bypass できる escape hatch を追加。本番では NODE_ENV='production' で先に弾かれるため安全 |
+| `app/api/employees/invite/route.ts` | **2026-05-16**: Resend 失敗時 (`resendInviteOnly` + `createEmployeeAndSendInvite` 両方) にレスポンス `{ success: true, warning, inviteLink }` を返すよう変更。Resend daily limit 等で employees / auth.user は作成済みなのに URL を渡せず admin が詰む問題への対応 |
+| `app/api/employees/resend-invite/route.ts` | **2026-05-16**: mailErr 時を 500 → 200 + `{ success: true, warning, inviteLink }` に変更。手動配布で完結する前提で `invited_at` も同時更新 |
+| `components/admin/InviteUrlDialog.tsx` (新規) | **2026-05-16**: Resend 失敗時に API が返す `inviteLink` を表示してコピーできる共通モーダル。3 つのエントリーポイント (`/admin/employees/new` / `EmployeeTable` 再送信 / `/admin/access-matrix` 追加) で共有 |
+| `app/(admin)/admin/employees/new/page.tsx` | **2026-05-16**: `result.inviteLink` あれば `InviteUrlDialog` 表示。リダイレクトはダイアログを閉じたタイミングに遅延 |
+| `components/admin/EmployeeTable.tsx` | **2026-05-16**: `handleResendInvite` で `json.inviteLink` / `json.warning` をハンドル。500 一律エラー処理だったが Resend 失敗時は URL モーダル表示に切替 |
+| `app/(admin)/admin/access-matrix/page.tsx` | **2026-05-16**: `AddManagerDialog` の handleSubmit で `result.inviteLink` ハンドリング + `InviteUrlDialog` を埋め込み |
 
 ---
 

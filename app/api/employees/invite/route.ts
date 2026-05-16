@@ -223,9 +223,12 @@ async function resendInviteOnly({
   });
 
   if (mailErr) {
+    /* Resend daily limit 等で送信失敗した場合、URL を UI に返して手動配布に切替えてもらう。
+       generateLink で生成した recovery link は 1 時間有効（Supabase default）。 */
     return NextResponse.json({
       success: true,
-      warning: 'この社員は既に登録済みですが、招待メールの再送信に失敗しました',
+      warning: 'この社員は既に登録済みですが、招待メールの再送信に失敗しました。下記 URL を別チャネルでご共有ください（1 時間有効）。',
+      inviteLink,
     });
   }
 
@@ -374,12 +377,13 @@ async function createEmployeeAndSendInvite({
   });
 
   if (mailErr) {
-    // メール送信失敗してもemployeeレコードは作成済み
+    // メール送信失敗してもemployeeレコードは作成済み。URL を返して手動配布に切替。
     return NextResponse.json({
       success: true,
       warning: managerFacilitiesWarning
-        ? `社員は作成されましたが、招待メールの送信に失敗しました。${managerFacilitiesWarning}`
-        : '社員は作成されましたが、招待メールの送信に失敗しました',
+        ? `社員は作成されましたが、招待メールの送信に失敗しました（下記 URL を 1 時間以内に共有してください）。${managerFacilitiesWarning}`
+        : '社員は作成されましたが、招待メールの送信に失敗しました。下記 URL を別チャネルで 1 時間以内に共有してください。',
+      inviteLink,
     });
   }
 

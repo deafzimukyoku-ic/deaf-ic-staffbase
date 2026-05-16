@@ -85,10 +85,20 @@ export async function POST(request: NextRequest) {
   });
 
   if (mailErr) {
-    return NextResponse.json(
-      { error: '招待メールの送信に失敗しました', detail: String(mailErr) },
-      { status: 500 },
-    );
+    /* Resend daily limit 等で送信失敗。URL は既に generateLink で取得済みなので
+       UI に返して手動配布に切替てもらう。invited_at は「メール送れた時だけ更新」だと
+       手動配布フローで永久に未送信扱いになるので、リンク発行をもって更新する。 */
+    await supabase
+      .from('employees')
+      .update({ invited_at: new Date().toISOString() })
+      .eq('id', employee_id);
+
+    return NextResponse.json({
+      success: true,
+      warning: '招待メールの送信に失敗しました。下記 URL を別チャネルで 1 時間以内に共有してください。',
+      inviteLink,
+      detail: String(mailErr),
+    });
   }
 
   // invited_at を更新
