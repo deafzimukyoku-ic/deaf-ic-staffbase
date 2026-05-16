@@ -47,7 +47,25 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-16（通知システム 3 件修正 + migrate 169/170 完了） / 全体完了率: 約 97%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-16（業務日報/日次出力 モバイル対応 + 4 カテゴリ画面 + dev-mask escape hatch 完了） / 全体完了率: 約 97%</p>
+
+<!-- 業務日報 / 4 カテゴリ画面 / モバイル対応 修正 (2026-05-16 後) -->
+<div class="phase">
+  <h2>業務日報 / 4 カテゴリ画面 / モバイル対応 修正 (2026-05-16) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>①</td><td>業務日報 出勤職員の時刻列が分割シフトで折り返す → 1 行表示に</td><td class="files">components/shift/DailyReportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>StaffTable の列幅を 氏名 40% / 出勤 10% → 氏名 34% / 出勤 16% に再配分し、時刻 td に <code>nowrap</code> クラス追加。<code>.report-table td.nowrap { white-space: nowrap; }</code> を CSS 側で定義。これで <code>08:30〜12:00 / 13:00〜17:30</code> の分割シフトも 1 行で収まる</td></tr>
+      <tr><td>②</td><td>4 カテゴリ管理画面（お知らせ/遵守事項/研修/業務マニュアル）の「カテゴリに入った後」のヘッダーで、モバイル幅でカテゴリ名が縦長（1 文字ずつ縦書き化）になる → 1 行表示</td><td class="files">admin/{announcements,compliance,trainings,manuals}/page.tsx + mgr/同 = 計 8 ファイル</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>原因: <code>flex flex-wrap</code> の中で右側に <code>ml-auto</code> が居て、中央 <code>flex-1</code> が squeeze され break-words で 1 文字単位に折り返していた。修正: h1 を <code>break-words → truncate</code>、右ブロックを <code>ml-auto → w-full sm:w-auto sm:ml-auto</code> でモバイル時のみ次行に強制 wrap。8 ファイル同パターンを一斉適用</td></tr>
+      <tr><td>③</td><td>業務日報 左右振り分けルール違反（左=児童発達支援・右=放課後等デイサービス の固定が、放デイのみの日に崩れて左に流入）</td><td class="files">components/shift/DailyReportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「事業所として児発児童が children テーブルに 1 人でも登録されているか」(<code>facilityHasPreschool</code> useMemo) で左右ルール切替に変更。登録あり = 左/右 固定（preschool 0 名の日は左列が全部空でも右列に放デイ）、登録なし（放デイ専門事業所）= 放デイを左から流し込み（現状維持）。migration / facility カラム追加 / UI トグル全て不要、ロジックだけで実現</td></tr>
+      <tr><td>④</td><td>業務日報のモバイル対応 (A4 印刷レイアウトを保持しつつ画面表示時のみ縮小)</td><td class="files">components/shift/DailyReportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>@media screen and (max-width: 800px)</code> 追加。<code>.report-page</code> の <code>width: 194mm → 100%</code>、<code>min-height</code> 解除、フォント 11px → 9px、行高・パディング詰め。出勤職員の <code>col-time</code> をモバイル時 16% → 22%、<code>col-name</code> を 34% → 28% に再調整。<code>@media print</code> は完全に独立で A4 印刷時の見た目は変わらない</td></tr>
+      <tr><td>⑤</td><td>日次出力のモバイル対応 (送迎タイムラインのブロック幅 + 外枠 padding)</td><td class="files">components/shift/DailyOutputFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>既存 <code>@media (max-width: 1023px)</code> ブロックに送迎 3 列 grid → 1 列 + <code>.transport-block</code> の <code>max-width: 420px → 100%</code> を追加 (<code>transport-three-col</code> クラス新設)。<code>@media (max-width: 639px)</code> で <code>daily-output-controls</code>/<code>daily-output-body</code> の <code>px-6 → px-2</code> を上書きしてモバイル幅で余白を詰める</td></tr>
+      <tr><td>追加</td><td>dev-name-mask の escape hatch 追加（実名表示で動作確認したい時用）</td><td class="files">lib/supabase/dev-name-mask.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>NEXT_PUBLIC_DEV_NAME_MASK_OFF=1</code> を .env.local に置くと開発ビルドでもマスクを完全 bypass できるよう <code>IS_DEV_BUILD</code> の判定を拡張。本番では NODE_ENV='production' で先に弾かれるため安全 (二重ガード温存)</td></tr>
+      <tr><td>型チェック</td><td>tsc 0 エラー確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>dev server (port 6002) で daily-report / daily-output / 4 カテゴリ画面 全て HTTP 200 確認、ユーザー検証 OK</td></tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① 業務日報の分割シフトある日を開き、時刻が 1 行で表示されること ② モバイル幅 (375px) で 4 カテゴリ 8 ページ全てでカテゴリ詳細ヘッダーが横 1 行に収まり、カテゴリ名が縦長にならないこと ③ 児発児童ゼロの事業所で従来通り放デイが左から流し込み、児発児童 1 名以上登録の事業所で放デイのみの日に左空白・右に放デイが表示されること ④ A4 印刷時 (Print Preview) に業務日報の表幅・フォントが元の 194mm レイアウトのままであること ⑤ 日次出力モバイル表示で送迎ブロックが 1 列縦並び・外枠 padding が viewport を圧迫しないこと ⑥ 本番では NEXT_PUBLIC_DEV_NAME_MASK_OFF の有無に関係なくマスクが OFF（NODE_ENV=production で gate）</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 通知システム & 画像アップロード 修正 (2026-05-16) -->
 <div class="phase">

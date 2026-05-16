@@ -626,20 +626,38 @@ export default function DailyOutputFull({ role: _role }: Props) {
               .whiteboard-frame {
                 padding: 1rem !important;
               }
+              /* 送迎ブロック (元: max-content 3 列 × maxWidth 420px = 1260px+) を
+                 モバイル時は 1 列 + ブロック幅も viewport に合わせる。
+                 「見えている限り対応」レベルなので各ブロックは縦積みで OK。 */
+              .transport-three-col {
+                grid-template-columns: 1fr !important;
+                gap: 0.75rem !important;
+              }
+              .transport-block {
+                max-width: 100% !important;
+              }
+            }
+            /* モバイル (<640px) は外枠 padding も詰める。Tailwind の px-6 (1.5rem) を上書き。 */
+            @media screen and (max-width: 639px) {
+              .daily-output-controls,
+              .daily-output-body {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+              }
             }
           `,
         }}
       />
 
       {/* 日付ステッパ + 印刷ボタンを 1 行で。利用表/シフト表/送迎表 と統一したスペーシング */}
-      <div className="px-6 pt-1 pb-1.5 print-hide flex items-center justify-between gap-3 flex-wrap">
+      <div className="daily-output-controls px-6 pt-1 pb-1.5 print-hide flex items-center justify-between gap-3 flex-wrap">
         <DateStepperFull value={date} onChange={setDate} />
         <Button variant="primary" onClick={handlePrint}>
           🖨 印刷 / PDF保存
         </Button>
       </div>
 
-      <div className="flex-1 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
+      <div className="daily-output-body flex-1 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
         {error && (
           <div
             className="mb-2 px-4 py-2 rounded"
@@ -937,7 +955,7 @@ function ThreeColGrid({
 }) {
   return (
     <div
-      className="grid gap-x-6 gap-y-5"
+      className="grid gap-x-6 gap-y-5 transport-three-col"
       style={{
         gridTemplateColumns: 'repeat(3, max-content)',
         gridAutoRows: 'min-content',

@@ -197,6 +197,15 @@ export default function DailyReportFull({ role: _role }: Props) {
   const childById = useMemo(() => new Map(children.map((c) => [c.id, c])), [children]);
   const staffById = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
+  /* 事業所として児発児童が「1 人でも登録されているか」で左右ルールを切替える。
+     - 登録あり: 左 = 児童発達支援 / 右 = 放課後等デイサービス（固定）
+     - 登録なし: 放デイ専門事業所なので 左から流し込み（左 12 名超なら右へ）
+     事業所単位の判定なので children 全体を見る（その日の出席状況は無関係）。 */
+  const facilityHasPreschool = useMemo(
+    () => children.some((c) => classifyService(c.grade_type) === '児童発達'),
+    [children],
+  );
+
   /* 施設名から絵文字 prefix を除去（業務日報には絵文字無しで印字） */
   const facilityDisplayName = useMemo(() => {
     if (!facility) return '';
@@ -291,7 +300,7 @@ export default function DailyReportFull({ role: _role }: Props) {
                 </div>
               </header>
 
-              <ChildrenTable preschool={preschool} afterSchool={afterSchool} />
+              <ChildrenTable preschool={preschool} afterSchool={afterSchool} facilityHasPreschool={facilityHasPreschool} />
 
               <StaffTable rows={staffRows} />
 
@@ -380,6 +389,9 @@ export default function DailyReportFull({ role: _role }: Props) {
         }
         .report-table td.center { text-align: center; }
         .report-table td.name { padding-left: 6px; }
+        /* 分割シフト "08:30〜12:00 / 13:00〜17:30" を 1 行で表示するため。
+           狭い列で折り返されると業務日報の見栄えが崩れるので強制 nowrap。 */
+        .report-table td.nowrap { white-space: nowrap; }
 
         .activity-box {
           margin-top: 4px;
@@ -400,6 +412,56 @@ export default function DailyReportFull({ role: _role }: Props) {
           padding-top: 4px;
           background: #f0f0f0;
         }
+
+        /* モバイル画面 (<800px) のみフォント・余白を縮小して 1 ページが viewport 幅に収まるようにする。
+           @media print には影響しないため A4 印刷レイアウトは完全に温存される。
+           「見えている限り対応されている」レベルの最低限の調整。 */
+        @media screen and (max-width: 800px) {
+          .report-root {
+            padding: 8px;
+          }
+          .report-page {
+            width: 100%;
+            min-height: auto;
+            padding: 2mm 1mm;
+            margin-bottom: 12px;
+          }
+          .report-title .title-text {
+            font-size: 16px;
+            letter-spacing: 1px;
+          }
+          .report-title .title-date {
+            font-size: 11px;
+          }
+          .report-table,
+          .report-table th {
+            font-size: 9px;
+          }
+          .report-table th,
+          .report-table td {
+            padding: 1px 2px;
+            height: 18px;
+            line-height: 1.3;
+          }
+          /* 出勤職員の時刻 "08:30〜12:00 / 13:00〜17:30" を 9px でも 1 行に収めるため
+             モバイルでは時刻列をやや広めに取り直す（PC 印刷時は元の 16% のまま）。 */
+          .report-table.staff-table th.col-time,
+          .report-table.staff-table td.col-time {
+            width: 22%;
+          }
+          .report-table.staff-table th.col-name,
+          .report-table.staff-table td.col-name {
+            width: 28%;
+          }
+          .activity-box {
+            font-size: 10px;
+            padding: 6px;
+            min-height: 30mm;
+          }
+          .activity-box-title {
+            font-size: 11px;
+          }
+        }
       `}</style>
     </>
   );
@@ -409,26 +471,30 @@ export default function DailyReportFull({ role: _role }: Props) {
 function ChildrenTable({
   preschool,
   afterSchool,
+  facilityHasPreschool,
 }: {
   preschool: { entry: ScheduleEntryRow; child: ChildRow }[];
   afterSchool: { entry: ScheduleEntryRow; child: ChildRow }[];
+  facilityHasPreschool: boolean;
 }) {
   /* 1 ページ A4 で残スペースを考えると、左右 2 列 × 各 12 行 = 24 名/枠程度。
      行数固定（少ない側は空行で埋める）。
-     列の振り分け:
-       - preschool が居る場合: 左=児童発達支援(preschool) / 右=放課後等デイサービス
-       - preschool が居ない施設: 放課後等デイサービスを左から流し込み、12 名超えたら右に続く
+     列の振り分けは「事業所が児発児童を 1 人でも登録しているか」で決定する:
+       - facilityHasPreschool = true: 左=児童発達支援(preschool) / 右=放課後等デイサービス（固定）
+         → その日 preschool 0 名でも左列は空のまま、放デイ児童は右列に表示
+       - facilityHasPreschool = false: 放デイ専門事業所として放課後だけを左から流し込み、12 名超なら右に続く
      合計行は preschool 件数 / afterSchool 件数 / 合計 を実数で表示。 */
   const ROWS = 12;
   type Cell = { entry: ScheduleEntryRow; child: ChildRow } | null;
 
   let left: Cell[];
   let right: Cell[];
-  if (preschool.length > 0) {
+  if (facilityHasPreschool) {
+    /* 左右固定。preschool 0 名の日は左列が全部空、afterSchool 13 名以上はあふれて切捨て */
     left = [...preschool, ...Array<Cell>(Math.max(0, ROWS - preschool.length)).fill(null)].slice(0, ROWS);
     right = [...afterSchool, ...Array<Cell>(Math.max(0, ROWS - afterSchool.length)).fill(null)].slice(0, ROWS);
   } else {
-    /* preschool 0 件の施設は放課後だけを左右に流し込み */
+    /* 児発児童が事業所に 1 人も登録されていない放デイ専門事業所は放課後を左から流し込み */
     const all: Cell[] = afterSchool.slice(0, ROWS * 2);
     while (all.length < ROWS * 2) all.push(null);
     left = all.slice(0, ROWS);
@@ -493,26 +559,29 @@ function StaffTable({ rows }: { rows: { staff: StaffRow; time: string; displayOr
   const right = padded.slice(ROWS, ROWS * 2);
 
   function renderCells(r: { staff: StaffRow; time: string } | null) {
-    if (!r) return <><td className="name"></td><td className="center"></td></>;
+    if (!r) return <><td className="name col-name"></td><td className="center nowrap col-time"></td></>;
     return (
       <>
-        <td className="name">{staffDisplayName(r.staff)}</td>
-        <td className="center">{r.time}</td>
+        <td className="name col-name">{staffDisplayName(r.staff)}</td>
+        <td className="center nowrap col-time">{r.time}</td>
       </>
     );
   }
 
   return (
-    <table className="report-table" style={{ marginTop: 4 }}>
+    <table className="report-table staff-table" style={{ marginTop: 4 }}>
       <thead>
         <tr>
           <th colSpan={4} style={{ fontSize: 13, padding: '4px 0', letterSpacing: 4 }}>出 勤 職 員</th>
         </tr>
         <tr>
-          <th style={{ width: '40%' }}>氏　　名</th>
-          <th style={{ width: '10%' }}>出勤</th>
-          <th style={{ width: '40%' }}>氏　　名</th>
-          <th style={{ width: '10%' }}>出勤</th>
+          {/* 分割シフトの時刻 "08:30〜12:00 / 13:00〜17:30" を 1 行表示するため
+             出勤列を 10% → 16% に拡幅し、氏名列を 40% → 34% に縮小。
+             モバイル時は CSS 側で col-time を 22% / col-name を 28% に再調整。 */}
+          <th className="col-name" style={{ width: '34%' }}>氏　　名</th>
+          <th className="col-time" style={{ width: '16%' }}>出勤</th>
+          <th className="col-name" style={{ width: '34%' }}>氏　　名</th>
+          <th className="col-time" style={{ width: '16%' }}>出勤</th>
         </tr>
       </thead>
       <tbody>

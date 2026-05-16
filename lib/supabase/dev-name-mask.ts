@@ -28,8 +28,13 @@
  * facilities.name や tenants.email 等の単独フィールドは触らない (employee/child shape の時だけマスク)。
  */
 
-/** ビルド時に inline される定数。本番ビルドでは false になり、unreachable code は dead-code elimination で消える。 */
-const IS_DEV_BUILD = process.env.NODE_ENV === 'development';
+/** ビルド時に inline される定数。本番ビルドでは false になり、unreachable code は dead-code elimination で消える。
+ *  NEXT_PUBLIC_DEV_NAME_MASK_OFF=1 を .env.local に置くと、開発ビルドでもマスクを完全 bypass できる。
+ *  本物の名前を見ながら表示確認したい時用の escape hatch。本番では NODE_ENV='production' で先に弾かれるため
+ *  この env 変数の有無は安全側に倒れる。 */
+const IS_DEV_BUILD =
+  process.env.NODE_ENV === 'development' &&
+  process.env.NEXT_PUBLIC_DEV_NAME_MASK_OFF !== '1';
 
 /** クライアントでのみ参照される。サーバーサイドでは false 扱い (= mask OFF)。 */
 function isLocalhostBrowser(): boolean {

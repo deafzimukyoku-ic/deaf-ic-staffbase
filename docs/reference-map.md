@@ -428,6 +428,10 @@ A 施設で勤務時間を登録 → B 施設のシフト表に「A 勤務」と
 |---|---|
 | `lib/email/notification-email.ts` | 引数型を `LegacyNotificationContentType` に絞る（5タイプ展開対応）。**2026-05-16: `bodySnippet` 撤廃**（メールは件名 + CTA のみ。本文はアプリ内で確認させて `announcement_reads` を蓄積させる狙い） |
 | `app/api/cron/send-notifications/route.ts` | `processShiftRow` 追加で shift_ready/shift_publish ディスパッチ。**2026-05-16: `rawBody` / `snippet` 生成と `bodySnippet` 引数渡しを削除** |
+| `components/shift/DailyReportFull.tsx` | **2026-05-16**: ① 出勤職員 StaffTable 時刻列を 10% → 16% 拡幅 + `td.nowrap` で分割シフトを 1 行化 + `col-name`/`col-time` クラス付与 / ③ 児童 ChildrenTable の左右振り分けを「`children` 全件で児発児童 1 名以上登録か」(`facilityHasPreschool` useMemo) で判定し左=児発・右=放デイ 固定ルールを実装 / ④ `@media screen and (max-width: 800px)` 追加してモバイル時 `.report-page` width 100% + フォント・行高縮小、`col-time` 16% → 22% に再調整。`@media print` は完全に独立 |
+| `components/shift/DailyOutputFull.tsx` | **2026-05-16**: 既存 `@media (max-width: 1023px)` に `.transport-three-col` 1 列化 + `.transport-block` `max-width: 100%` を追加。`@media (max-width: 639px)` で `.daily-output-controls`/`.daily-output-body` の `px-6 → px-2` 上書き。ThreeColGrid に `transport-three-col` クラス、外枠 div に `daily-output-controls`/`daily-output-body` クラスを付与 |
+| `app/(admin)/admin/{announcements,compliance,trainings,manuals}/page.tsx`, `app/(manager)/mgr/同 4 つ` | **2026-05-16**: カテゴリ詳細ヘッダーで h1 を `break-words → truncate`、右ブロックを `ml-auto → w-full sm:w-auto sm:ml-auto` に変更。モバイル幅でカテゴリ名が縦書き化する問題の修正。計 8 ファイル同パターン |
+| `lib/supabase/dev-name-mask.ts` | **2026-05-16**: `NEXT_PUBLIC_DEV_NAME_MASK_OFF=1` でマスクを bypass できる escape hatch を追加。本番では NODE_ENV='production' で先に弾かれるため安全 |
 
 ---
 
