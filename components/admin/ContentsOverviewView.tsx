@@ -50,6 +50,7 @@ interface RawRow {
   body: string | null;
   content: string | null; /* compliance_documents 用 */
   created_by: string | null;
+  sort_order: number | null; /* 各機能で admin が決めた並び順 */
 }
 
 interface Row {
@@ -59,6 +60,7 @@ interface Row {
   categoryId: string | null;
   categoryName: string;
   categorySortOrder: number; /* カテゴリ並び替え用 */
+  postSortOrder: number; /* 投稿の admin 並び順 (各機能内 sort_order) */
   isPublished: boolean;
   textContent: string; /* ポップで表示する全文 */
   urls: string[];
@@ -139,10 +141,10 @@ export function ContentsOverviewView({ scope }: Props) {
       const base = scope === 'admin' ? '/admin' : '/mgr';
 
       const [ann, comp, train, man, cats, emps] = await Promise.all([
-        supabase.from('announcements').select('id, title, category_id, is_published, content_blocks, body, created_by').eq('tenant_id', tenantId),
-        supabase.from('compliance_documents').select('id, title, category_id, is_published, content_blocks, content, created_by').eq('tenant_id', tenantId),
-        supabase.from('trainings').select('id, title, category_id, is_published, content_blocks, body, created_by').eq('tenant_id', tenantId),
-        supabase.from('manuals').select('id, title, category_id, is_published, content_blocks, body, created_by').eq('tenant_id', tenantId),
+        supabase.from('announcements').select('id, title, category_id, is_published, content_blocks, body, created_by, sort_order').eq('tenant_id', tenantId),
+        supabase.from('compliance_documents').select('id, title, category_id, is_published, content_blocks, content, created_by, sort_order').eq('tenant_id', tenantId),
+        supabase.from('trainings').select('id, title, category_id, is_published, content_blocks, body, created_by, sort_order').eq('tenant_id', tenantId),
+        supabase.from('manuals').select('id, title, category_id, is_published, content_blocks, body, created_by, sort_order').eq('tenant_id', tenantId),
         supabase.from('categories').select('id, name, type, sort_order').eq('tenant_id', tenantId),
         supabase.from('employees').select('id, last_name, first_name').eq('tenant_id', tenantId),
       ]);
@@ -166,6 +168,7 @@ export function ContentsOverviewView({ scope }: Props) {
             categoryId: r.category_id,
             categoryName: info?.name ?? '(未分類)',
             categorySortOrder: info?.sort ?? 9999,
+            postSortOrder: r.sort_order ?? 9999,
             isPublished: r.is_published,
             textContent: blocksToText(r.content_blocks, r.body, r.content),
             urls: extractUrls(r.content_blocks, r.body, r.content),
@@ -181,7 +184,8 @@ export function ContentsOverviewView({ scope }: Props) {
         ...((train.data ?? []) as RawRow[]).map(toRow('training', '/trainings')),
         ...((man.data ?? []) as RawRow[]).map(toRow('manual', '/manuals')),
       ];
-      /* 種別 (FEATURE_ORDER) → カテゴリ sort_order → カテゴリ名 → タイトル順 */
+      /* 種別 (FEATURE_ORDER) → カテゴリ sort_order → カテゴリ名 → 投稿 sort_order (admin の並び替え)
+         → タイトル (最終 fallback) の順 */
       const featureRank = new Map(FEATURE_ORDER.map((k, i) => [k, i]));
       all.sort((a, b) => {
         const fa = featureRank.get(a.feature) ?? 99;
@@ -189,6 +193,7 @@ export function ContentsOverviewView({ scope }: Props) {
         if (fa !== fb) return fa - fb;
         if (a.categorySortOrder !== b.categorySortOrder) return a.categorySortOrder - b.categorySortOrder;
         if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName, 'ja');
+        if (a.postSortOrder !== b.postSortOrder) return a.postSortOrder - b.postSortOrder;
         return a.title.localeCompare(b.title, 'ja');
       });
       setRows(all);
