@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { applyScopeFilter } from '@/components/admin/FacilityScopeSelector';
 import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
+import { ManualIntroDialog } from '@/components/employee/ManualIntroDialog';
 import type { TargetType } from '@/lib/types';
 
 type UnreadKey = 'document' | 'compliance' | 'training' | 'announcement' | 'manual' | 'message';
@@ -30,15 +31,32 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
   const router = useRouter();
   const [userRole, setUserRole] = useState<string>('employee');
   const [unread, setUnread] = useState<Record<UnreadKey, number>>({ document: 0, compliance: 0, training: 0, announcement: 0, manual: 0, message: 0 });
+  /* 175: 初回ログイン マニュアル誘導ダイアログ */
+  const [introState, setIntroState] = useState<{ employeeId: string; manualCategoryId: string | null } | null>(null);
 
   useEffect(() => {
     async function loadCompany() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: me } = await supabase.from('employees').select('id, tenant_id, role, facility_id, updated_at').eq('auth_user_id', user.id).single();
+      const { data: me } = await supabase.from('employees').select('id, tenant_id, role, facility_id, updated_at, manual_intro_first_seen_at').eq('auth_user_id', user.id).single();
       if (!me) return;
       setUserRole(me.role);
+
+      /* 175: 「職員ステーションの使い方」マニュアル誘導ダイアログ
+         manual_intro_first_seen_at が NULL のときだけ 1 度表示する。employee / shift_manager
+         を含む全ロール対象 (admin/manager も自分用 employee 画面を見るときは表示)。
+         introState が既にセット済 (=このセッションで一度表示) のときは触らない。 */
+      if (!me.manual_intro_first_seen_at && !introState) {
+        const { data: cat } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('tenant_id', me.tenant_id)
+          .eq('type', 'manual')
+          .eq('name', '職員ステーションの使い方')
+          .maybeSingle();
+        setIntroState({ employeeId: me.id, manualCategoryId: (cat?.id as string) ?? null });
+      }
 
       // 未確認/未読/未合格のカウント計算（施設スコープ考慮）
       type Row = { id: string; updated_at?: string; target_type: TargetType; target_facility_ids: string[] };
@@ -179,6 +197,15 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
       <main className="mx-auto max-w-7xl px-4 py-6 md:px-6">
         {children}
       </main>
+
+      {/* 175: 初回ログイン マニュアル誘導 (manual_intro_first_seen_at NULL の社員に 1 度だけ) */}
+      {introState && (
+        <ManualIntroDialog
+          employeeId={introState.employeeId}
+          manualCategoryId={introState.manualCategoryId}
+          onClose={() => setIntroState(null)}
+        />
+      )}
     </div>
   );
 }

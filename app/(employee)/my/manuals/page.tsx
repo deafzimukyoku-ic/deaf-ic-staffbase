@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,6 +30,9 @@ export default function MyManualsPage() {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [viewSummaries, setViewSummaries] = useState<Map<string, ViewSummary>>(new Map());
   const supabase = createClient();
+  /* 175: URL クエリ ?category=<id> でカテゴリを初期選択 (初回ログイン誘導の遷移先で使用) */
+  const searchParams = useSearchParams();
+  const initialCategoryId = searchParams.get('category');
 
   useEffect(() => {
     async function load() {
@@ -83,7 +87,15 @@ export default function MyManualsPage() {
 
         try {
           const catRes = await fetch('/api/categories?type=manual');
-          if (catRes.ok) setCategories(await catRes.json());
+          if (catRes.ok) {
+            const cats = (await catRes.json()) as Category[];
+            setCategories(cats);
+            /* 175: ?category=<id> 指定があれば該当カテゴリを初期選択 */
+            if (initialCategoryId) {
+              const found = cats.find((c) => c.id === initialCategoryId);
+              if (found) setSelectedCategory(found);
+            }
+          }
         } catch {}
 
         setLoading(false);
@@ -92,7 +104,8 @@ export default function MyManualsPage() {
       }
     }
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCategoryId]);
 
   async function markRead(manualId: string) {
     const { data: { user } } = await supabase.auth.getUser();

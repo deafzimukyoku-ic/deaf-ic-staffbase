@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { useNotifications } from '@/lib/hooks/useNotifications';
-import { EVENT_META, type NotificationRow } from '@/lib/notifications/types';
+import { EVENT_META, FALLBACK_EVENT_META, type NotificationRow } from '@/lib/notifications/types';
 
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
@@ -86,7 +86,8 @@ export function NotificationsBell() {
 }
 
 function NotificationListItem({ notification, onClick }: { notification: NotificationRow; onClick: () => void }) {
-  const meta = EVENT_META[notification.event_type];
+  /* 175: 未知 event_type に対する fallback */
+  const meta = EVENT_META[notification.event_type] ?? FALLBACK_EVENT_META;
   const isUnread = !notification.read_at;
   const when = new Date(notification.created_at).toLocaleString('ja-JP', {
     month: 'numeric',

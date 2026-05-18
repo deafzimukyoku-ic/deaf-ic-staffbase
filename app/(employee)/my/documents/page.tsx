@@ -10,7 +10,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { EmployeeImagesCard } from '@/components/employee/EmployeeImagesCard';
 import { IssuedDocumentsSection } from '@/components/employee/IssuedDocumentsSection';
-import type { DocumentTemplate, DocumentSubmission } from '@/lib/types';
+import { extractReferencedEmployeeFields, needsResubmitBySnapshot } from '@/lib/document-resubmit';
+import type { DocumentTemplate, DocumentSubmission, PdfTag } from '@/lib/types';
 
 interface TemplateWithSubmission {
   template: DocumentTemplate;
@@ -29,8 +30,12 @@ export default function MyDocumentsPage() {
   const [employeeData, setEmployeeData] = useState<{ license_image_path: string | null; commute_route_image_path: string | null; custom_fields: Record<string, string> | null } | null>(null);
   const [imageFieldDefs, setImageFieldDefs] = useState<{ field_key: string; label: string; field_type: string }[]>([]);
   /* 基本情報の最終更新時刻。document_submissions.submitted_at と比較して
-     「提出後に基本情報が変わった」場合に再提出ボタンを強調表示するため。 */
+     「提出後に基本情報が変わった」場合に再提出ボタンを強調表示するため。
+     175 以降は snapshot 比較が主だが、snapshot 取得前の過去提出に対する fallback として残す。 */
   const [employeeUpdatedAt, setEmployeeUpdatedAt] = useState<string | null>(null);
+  /* 175: snapshot 比較用。現在の employees 全カラム + テンプごとの参照カラム集合 */
+  const [employeeFullRow, setEmployeeFullRow] = useState<Record<string, unknown> | null>(null);
+  const [referencedFieldsByTemplate, setReferencedFieldsByTemplate] = useState<Map<string, Set<string>>>(new Map());
   const supabase = createClient();
 
   useEffect(() => {
@@ -53,6 +58,8 @@ export default function MyDocumentsPage() {
         setEmployeeId(me.id);
         setTenantId(me.tenant_id);
         setEmployeeUpdatedAt((me.updated_at as string) ?? null);
+        /* 175: snapshot 比較用に employees 全カラムを保持 */
+        setEmployeeFullRow(me as Record<string, unknown>);
         setEmployeeData({
           license_image_path: me.license_image_path,
           commute_route_image_path: me.commute_route_image_path,
@@ -100,6 +107,25 @@ export default function MyDocumentsPage() {
           .eq('employee_id', me.id);
 
         const subMap = new Map((submissions || []).map((s) => [s.document_template_id, s as DocumentSubmission]));
+
+        /* 175: PDF テンプ用の pdf_tags を一括取得し、テンプごとの参照 employees カラム集合を計算 */
+        const filteredIds = filtered.map((t) => t.id);
+        const { data: pdfTagsRows } = await supabase
+          .from('pdf_tags')
+          .select('*')
+          .in('template_id', filteredIds);
+        const allTags = (pdfTagsRows ?? []) as PdfTag[];
+        const tagsByTemplate = new Map<string, PdfTag[]>();
+        for (const tag of allTags) {
+          const arr = tagsByTemplate.get(tag.template_id) ?? [];
+          arr.push(tag);
+          tagsByTemplate.set(tag.template_id, arr);
+        }
+        const refMap = new Map<string, Set<string>>();
+        for (const t of filtered) {
+          refMap.set(t.id, extractReferencedEmployeeFields(t, tagsByTemplate.get(t.id) ?? []));
+        }
+        setReferencedFieldsByTemplate(refMap);
 
         setItems(filtered.map((t) => ({
           template: t,
@@ -153,38 +179,44 @@ export default function MyDocumentsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: me } = await supabase
+    /* 175: 提出時の employees 全カラムを snapshot として保存。
+       「内容を確認しました」=「現在の基本情報で OK」の意思表示なので、その時点の値を凍結する。 */
+    const { data: meFull } = await supabase
       .from('employees')
-      .select('id')
+      .select('*')
       .eq('auth_user_id', user.id)
       .single();
-
-    if (!me) return;
+    if (!meFull) return;
 
     const item = items.find((i) => i.template.id === templateId);
     if (!item) return;
+    const nowIso = new Date().toISOString();
+    const snapshot = meFull as Record<string, unknown>;
 
     if (item.submission) {
       await supabase
         .from('document_submissions')
-        .update({ status: 'submitted', submitted_at: new Date().toISOString() })
+        .update({ status: 'submitted', submitted_at: nowIso, employee_snapshot: snapshot })
         .eq('id', item.submission.id);
     } else {
       await supabase
         .from('document_submissions')
         .insert({
-          employee_id: me.id,
+          employee_id: meFull.id,
           document_template_id: templateId,
           form_data: {},
           status: 'submitted',
-          submitted_at: new Date().toISOString(),
+          submitted_at: nowIso,
+          employee_snapshot: snapshot,
         });
     }
 
+    /* ローカル state も snapshot を反映 (再提出フラグを即座に消すため) */
+    setEmployeeFullRow(snapshot);
     setItems((prev) =>
       prev.map((i) =>
         i.template.id === templateId
-          ? { ...i, submission: { ...(i.submission || {} as DocumentSubmission), status: 'submitted' as const, submitted_at: new Date().toISOString() } as DocumentSubmission }
+          ? { ...i, submission: { ...(i.submission || {} as DocumentSubmission), status: 'submitted' as const, submitted_at: nowIso, employee_snapshot: snapshot } as DocumentSubmission }
           : i
       )
     );
@@ -258,11 +290,23 @@ export default function MyDocumentsPage() {
           {items.map(({ template, submission }) => {
             const isConfirmed = submission?.status === 'submitted';
             const isPreviewOpen = previewId === template.id;
-            /* 提出後に基本情報が更新されていれば「再提出」ボタンを強調表示する。
-               employees.updated_at > document_submissions.submitted_at で判定。 */
-            const needsResubmit = isConfirmed && submission?.submitted_at && employeeUpdatedAt
-              ? new Date(employeeUpdatedAt) > new Date(submission.submitted_at)
-              : false;
+            /* 175: 提出後に「このテンプが実際に参照する employee カラム」だけ変わったか snapshot 比較で判定。
+               snapshot が無い過去提出 (NULL) は従来の updated_at vs submitted_at 比較に fallback。
+               これにより「住所だけ変えた」→「住所未使用書類は再提出不要」を実現。 */
+            const refFields = referencedFieldsByTemplate.get(template.id) ?? new Set<string>();
+            let needsResubmit = false;
+            if (isConfirmed && submission?.submitted_at) {
+              if (submission.employee_snapshot && employeeFullRow) {
+                needsResubmit = needsResubmitBySnapshot(
+                  submission.employee_snapshot as Record<string, unknown>,
+                  employeeFullRow,
+                  refFields,
+                );
+              } else if (employeeUpdatedAt) {
+                /* fallback: snapshot 無い古い提出は従来通り timestamp 比較 (粗いが false positive 多め) */
+                needsResubmit = new Date(employeeUpdatedAt) > new Date(submission.submitted_at);
+              }
+            }
 
             return (
               <Card key={template.id} className={isConfirmed && !needsResubmit ? 'opacity-70' : ''}>

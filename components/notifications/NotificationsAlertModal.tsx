@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/lib/hooks/useNotifications';
-import { EVENT_META, type NotificationRow } from '@/lib/notifications/types';
+import { EVENT_META, FALLBACK_EVENT_META, type NotificationRow } from '@/lib/notifications/types';
 
 const SESSION_KEY = 'notif_modal_session_seen_v1';
 
@@ -81,7 +81,9 @@ export function NotificationsAlertModal() {
 }
 
 function NotificationCard({ notification }: { notification: NotificationRow }) {
-  const meta = EVENT_META[notification.event_type];
+  /* 175: 未知 event_type (UI 側 EVENT_META 更新漏れ) でも落ちないよう fallback。
+     根本的には EVENT_META に必ず追加するが、防衛ライン。 */
+  const meta = EVENT_META[notification.event_type] ?? FALLBACK_EVENT_META;
   const when = new Date(notification.created_at).toLocaleString('ja-JP', {
     month: 'numeric',
     day: 'numeric',

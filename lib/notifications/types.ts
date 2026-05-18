@@ -11,7 +11,18 @@ export type NotificationEventType =
   | 'announcement_read'
   | 'manual_read'
   /* Phase G / migration 142: 個別メッセージを受信したとき、受信者に向けて挿入される */
-  | 'direct_message';
+  | 'direct_message'
+  /* 173: 会社→社員 書類発行 (issued_documents) — 発行先社員に届く通知 */
+  | 'document_issued';
+
+/* 未知 event_type が来ても落ちないための fallback メタ。万が一 DB に enum が
+   増えたが UI 側 EVENT_META 更新を忘れた場合のための保険。 */
+export const FALLBACK_EVENT_META = {
+  label: '通知',
+  icon: '🔔',
+  verb: '',
+  href: () => '/admin/dashboard',
+} as const;
 
 export interface NotificationRow {
   id: string;
@@ -69,5 +80,12 @@ export const EVENT_META: Record<
     /* id にはスレッド ID を入れて、admin / mgr / employee それぞれのスレッド一覧に飛ぶ。
        ここでは admin 向けにフォールバック。実際のリンクは bell 側で role に応じて切替えても良い。 */
     href: () => '/admin/messages',
+  },
+  document_issued: {
+    /* 173: 発行先 (= 社員本人) が受信。admin/manager 自身に発行された場合のみここに出る。 */
+    label: '会社発行書類',
+    icon: '📨',
+    verb: 'が届きました',
+    href: () => '/my/documents',
   },
 };

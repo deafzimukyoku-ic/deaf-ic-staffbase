@@ -200,6 +200,8 @@ export interface Employee {
   custom_fields: Record<string, string> | null;
   // 誓約
   pledge_confirmed_at: string | null;
+  /* 175: 「職員ステーションの使い方」マニュアル誘導ダイアログを表示した時刻。NULL = 未表示。 */
+  manual_intro_first_seen_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -509,6 +511,9 @@ export interface DocumentSubmission {
   status: DocumentStatus;
   submitted_at: string | null;
   generated_docx_path: string | null;
+  /* 175: 提出時の employees 行スナップショット。再提出判定 (テンプ参照カラムだけ比較) に使う。
+     NULL = 過去提出 (snapshot 取得前) → updated_at vs submitted_at の従来ロジックに fallback */
+  employee_snapshot: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
