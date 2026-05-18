@@ -26,6 +26,7 @@ const staffNav: NavItem[] = [
   { kind: 'link', href: '/mgr/trainings', label: '研修', icon: '📚' },
   { kind: 'link', href: '/mgr/announcements', label: 'お知らせ', icon: '📢' },
   { kind: 'link', href: '/mgr/manuals', label: '業務マニュアル', icon: '📖' },
+  { kind: 'link', href: '/mgr/contents-overview', label: '投稿一覧', icon: '🗂️' },
   { kind: 'link', href: '/mgr/messages', label: '個別連絡', icon: '💬' },
   { kind: 'link', href: '/mgr/reports', label: '閲覧レポート', icon: '📊' },
 ];

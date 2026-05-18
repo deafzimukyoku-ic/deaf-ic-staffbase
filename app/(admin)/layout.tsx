@@ -28,6 +28,7 @@ const staffNav: NavItem[] = [
   { kind: 'link', href: '/admin/trainings', label: '研修', icon: '📚' },
   { kind: 'link', href: '/admin/announcements', label: 'お知らせ', icon: '📢' },
   { kind: 'link', href: '/admin/manuals', label: '業務マニュアル', icon: '📖' },
+  { kind: 'link', href: '/admin/contents-overview', label: '投稿一覧', icon: '🗂️' },
   { kind: 'link', href: '/admin/messages', label: '個別連絡', icon: '💬' },
   { kind: 'link', href: '/admin/reports', label: '閲覧レポート', icon: '📊' },
   /* チーム診断は /admin/employees の社員一覧画面から起動 */
