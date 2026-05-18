@@ -695,17 +695,32 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
 
     let query = supabase
       .from('employees')
-      .select('id, last_name, first_name, facility_id, status, role')
+      .select('id, employee_number, last_name, first_name, facility_id, status, role')
       .eq('tenant_id', me.tenant_id)
       .eq('status', 'active')
-      .neq('id', me.id);
+      .neq('id', me.id)
+      .neq('role', 'shift_manager'); /* シフト統括は個別連絡の宛先候補から除外 */
     if (memberIds !== null) {
       query = query.in('id', memberIds.length > 0 ? memberIds : ['00000000-0000-0000-0000-000000000000']);
     }
 
-    const { data } = await query.order('last_name', { ascending: true });
+    const { data } = await query;
+    /* 従業員番号順 (数値変換できれば数値比較、それ以外は文字列比較、未設定 (NULL/空) は末尾) */
+    const sorted = ((data ?? []) as Array<{ id: string; employee_number: string | null; last_name: string | null; first_name: string | null; facility_id: string | null }>)
+      .slice()
+      .sort((a, b) => {
+        const an = String(a.employee_number ?? '').trim();
+        const bn = String(b.employee_number ?? '').trim();
+        if (!an && !bn) return 0;
+        if (!an) return 1;
+        if (!bn) return -1;
+        const aNum = Number(an);
+        const bNum = Number(bn);
+        if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+        return an.localeCompare(bn, 'ja');
+      });
     setCandidates(
-      (data ?? []).map((e: { id: string; last_name: string | null; first_name: string | null; facility_id: string | null }) => ({
+      sorted.map((e) => ({
         id: e.id,
         name: staffDisplayName({ last_name: e.last_name, first_name: e.first_name }),
         facility_id: e.facility_id,
