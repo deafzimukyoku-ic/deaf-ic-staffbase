@@ -47,7 +47,30 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-18（書類発行 / shift_manager 一覧除外 / 送迎表列順 施設単位統一 実装完了） / 全体完了率: 約 97%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-18（書類タブ整合性 + 会社発行PDF重複防止 + 提出フロー混入排除 完了） / 全体完了率: 約 97%</p>
+
+<!-- 2026-05-18 計画 #4: 書類タブ整合性 + 会社発行PDF 重複防止 + 提出フロー混入排除 -->
+<div class="phase">
+  <h2>書類タブ整合性 + 会社発行PDF 重複防止 + 提出フロー混入排除 (2026-05-18 完了) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>(R1) 社員画面サイドバー「書類」バッジ件数 ≠ 実際の「再提出する」赤ボタン数。audience フィルタ / matrix 除外 / is_company_issued 除外 / snapshot 比較を行っていない。 (R2) 個別発行 API・招待時自動発行に dedup が無く、issued_documents に DB UNIQUE 制約も無いため重複発行が起こり得る。 (R3) 会社発行 ON テンプが社員提出フローにも残り「📨 会社から届いた書類」と「📄 書類カード」両方に同テンプが出る</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>migration 173/174/175 で発行系を入れたが、提出フローとの整合と DB UNIQUE が抜けていた後追い修正。データ消失回避のため既存 document_submissions は触らない</td></tr>
+      <tr><td>S1</td><td>共通ヘルパー新設: countDocumentsNeedingResubmit(supabase, employee) → number。matrix 除外 / is_company_issued 除外 / loadTemplateAudience + isEmployeeInAudience / pdf_tags 一括取得 / extractReferencedEmployeeFields + needsResubmitBySnapshot / snapshot 無い旧提出は updated_at vs submitted_at fallback</td><td class="files">lib/document-resubmit-count.ts (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+      <tr><td>S2</td><td>EmployeeLayout の me 取得を select('*') に拡張 (snapshot 比較に全列必要)。Promise.all から docSubRes 削除。docResubmit 計算を S1 ヘルパー呼び出しに置換</td><td class="files">app/(employee)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>既存の me.role / tenant_id / facility_id / updated_at / manual_intro_first_seen_at 参照は維持</td></tr>
+      <tr><td>S3</td><td>/my/documents の filter に <code>if (t.is_company_issued) return false;</code> を追加。会社発行テンプは下部「📄 書類カード」一覧から除外し、上部 IssuedDocumentsSection でのみ表示</td><td class="files">app/(employee)/my/documents/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+      <tr><td>S4 前段</td><td>migration 179 適用前に重複検出 SQL を実行 → 8 グループ 16 行検出。同テンプ <code>1d2ea7fd...</code> 「個人番号利用通知書」(is_company_issued=true) に対し admin 1 名が 90 秒間で発行した結果。ユーザーへ報告 → 「新しい方を残して旧い方を revoke」承認</td><td class="files">scripts/check-issued-docs-duplicates.mjs (新規), scripts/investigate-issued-docs-duplicates.mjs (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+      <tr><td>S4</td><td>migration 179: 既存重複の整理 (各組で最新 1 件を残して旧を revoked_at=now() + revoked_reason='migration 179: 重複発行の整理 (旧コピーを取消)') → 部分 UNIQUE INDEX <code>issued_documents_active_unique ON (employee_id, document_template_id) WHERE revoked_at IS NULL</code> 作成 → NOTIFY pgrst</td><td class="files">supabase/migrations/179_issued_documents_unique_active.sql (新規), scripts/apply-migration-179.mjs (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>pooler 経由で適用。active 23 → 15、revoked 1 → 9、dup_groups 8 → 0、INDEX 作成済</td></tr>
+      <tr><td>S4 後処理</td><td>revoke された 8 行の generated_pdf_path について service-role で Storage 'issued-documents' から削除 (孤児ファイル掃除)</td><td class="files">scripts/cleanup-orphan-storage.mjs (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>8 件 (各 ~6MB) 削除確認</td></tr>
+      <tr><td>S5</td><td>issue-helper.ts: DB INSERT 直前に <code>employee_id + document_template_id AND revoked_at IS NULL</code> の存在チェック。あれば既アップロード分の Storage を <code>remove([objectName])</code> で掃除して <code>{ success: false, error: 'この社員には同じ書類が既に発行されています' }</code> を返す。INSERT 時の UNIQUE 違反 (23505) も同じ日本語エラーに整形</td><td class="files">lib/issued-documents/issue-helper.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>個別発行 API・招待時自動発行・一括発行 (保険) の 3 経路 + DB UNIQUE INDEX 最終防御の 2 段構え</td></tr>
+      <tr><td>S6</td><td>IssueDocumentDialog: TemplateRow に <code>alreadyIssued: boolean</code> 追加。useEffect で <code>issued_documents</code> から <code>employee_id=this AND revoked_at IS NULL</code> を取得して該当テンプを既発行マーク。ラジオは disabled + 「発行済」バッジ表示</td><td class="files">components/admin/IssueDocumentDialog.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+      <tr><td>S7</td><td>tsc 型チェック (touched ファイル全て 0 エラー) + npm run dev (port 6001) で <code>/</code>, <code>/login</code> 200 / <code>/my/documents</code>, <code>/admin/employees</code> 307 (middleware 認証 redirect — 正常) を確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ユーザーが実機で UI 確認後コミット予定</td></tr>
+      <tr><td>S8</td><td>docs/reference-map.md に migrations 174〜179 を追加 + §14d「書類タブ整合性 + 会社発行PDF 重複防止」セクション (is_company_issued 参照表 / issued_documents UNIQUE 制約 / バッジ件数の単一情報源) 新設。docs/error-log.md に 3 件の解決ログ</td><td class="files">docs/reference-map.md, docs/error-log.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+      <tr><td>S9</td><td>commit + main マージ + push (ユーザー実機確認 OK 後)</td><td class="files">—</td><td><span class="status doing">進行中</span></td><td class="pct">90%</td><td>ユーザー OK 待ち</td></tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① 任意の社員について「サイドバー書類タブのバッジ数」=「/my/documents の赤『再提出する』ボタン数」が成立する ② 同一 (employee_id, document_template_id) で <code>revoked_at IS NULL</code> の発行が 2 件以上存在しない (migration 179 で DB レベル保証) ③ 会社発行 ON テンプは社員側「📄 書類カード」に出ず、上部「📨 会社から届いた書類」のみに出る ④ revoke → 再発行が可能なまま (部分 UNIQUE の意図通り) ⑤ 個別発行モーダルで既発行テンプが disabled + 「発行済」バッジ ⑥ 一括発行 → 個別発行モーダルで連動して disabled になる ⑦ snapshot 無い旧 document_submissions は updated_at vs submitted_at fallback で従来挙動を保つ (壊れない)</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-05-18 計画 #1: shift_manager 一覧除外 (案件 B) -->
 <div class="phase">

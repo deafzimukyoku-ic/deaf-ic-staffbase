@@ -98,6 +98,10 @@ export default function MyDocumentsPage() {
 
         const filtered = (templates as DocumentTemplate[]).filter((t) => {
           if (t.template_type === 'pdf' && t.data_mode === 'matrix') return false;
+          /* 174/179 (R3): 会社→社員 発行用テンプは社員提出フロー対象外。
+             上部の IssuedDocumentsSection (📨 会社から届いた書類) のみで表示し、
+             ここの📄 書類カード一覧には出さない (重複表示 + バッジ二重計上の防止) */
+          if (t.is_company_issued) return false;
           return isEmployeeInAudience(t.id, me as unknown as import('@/lib/types').Employee, audienceByTemplate);
         });
 

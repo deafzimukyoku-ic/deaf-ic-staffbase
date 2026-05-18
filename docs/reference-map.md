@@ -43,6 +43,12 @@
 | 171 | 171_exclude_shift_manager_from_subordinate_progress.sql | **shift_manager を進捗管理対象から除外**。156 の `get_my_subordinate_progress` を CREATE OR REPLACE で上書き (シグネチャ・戻り値・GRANT は同一)。target_emps CTE に `e.role <> 'shift_manager'` を追加。フロント側 admin/dashboard / api/reports / api/admin/send-reminder の 3 ファイルでも `.neq('role', 'shift_manager')` を 1 行ずつ追加 | ✅ 適用済 |
 | 172 | 172_facility_shift_settings_transport_column_order.sql | **送迎表列順を施設単位で共有**。`facility_shift_settings.transport_column_order jsonb` 追加 (NULL 許容、DEFAULT_TRANSPORT_COLUMN_ORDER フォールバック)。従来 `localStorage['deaf-ic:transport:column-order:{facilityId}']` でブラウザ/端末単位だった列順を施設で統一。TransportFull.tsx は読み書きを localStorage → supabase.update に置換 | ✅ 適用済 |
 | 173 | 173_issued_documents.sql | **会社→社員 書類発行 (issued_documents) 一式**。テーブル + 2 SECURITY DEFINER 関数 (`is_own_issued_document` / `can_admin_view_issued_document`) + 4 RLS ポリシー (SELECT / INSERT / 本人 UPDATE / admin UPDATE) + Storage バケット `issued-documents` (private, 20MB, application/pdf) + Storage SELECT ポリシー + notifications.event_type CHECK に `'document_issued'` 追加 (142 を ALTER で上書き → 7 種)。在籍社員は in_app (通知ベル + /my/documents カード)、退職社員は email_only (Resend で PDF 添付メール) | ✅ 適用済 |
+| 174 | 174_document_templates_company_issue.sql | `document_templates.is_company_issued bool` + `auto_issue_message text` 追加。会社→社員 発行用テンプ識別フラグ + 招待自動発行 / 一括発行時の固定メッセージ。**179 で社員提出フローから除外する起点となるフラグ** | ✅ 適用済 |
+| 175 | 175_resubmit_snapshot_and_manual_intro.sql | `document_submissions.employee_snapshot jsonb` (提出時の employees 全カラム凍結) + `employees.manual_intro_first_seen_at timestamptz` (初回ログイン マニュアル誘導ダイアログを 1 度だけ表示)。書類再提出判定を「テンプ参照カラムだけ snapshot 比較」に切り替えるための基盤 | ✅ 適用済 |
+| 176 | 176_message_threads_open_insert.sql | 個別連絡: 新規スレッド作成 RLS の INSERT ポリシー解放 | ✅ 適用済 |
+| 177 | 177_message_thread_members_open_insert.sql | 個別連絡: members INSERT ポリシー解放（admin 並び順反映含む） | ✅ 適用済 |
+| 178 | 178_message_attachments_link_url.sql | 個別連絡: 添付に URL リンク機能 (PDF/動画/Drive 等) を追加。新カラム `link_url text` | ✅ 適用済 |
+| 179 | 179_issued_documents_unique_active.sql | **issued_documents の active 発行に対する部分 UNIQUE INDEX**。`(employee_id, document_template_id) WHERE revoked_at IS NULL` で 1 件のみ。同時に既存重複 (admin が一括発行ボタン 2 連発で 8 名分が二重発行されていた) を、各組で最新 1 件を残して旧コピーを `revoked_at=now(), revoked_reason='migration 179: 重複発行の整理 (旧コピーを取消)'` で整理。revoke 後の再発行は引き続き可能。`lib/issued-documents/issue-helper.ts` の INSERT 直前 dedup チェックと 2 段構え (アプリ層 dedup + DB UNIQUE 最終防御) | ✅ 適用済 |
 
 ---
 
@@ -896,6 +902,36 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 - **イベント参加判定**: 月締め時に手動チェック前提。schedule_entries の `attendance_status='present'` から自動推測はしない（present 以外でも イベントには参加した、という運用例があるため）
 - **月次集計の永続化**: `billing_summaries` に snapshot 保存。再印刷時に同じ数字が出る（月内に児童属性が変わっても紙の数字は守られる）
 - **shift_only_mode との関係**: シフトのみ事業所はそもそも利用料金表を使わない（児童不在）。サイドバーから 利用料金表 / 児童管理 / イベント設定 はフィルタで除外
+
+---
+
+## 14d. 書類タブ整合性 + 会社発行PDF 重複防止（migration 179, 2026-05-18）
+
+### `document_templates.is_company_issued` 参照
+| ファイル | 用途 |
+|---|---|
+| supabase/migrations/174_document_templates_company_issue.sql | カラム追加 |
+| lib/types.ts | `DocumentTemplate.is_company_issued: boolean` |
+| **lib/document-resubmit-count.ts (新規)** | **バッジ件数算出時にこのフラグで除外**（社員提出フロー対象外） |
+| **app/(employee)/my/documents/page.tsx** | **`filter` で `is_company_issued` を除外**（📄 書類カード一覧から消す）。上部の `IssuedDocumentsSection` でのみ表示 |
+| components/employee/IssuedDocumentsSection.tsx | 「📨 会社から届いた書類」セクション（会社発行テンプの専用 UI） |
+| components/admin/IssueDocumentDialog.tsx | 発行モーダルの「会社発行用のみ表示」トグルで使用 |
+| app/api/employees/invite/route.ts | 招待自動発行で `is_company_issued=true` のみを発行対象に絞る |
+| app/api/issued-documents/bulk-issue/route.ts | 一括発行で `is_company_issued=true` のみを発行対象に絞る |
+
+### `issued_documents` UNIQUE 制約（部分 INDEX, migration 179）
+| ファイル | 用途 |
+|---|---|
+| **supabase/migrations/179_issued_documents_unique_active.sql (新規)** | **`(employee_id, document_template_id) WHERE revoked_at IS NULL` の部分 UNIQUE INDEX**。同時に既存重複の整理 UPDATE 含む |
+| **lib/issued-documents/issue-helper.ts** | **INSERT 直前の dedup チェック**（既 active があれば Storage 孤児削除 + 日本語エラー返却）。INSERT 時の UNIQUE 違反 (23505) もキャッチして同じ日本語エラーを返す |
+| **components/admin/IssueDocumentDialog.tsx** | **`alreadyIssued` 判定で既発行テンプを disabled + 「発行済」バッジ表示**（`employee_id AND revoked_at IS NULL` を取得） |
+
+### バッジ件数の単一情報源
+| ファイル | 用途 |
+|---|---|
+| **lib/document-resubmit-count.ts (新規)** | **`countDocumentsNeedingResubmit(supabase, employee)`**。matrix 除外 / is_company_issued 除外 / audience フィルタ / `extractReferencedEmployeeFields` + `needsResubmitBySnapshot`（snapshot 無いときは `updated_at > submitted_at` fallback）|
+| **app/(employee)/layout.tsx** | **サイドバー「書類」バッジ件数算出にヘルパーを使用**（旧: 粗い timestamp 比較で false positive 多数 → /my/documents 上の赤ボタン数と一致するように修正）|
+| app/(employee)/my/documents/page.tsx | 赤い「再提出する」ボタンの判定は同じく `extractReferencedEmployeeFields` + `needsResubmitBySnapshot` を直接使用（ヘルパーは集計専用、画面側は per-row で持つ参照集合を流用）|
 
 ---
 

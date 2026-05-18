@@ -23,6 +23,49 @@
 
 ---
 
+## 書類タブのバッジ件数 ≠ 赤い「再提出する」ボタン数
+
+- **発生日**: 2026-05-18
+- **発生箇所**: `app/(employee)/layout.tsx:113-118`（旧コード）
+- **フェーズ**: 書類タブ整合性 + 会社発行PDF 重複防止 + 提出フロー混入排除
+- **エラー内容**: サイドバー「書類」タブの赤バッジ件数が、`/my/documents` 上で実際に表示される赤い「再提出する」ボタンの数と一致しなかった（バッジは多めに出ていた）
+- **原因**: layout.tsx のバッジ計算は `document_submissions.submitted_at < employees.updated_at` の粗い timestamp 比較だけを行っていた。`/my/documents/page.tsx` 側はこれに加えて (a) matrix 除外 / (b) audience フィルタ / (c) `is_company_issued` 除外 / (d) snapshot 比較で「テンプが参照するカラムだけ」比較していたため、両者でロジックがずれていた
+- **解決方法**: 共通ヘルパー `lib/document-resubmit-count.ts::countDocumentsNeedingResubmit(supabase, employee)` を新設し、layout.tsx のバッジ計算をこのヘルパー呼び出しに置換。`/my/documents/page.tsx` の per-row 判定と同じフィルタ順序と snapshot 比較を共有
+- **再発防止**: `docs/reference-map.md §14d` に「バッジ件数の単一情報源」を明記。将来 layout 側または page 側に新フィルタを足すときは必ず両方に反映する
+
+---
+
+## 会社→社員 発行 PDF が個別発行 / 一括発行 / 招待自動発行で重複できてしまう
+
+- **発生日**: 2026-05-18（本番で重複 8 組 / 16 行が同日 07:56〜07:58 の 90 秒間に発生していたことが migration 適用前調査で判明）
+- **発生箇所**: `lib/issued-documents/issue-helper.ts:164-183`（旧コード）/ `supabase/migrations/173_issued_documents.sql`（DB UNIQUE 未設定）
+- **フェーズ**: 書類タブ整合性 + 会社発行PDF 重複防止 + 提出フロー混入排除
+- **エラー内容**: 同一社員に同じ書類テンプが `revoked_at IS NULL` のまま 2 件以上 active で残っていた
+- **原因**:
+  1. 一括発行 API には buildPlan で「DB に既存 active があれば skip」する dedup があったが、**「同じ tick で既存 active が無いまま並走している 2 回目の bulk 呼び出し」を防げない**設計だった（admin が一括発行ボタンを 2 連発したり、同時に 2 タブで実行したりすると、1 回目の処理がまだ INSERT 完了前の社員には 2 回目も新規発行が走る）
+  2. 個別発行 API・招待時自動発行には dedup 自体が無かった
+  3. `issued_documents` に DB UNIQUE 制約が無かったため、レースで通り抜けた重複を最終防御で弾けなかった
+- **解決方法**:
+  1. **アプリ層 dedup**: `lib/issued-documents/issue-helper.ts` の DB INSERT 直前に `employee_id + document_template_id AND revoked_at IS NULL` の存在チェックを追加。あれば Storage 孤児を削除して日本語エラー返却
+  2. **DB 最終防御**: `supabase/migrations/179_issued_documents_unique_active.sql` で部分 UNIQUE INDEX `(employee_id, document_template_id) WHERE revoked_at IS NULL` を作成。アプリ層 dedup を通り抜けたレースもここで UNIQUE 違反 (PG 23505) として弾き、`issue-helper.ts` 側でその違反を検知してユーザー向け日本語メッセージに整形
+  3. **UI 強化**: `components/admin/IssueDocumentDialog.tsx` で既発行テンプを disabled + 「発行済」バッジ表示
+  4. **既存重複の整理**: migration 179 冒頭で `(employee_id, document_template_id)` の `revoked_at IS NULL` を `issued_at DESC` で順位付け、最新 1 件を残して旧コピーを `revoked_at=now(), revoked_reason='migration 179: 重複発行の整理 (旧コピーを取消)'` で取消。Storage の孤児 PDF も service-role で削除（`scripts/cleanup-orphan-storage.mjs`）
+- **再発防止**: `docs/reference-map.md §14d` に「2 段構え (アプリ層 dedup + DB 最終防御)」を明記。revoke 後の再発行は部分 INDEX なので可能
+
+---
+
+## 会社発行 ON テンプが社員側「📄 書類カード」と「📨 会社から届いた書類」の両方に出ていた
+
+- **発生日**: 2026-05-18
+- **発生箇所**: `app/(employee)/my/documents/page.tsx:99-102`（旧コード）
+- **フェーズ**: 書類タブ整合性 + 会社発行PDF 重複防止 + 提出フロー混入排除
+- **エラー内容**: `document_templates.is_company_issued=true` のテンプが社員提出フローの一覧（📄 書類カード）にも出現し、上部の発行カード（📨 会社から届いた書類）と重複表示されていた。さらにそのテンプに対して社員が「内容を確認しました」を押せるため意味の取り違えが発生
+- **原因**: `/my/documents/page.tsx` のテンプ filter で `is_company_issued` チェックが入っていなかった（migration 174 で追加したフラグの参照漏れ）
+- **解決方法**: page.tsx の filter に `if (t.is_company_issued) return false;` を 1 行追加。会社発行テンプは上部 `IssuedDocumentsSection` でのみ表示
+- **再発防止**: `docs/reference-map.md §14d` の `document_templates.is_company_issued 参照` 表に page.tsx を明記。バッジ件数のヘルパーにも同じ除外を入れて、画面と件数の整合を担保
+
+---
+
 ## 業務日報 ChildrenTable 左右振り分けが設計時点でルール違反
 
 - **発生日**: 2026-05-16

@@ -161,6 +161,27 @@ export async function issueDocument(
     }
   }
 
+  /* 179 (R2): DB INSERT 直前の dedup チェック。一括発行 / 個別発行 / 招待時自動発行の
+     全 3 経路を塞ぐ。Storage upload は既に終わっているので、重複検知時は孤児ファイルを
+     掃除してから返す。INSERT 〜 ここまでの間のレースは migration 179 の部分 UNIQUE INDEX
+     (issued_documents_active_unique) が最終防御で UNIQUE 違反として弾く */
+  const { data: existingActive } = await admin
+    .from('issued_documents')
+    .select('id, issued_at, issued_by_name')
+    .eq('employee_id', employeeId)
+    .eq('document_template_id', templateId)
+    .is('revoked_at', null)
+    .limit(1);
+  if (existingActive && existingActive.length > 0) {
+    const ex = existingActive[0] as { issued_at: string; issued_by_name: string };
+    await admin.storage.from('issued-documents').remove([objectName]);
+    return {
+      success: false,
+      error: 'この社員には同じ書類が既に発行されています',
+      detail: `発行日: ${new Date(ex.issued_at).toLocaleString('ja-JP')} / 発行者: ${ex.issued_by_name}。再発行する場合は先に取り消してください。`,
+    };
+  }
+
   /* DB INSERT */
   const { data: inserted, error: insErr } = await admin
     .from('issued_documents')
@@ -183,7 +204,17 @@ export async function issueDocument(
     .single();
   if (insErr) {
     await admin.storage.from('issued-documents').remove([objectName]);
-    return { success: false, error: '保存に失敗しました', detail: insErr.message };
+    /* migration 179 の部分 UNIQUE INDEX による違反 (上の dedup と INSERT の間のレース) を
+       ユーザー向け文言に整える */
+    const isUniqueViolation = (insErr as { code?: string }).code === '23505'
+      || /issued_documents_active_unique/.test(insErr.message ?? '');
+    return {
+      success: false,
+      error: isUniqueViolation
+        ? 'この社員には同じ書類が既に発行されています'
+        : '保存に失敗しました',
+      detail: insErr.message,
+    };
   }
 
   /* in_app のみ通知ベルに INSERT */

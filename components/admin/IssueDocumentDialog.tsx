@@ -37,6 +37,9 @@ interface TemplateRow {
   is_company_issued: boolean;
   auto_issue_message: string | null;
   placementCount: number;
+  /* 179 (R2): この社員に対して既に active (revoked_at IS NULL) で発行済かどうか。
+     true なら選択 disabled + 「発行済」バッジ表示 */
+  alreadyIssued: boolean;
 }
 
 export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: Props) {
@@ -75,23 +78,38 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
         return;
       }
       const ids = list.map((t) => t.id);
-      const { data: pls } = await supabase
-        .from('pdf_tag_placements')
-        .select('template_id')
-        .in('template_id', ids);
+      const [plsRes, issuedRes] = await Promise.all([
+        supabase
+          .from('pdf_tag_placements')
+          .select('template_id')
+          .in('template_id', ids),
+        /* 179 (R2): この社員で active (revoked_at IS NULL) の発行を取得して disabled に使う */
+        supabase
+          .from('issued_documents')
+          .select('document_template_id')
+          .eq('employee_id', employee.id)
+          .is('revoked_at', null),
+      ]);
       const countByTpl = new Map<string, number>();
-      for (const p of pls ?? []) {
+      for (const p of plsRes.data ?? []) {
         const tid = (p as { template_id: string }).template_id;
         countByTpl.set(tid, (countByTpl.get(tid) ?? 0) + 1);
       }
+      const issuedTplIds = new Set(
+        ((issuedRes.data ?? []) as { document_template_id: string }[]).map((r) => r.document_template_id),
+      );
       setTemplates(
         list
           .filter((t) => t.data_mode !== 'matrix')
-          .map((t) => ({ ...t, placementCount: countByTpl.get(t.id) ?? 0 }))
+          .map((t) => ({
+            ...t,
+            placementCount: countByTpl.get(t.id) ?? 0,
+            alreadyIssued: issuedTplIds.has(t.id),
+          }))
       );
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [open, supabase]);
+  }, [open, supabase, employee.id]);
 
   /* プレビュー: 選択中テンプレで /api/documents/generate-pdf を叩いて iframe 表示 */
   useEffect(() => {
@@ -232,7 +250,9 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
             ) : (
               <div className="space-y-1 max-h-44 overflow-y-auto border rounded-md p-2">
                 {visibleTemplates.map((t) => {
-                  const disabled = t.placementCount === 0 || !t.pdf_storage_path;
+                  const noPlacement = t.placementCount === 0 || !t.pdf_storage_path;
+                  /* 179 (R2): 既発行 (active) も disabled。revoke 後は active が消えるので再度発行可能 */
+                  const disabled = noPlacement || t.alreadyIssued;
                   return (
                     <label
                       key={t.id}
@@ -253,7 +273,10 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
                       {t.is_company_issued && !disabled && (
                         <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-300">会社発行</Badge>
                       )}
-                      {disabled && (
+                      {t.alreadyIssued && (
+                        <Badge variant="outline" className="text-[10px] text-blue-700 border-blue-300">発行済</Badge>
+                      )}
+                      {noPlacement && (
                         <Badge variant="outline" className="text-[10px]">タグ配置なし</Badge>
                       )}
                     </label>
