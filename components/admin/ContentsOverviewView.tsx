@@ -2,9 +2,10 @@
 
 /* 4 機能 (お知らせ / 遵守事項 / 研修 / 業務マニュアル) を横断する投稿一覧。
    - admin / manager 両方で同じ UI
-   - タイトル検索 + 機能 / カテゴリ / 公開状態 フィルタ
-   - タイトル完全一致 (正規化: 前後空白除去 + 小文字化) 行のハイライト + 「重複」バッジ
-   - 各行から該当機能の管理ページに遷移して直接編集 */
+   - カテゴリ順 → カテゴリ内タイトル順で並び替え
+   - 列: カテゴリ / タイトル / 内容 (ポップで全文) / URL / 公開
+   - URL 重複: 同じ URL を含む投稿が他にもあれば赤バッジ、ホバーで「どこと重複してるか」を pop
+   - タイトルクリックで該当機能の管理ページへ */
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -12,6 +13,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type FeatureKey = 'announcement' | 'compliance' | 'training' | 'manual';
 
@@ -29,14 +31,26 @@ const FEATURE_BADGE_CLASS: Record<FeatureKey, string> = {
   manual: 'bg-purple-100 text-purple-800 border-purple-300',
 };
 
+interface RawRow {
+  id: string;
+  title: string | null;
+  category_id: string | null;
+  is_published: boolean;
+  content_blocks: unknown;
+  body: string | null;
+  content: string | null; /* compliance_documents 用 */
+}
+
 interface Row {
   feature: FeatureKey;
   id: string;
   title: string;
-  categoryName: string | null;
+  categoryId: string | null;
+  categoryName: string;
+  categorySortOrder: number; /* カテゴリ並び替え用 */
   isPublished: boolean;
-  createdAt: string;
-  editorName: string;
+  textContent: string; /* ポップで表示する全文 */
+  urls: string[];
   editLink: string;
 }
 
@@ -44,15 +58,41 @@ interface Props {
   scope: 'admin' | 'manager';
 }
 
-/* 重複判定用のタイトル正規化 (前後空白除去 + 全角→半角空白 + 連続空白 1 つ + 小文字化) */
-function normalize(title: string): string {
-  return title.replace(/[　\s]+/g, ' ').trim().toLowerCase();
+/* URL 抽出: content_blocks (jsonb) を文字列化 + body / content と結合してから http(s) URL を拾う。
+   末尾の句読点や閉じ括弧は除外する。 */
+function extractUrls(...sources: (string | null | undefined | unknown)[]): string[] {
+  const text = sources.map((s) => (typeof s === 'string' ? s : JSON.stringify(s ?? ''))).join(' ');
+  const matches = text.match(/https?:\/\/[^\s<>"'()、。「」　]+/g) ?? [];
+  /* 末尾のピリオド / カンマ / コロンを除去 (テキスト末尾に句読点が混入しがち) */
+  const cleaned = matches.map((u) => u.replace(/[.,:;!?]+$/, ''));
+  return Array.from(new Set(cleaned));
+}
+
+/* content_blocks から人間可読テキストを抽出 (ポップ表示用) */
+function blocksToText(blocks: unknown, body: string | null, content: string | null): string {
+  const parts: string[] = [];
+  if (Array.isArray(blocks)) {
+    for (const b of blocks) {
+      if (b && typeof b === 'object') {
+        const v = (b as { type?: string; value?: unknown }).value;
+        const type = (b as { type?: string }).type;
+        if (typeof v === 'string') parts.push(v);
+        else if (type === 'image' && v && typeof v === 'object' && 'url' in (v as Record<string, unknown>)) {
+          parts.push(`[画像] ${(v as { url: string }).url}`);
+        }
+      }
+    }
+  }
+  if (body && body.trim()) parts.push(body.trim());
+  if (content && content.trim()) parts.push(content.trim());
+  return parts.join('\n').trim();
 }
 
 export function ContentsOverviewView({ scope }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
+  const [contentPreview, setContentPreview] = useState<{ title: string; text: string } | null>(null);
 
   /* フィルタ */
   const [query, setQuery] = useState('');
@@ -73,73 +113,75 @@ export function ContentsOverviewView({ scope }: Props) {
       const tenantId = me.tenant_id;
       const base = scope === 'admin' ? '/admin' : '/mgr';
 
-      const [ann, comp, train, man, cats, emps] = await Promise.all([
-        supabase.from('announcements').select('id, title, category_id, is_published, created_at, updated_at, created_by, updated_by').eq('tenant_id', tenantId),
-        supabase.from('compliance_documents').select('id, title, category_id, is_published, created_at, updated_at, created_by, updated_by').eq('tenant_id', tenantId),
-        supabase.from('trainings').select('id, title, category_id, is_published, created_at, updated_at, created_by, updated_by').eq('tenant_id', tenantId),
-        supabase.from('manuals').select('id, title, category_id, is_published, created_at, updated_at, created_by, updated_by').eq('tenant_id', tenantId),
-        supabase.from('categories').select('id, name, type').eq('tenant_id', tenantId),
-        supabase.from('employees').select('id, last_name, first_name').eq('tenant_id', tenantId),
+      const [ann, comp, train, man, cats] = await Promise.all([
+        supabase.from('announcements').select('id, title, category_id, is_published, content_blocks, body').eq('tenant_id', tenantId),
+        supabase.from('compliance_documents').select('id, title, category_id, is_published, content_blocks, content').eq('tenant_id', tenantId),
+        supabase.from('trainings').select('id, title, category_id, is_published, content_blocks, body').eq('tenant_id', tenantId),
+        supabase.from('manuals').select('id, title, category_id, is_published, content_blocks, body').eq('tenant_id', tenantId),
+        supabase.from('categories').select('id, name, type, sort_order').eq('tenant_id', tenantId),
       ]);
 
-      const catMap = new Map<string, string>();
-      for (const c of (cats.data ?? []) as Array<{ id: string; name: string }>) {
-        catMap.set(c.id, c.name);
-      }
-      const empMap = new Map<string, string>();
-      for (const e of (emps.data ?? []) as Array<{ id: string; last_name: string | null; first_name: string | null }>) {
-        empMap.set(e.id, `${e.last_name ?? ''} ${e.first_name ?? ''}`.trim() || '(名前未設定)');
+      const catInfo = new Map<string, { name: string; sort: number }>();
+      for (const c of (cats.data ?? []) as Array<{ id: string; name: string; sort_order: number | null }>) {
+        catInfo.set(c.id, { name: c.name, sort: c.sort_order ?? 9999 });
       }
 
       function toRow(feature: FeatureKey, basePath: string) {
-        return (r: { id: string; title: string | null; category_id: string | null; is_published: boolean; created_at: string; updated_at: string | null; created_by: string | null; updated_by: string | null }): Row => {
-          const editorId = r.updated_by ?? r.created_by;
+        return (r: RawRow): Row => {
+          const info = r.category_id ? catInfo.get(r.category_id) : undefined;
           return {
             feature,
             id: r.id,
             title: r.title ?? '(無題)',
-            categoryName: r.category_id ? (catMap.get(r.category_id) ?? '(未分類カテゴリ)') : null,
+            categoryId: r.category_id,
+            categoryName: info?.name ?? '(未分類)',
+            categorySortOrder: info?.sort ?? 9999,
             isPublished: r.is_published,
-            createdAt: r.created_at,
-            editorName: editorId ? (empMap.get(editorId) ?? '(削除済)') : '(不明)',
+            textContent: blocksToText(r.content_blocks, r.body, r.content),
+            urls: extractUrls(r.content_blocks, r.body, r.content),
             editLink: `${base}${basePath}`,
           };
         };
       }
 
       const all: Row[] = [
-        ...((ann.data ?? []) as Parameters<ReturnType<typeof toRow>>[0][]).map(toRow('announcement', '/announcements')),
-        ...((comp.data ?? []) as Parameters<ReturnType<typeof toRow>>[0][]).map(toRow('compliance', '/compliance')),
-        ...((train.data ?? []) as Parameters<ReturnType<typeof toRow>>[0][]).map(toRow('training', '/trainings')),
-        ...((man.data ?? []) as Parameters<ReturnType<typeof toRow>>[0][]).map(toRow('manual', '/manuals')),
+        ...((ann.data ?? []) as RawRow[]).map(toRow('announcement', '/announcements')),
+        ...((comp.data ?? []) as RawRow[]).map(toRow('compliance', '/compliance')),
+        ...((train.data ?? []) as RawRow[]).map(toRow('training', '/trainings')),
+        ...((man.data ?? []) as RawRow[]).map(toRow('manual', '/manuals')),
       ];
-      all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      /* カテゴリ順 (sort_order) → カテゴリ内タイトル順 */
+      all.sort((a, b) => {
+        if (a.categorySortOrder !== b.categorySortOrder) return a.categorySortOrder - b.categorySortOrder;
+        if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName, 'ja');
+        return a.title.localeCompare(b.title, 'ja');
+      });
       setRows(all);
       setLoading(false);
     })().catch(() => setLoading(false));
   }, [supabase, scope]);
 
-  /* タイトル完全一致グループ (重複判定) */
-  const dupCounts = useMemo(() => {
-    const map = new Map<string, number>();
+  /* URL → そのURL を含む投稿の配列 (重複検知) */
+  const urlToRows = useMemo(() => {
+    const m = new Map<string, { feature: FeatureKey; id: string; title: string; categoryName: string }[]>();
     for (const r of rows) {
-      const key = normalize(r.title);
-      if (!key) continue;
-      map.set(key, (map.get(key) ?? 0) + 1);
+      for (const u of r.urls) {
+        const arr = m.get(u) ?? [];
+        arr.push({ feature: r.feature, id: r.id, title: r.title, categoryName: r.categoryName });
+        m.set(u, arr);
+      }
     }
-    return map;
+    return m;
   }, [rows]);
 
-  /* カテゴリフィルタの選択肢 (フィルタ中の機能に応じて) */
+  /* カテゴリフィルタ用の選択肢 (現フィルタ機能に合致するものだけ) */
   const categoryOptions = useMemo(() => {
-    const seen = new Map<string, string>();
+    const map = new Map<string, string>();
     for (const r of rows) {
       if (featureFilter !== 'all' && r.feature !== featureFilter) continue;
-      if (!r.categoryName) continue;
-      const key = `${r.feature}::${r.categoryName}`;
-      seen.set(key, r.categoryName);
+      if (r.categoryId) map.set(r.categoryId, r.categoryName);
     }
-    return Array.from(new Set(seen.values())).sort();
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'ja'));
   }, [rows, featureFilter]);
 
   const filtered = useMemo(() => {
@@ -148,8 +190,8 @@ export function ContentsOverviewView({ scope }: Props) {
       if (featureFilter !== 'all' && r.feature !== featureFilter) return false;
       if (categoryFilter !== 'all') {
         if (categoryFilter === '__none__') {
-          if (r.categoryName) return false;
-        } else if (r.categoryName !== categoryFilter) return false;
+          if (r.categoryId) return false;
+        } else if (r.categoryId !== categoryFilter) return false;
       }
       if (publishFilter === 'published' && !r.isPublished) return false;
       if (publishFilter === 'unpublished' && r.isPublished) return false;
@@ -158,9 +200,12 @@ export function ContentsOverviewView({ scope }: Props) {
     });
   }, [rows, query, featureFilter, categoryFilter, publishFilter]);
 
-  const dupTotal = useMemo(() => {
-    return Array.from(dupCounts.values()).filter((n) => n >= 2).length;
-  }, [dupCounts]);
+  /* URL 重複のあるユニーク URL 数 */
+  const dupUrlCount = useMemo(() => {
+    let n = 0;
+    for (const arr of urlToRows.values()) if (arr.length >= 2) n++;
+    return n;
+  }, [urlToRows]);
 
   return (
     <div className="space-y-4">
@@ -168,8 +213,8 @@ export function ContentsOverviewView({ scope }: Props) {
         <h1 className="text-2xl font-bold">投稿一覧 (4 機能横断)</h1>
         <p className="text-sm text-diletto-gray mt-1">
           {loading ? '読み込み中...' : `${filtered.length} / ${rows.length} 件`}
-          {dupTotal > 0 && (
-            <span className="ml-3 text-amber-700">⚠ タイトル重複 {dupTotal} 件 (黄色ハイライト)</span>
+          {dupUrlCount > 0 && (
+            <span className="ml-3 text-amber-700">⚠ 重複URL {dupUrlCount} 件 (赤バッジにカーソルで重複先表示)</span>
           )}
         </p>
       </div>
@@ -204,8 +249,8 @@ export function ContentsOverviewView({ scope }: Props) {
               >
                 <option value="all">すべてのカテゴリ</option>
                 <option value="__none__">(未分類)</option>
-                {categoryOptions.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {categoryOptions.map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
                 ))}
               </select>
             </label>
@@ -231,50 +276,89 @@ export function ContentsOverviewView({ scope }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-diletto-gray-light">
-                  <th className="py-2 px-2 whitespace-nowrap">タイトル</th>
-                  <th className="py-2 px-2 whitespace-nowrap">機能</th>
                   <th className="py-2 px-2 whitespace-nowrap">カテゴリ</th>
+                  <th className="py-2 px-2 whitespace-nowrap">タイトル</th>
+                  <th className="py-2 px-2 whitespace-nowrap">内容</th>
+                  <th className="py-2 px-2 whitespace-nowrap">URL</th>
                   <th className="py-2 px-2 whitespace-nowrap text-center">公開</th>
-                  <th className="py-2 px-2 whitespace-nowrap">投稿日</th>
-                  <th className="py-2 px-2 whitespace-nowrap">編集者</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => {
-                  const dup = dupCounts.get(normalize(r.title)) ?? 1;
+                  /* この投稿の URL のうち重複しているもの */
+                  const dupUrls = r.urls.filter((u) => (urlToRows.get(u)?.length ?? 0) >= 2);
                   return (
-                    <tr
-                      key={`${r.feature}::${r.id}`}
-                      className={
-                        'border-b last:border-0 ' +
-                        (dup >= 2 ? 'bg-amber-50/60' : 'hover:bg-diletto-gray/[0.03]')
-                      }
-                    >
+                    <tr key={`${r.feature}::${r.id}`} className="border-b last:border-0 hover:bg-diletto-gray/[0.03]">
+                      <td className="py-2 px-2 align-top whitespace-nowrap">
+                        <Badge variant="outline" className={`text-[10px] mr-1 ${FEATURE_BADGE_CLASS[r.feature]}`}>
+                          {FEATURE_LABEL[r.feature]}
+                        </Badge>
+                        <span className="text-xs">{r.categoryName}</span>
+                      </td>
                       <td className="py-2 px-2 align-top">
                         <Link href={r.editLink} className="text-diletto-blue hover:underline">
                           {r.title}
                         </Link>
-                        {dup >= 2 && (
-                          <Badge variant="outline" className="ml-2 text-[10px] border-amber-400 text-amber-800">
-                            重複 {dup}
-                          </Badge>
+                      </td>
+                      <td className="py-2 px-2 align-top max-w-[240px]">
+                        {r.textContent ? (
+                          <button
+                            type="button"
+                            className="text-left text-xs text-diletto-gray-light hover:text-diletto-ink line-clamp-2 underline decoration-dotted"
+                            onClick={() => setContentPreview({ title: r.title, text: r.textContent })}
+                            title="クリックで全文表示"
+                          >
+                            {r.textContent.slice(0, 80)}{r.textContent.length > 80 ? '…' : ''}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-diletto-gray-light">(本文なし)</span>
                         )}
                       </td>
-                      <td className="py-2 px-2 align-top">
-                        <Badge variant="outline" className={`text-[11px] ${FEATURE_BADGE_CLASS[r.feature]}`}>
-                          {FEATURE_LABEL[r.feature]}
-                        </Badge>
+                      <td className="py-2 px-2 align-top max-w-[240px]">
+                        {r.urls.length === 0 ? (
+                          <span className="text-xs text-diletto-gray-light">—</span>
+                        ) : (
+                          <div className="space-y-1">
+                            {r.urls.map((u) => {
+                              const sameUrlRows = urlToRows.get(u) ?? [];
+                              const others = sameUrlRows.filter((o) => !(o.feature === r.feature && o.id === r.id));
+                              const isDup = others.length > 0;
+                              const tooltip = isDup
+                                ? `他で使用中:\n${others.map((o) => `・[${FEATURE_LABEL[o.feature]}/${o.categoryName}] ${o.title}`).join('\n')}`
+                                : '';
+                              return (
+                                <div key={u} className="flex items-center gap-1.5">
+                                  <a
+                                    href={u}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-diletto-blue hover:underline truncate max-w-[200px]"
+                                    title={u}
+                                  >
+                                    {u}
+                                  </a>
+                                  {isDup && (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 cursor-help shrink-0"
+                                      title={tooltip}
+                                    >
+                                      重複 {sameUrlRows.length}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {dupUrls.length === 0 && r.urls.length > 0 && (
+                          <p className="text-[10px] text-diletto-gray-light mt-0.5">(他の投稿では未使用)</p>
+                        )}
                       </td>
-                      <td className="py-2 px-2 align-top whitespace-nowrap">{r.categoryName ?? <span className="text-diletto-gray-light">(未分類)</span>}</td>
                       <td className="py-2 px-2 align-top text-center">
                         {r.isPublished
                           ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">公開</Badge>
                           : <Badge variant="outline" className="text-[10px] text-diletto-gray-light">非公開</Badge>}
                       </td>
-                      <td className="py-2 px-2 align-top whitespace-nowrap text-diletto-gray-light text-xs">
-                        {new Date(r.createdAt).toLocaleDateString('ja-JP')}
-                      </td>
-                      <td className="py-2 px-2 align-top whitespace-nowrap text-xs">{r.editorName}</td>
                     </tr>
                   );
                 })}
@@ -286,6 +370,18 @@ export function ContentsOverviewView({ scope }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* 内容ポップ: クリックで全文表示 */}
+      <Dialog open={contentPreview !== null} onOpenChange={(o) => { if (!o) setContentPreview(null); }}>
+        <DialogContent className="w-[92vw] sm:max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{contentPreview?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto text-sm whitespace-pre-wrap leading-relaxed">
+            {contentPreview?.text}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
