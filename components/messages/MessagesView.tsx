@@ -22,6 +22,7 @@ import { createClient } from '@/lib/supabase/client';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { fetchEmployeeIdsForFacilities } from '@/lib/multi-facility';
 import Button from '@/components/shift-compat/Button';
+import { AttachmentDropZone } from '@/components/messages/AttachmentDropZone';
 import type {
   MessageRow,
   MessageThreadRow,
@@ -300,7 +301,7 @@ export default function MessagesView({ scope }: Props) {
   }, [activeThreadId, loadMessages]);
 
   /* --- 添付ファイル選択 --- */
-  const handleAttachChange = (files: FileList | null) => {
+  const handleAttachChange = (files: FileList | File[] | null) => {
     if (!files) return;
     const accepted: File[] = [];
     const rejected: string[] = [];
@@ -615,23 +616,17 @@ export default function MessagesView({ scope }: Props) {
                     className="flex-1 text-sm rounded p-2 outline-none"
                     style={{ background: 'var(--white)', border: '1px solid var(--rule)' }}
                   />
-                  <label className="cursor-pointer text-xs px-3 py-2 rounded border whitespace-nowrap hover:bg-[var(--accent-pale)]" style={{ borderColor: 'var(--rule)' }}>
-                    📎 添付
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*,application/pdf"
-                      className="hidden"
-                      onChange={(e) => { handleAttachChange(e.target.files); e.target.value = ''; }}
-                    />
-                  </label>
                   <Button variant="primary" onClick={sendMessage} disabled={sending || (!composerBody.trim() && pendingAttachments.length === 0)}>
                     {sending ? '送信中...' : '送信'}
                   </Button>
                 </div>
-                <p className="text-[10px]" style={{ color: 'var(--ink-3)' }}>
-                  添付: 画像 / PDF のみ、各 10MB まで
-                </p>
+                <AttachmentDropZone
+                  compact
+                  acceptMime="image/*,application/pdf"
+                  maxBytesLabel="10MB"
+                  helperText="画像 / PDF、各 10MB まで (クリック / ドラッグ&ドロップ / 貼り付け)"
+                  onFiles={handleAttachChange}
+                />
               </div>
             </>
           )}
@@ -727,7 +722,7 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
     return candidates.filter((c) => c.name.includes(q));
   }, [candidates, filter]);
 
-  const handleAttach = (files: FileList | null) => {
+  const handleAttach = (files: FileList | File[] | null) => {
     if (!files) return;
     const out: File[] = [];
     const reject: string[] = [];
@@ -853,13 +848,11 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
           </div>
 
           <div>
-            <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--ink-2)' }}>添付（画像 / PDF, 各 10MB）</label>
-            <input
-              type="file"
-              multiple
-              accept="image/*,application/pdf"
-              onChange={(e) => { handleAttach(e.target.files); e.target.value = ''; }}
-              className="text-sm"
+            <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--ink-2)' }}>添付</label>
+            <AttachmentDropZone
+              acceptMime="image/*,application/pdf"
+              maxBytesLabel="10MB"
+              onFiles={handleAttach}
             />
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
