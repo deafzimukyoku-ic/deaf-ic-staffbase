@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
      171: shift_manager は閲覧レポート対象から除外 (運用上「進捗管理対象外」) */
   let empQuery = supabase
     .from('employees')
-    .select('id, last_name, first_name, facility_id, role, status')
+    .select('id, employee_number, last_name, first_name, facility_id, role, status')
     .eq('tenant_id', me.tenant_id)
     .eq('status', 'active')
     .neq('role', 'shift_manager');
@@ -196,6 +196,7 @@ export async function GET(req: NextRequest) {
     categories: categoriesData || [],
     employees: (employeesData || []).map((e) => ({
       id: e.id,
+      employee_number: e.employee_number ?? null,
       name: `${e.last_name} ${e.first_name}`,
       facility_id: e.facility_id,
       facility_name: e.facility_id ? (facMap.get(e.facility_id) || '') : '',

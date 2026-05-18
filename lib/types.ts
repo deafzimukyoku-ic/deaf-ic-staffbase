@@ -305,6 +305,21 @@ export interface IssuedDocument {
   created_at: string;
 }
 
+/* 182: 社員招待 下書き保存 (invite_drafts)
+   admin が /admin/employees/new の長文フォーム入力途中で離脱 → 別端末で再開 を可能にする。
+   form_data は招待 API に渡すパラメータ全体のスナップショット (email, employee_number,
+   last_name, first_name, ... 全フィールド)。 */
+export interface InviteDraft {
+  id: string;
+  tenant_id: string;
+  admin_employee_id: string;
+  facility_id: string | null;
+  form_data: Record<string, unknown>;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // 職員管理（shift-maker 固有編集項目。社員管理の employees に merge 済み）
 export type EmploymentType = 'full_time' | 'part_time';
 

@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { InviteUrlDialog } from '@/components/admin/InviteUrlDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { InviteUrlDialog } from '@/components/admin/InviteUrlDialog';
+import type { InviteDraft } from '@/lib/types';
 
 interface Facility {
   id: string;
@@ -27,11 +29,21 @@ export default function NewEmployeePage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
-  /* Resend 送信失敗時に API が返してくる招待 URL を保持して
-     InviteUrlDialog で表示する。閉じたら一覧へ遷移。 */
-  const [pendingInviteLink, setPendingInviteLink] = useState<{ url: string; name: string } | null>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  /* Resend 送信失敗時に API が返してくる招待 URL を保持して InviteUrlDialog で表示。
+     閉じたタイミングで一覧へ遷移するため、handleSubmit 側では push しない。 */
+  const [pendingInviteLink, setPendingInviteLink] = useState<{ url: string; name: string } | null>(null);
+
+  /* 182: 下書き保存。currentDraftId が null なら新規 (POST insert)、値があれば更新 (POST update)。
+     招待が成功したタイミングで自動的に DELETE する。 */
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [drafts, setDrafts] = useState<InviteDraft[]>([]);
+  const [draftModalOpen, setDraftModalOpen] = useState(false);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
 
   const [form, setForm] = useState({
     email: '',
@@ -101,6 +113,76 @@ export default function NewEmployeePage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  async function handleSaveDraft() {
+    setSavingDraft(true);
+    try {
+      const res = await fetch('/api/employees/invite-drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentDraftId ?? undefined,
+          facility_id: form.facility_id || null,
+          form_data: form,
+          note: note.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error('下書きの保存に失敗しました', { description: json.error });
+        return;
+      }
+      const saved = json.draft as InviteDraft;
+      setCurrentDraftId(saved.id);
+      toast.success('下書きを保存しました');
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  async function handleOpenDraftList() {
+    setLoadingDrafts(true);
+    setDraftModalOpen(true);
+    try {
+      const res = await fetch('/api/employees/invite-drafts');
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error('下書き一覧の取得に失敗しました', { description: json.error });
+        setDraftModalOpen(false);
+        return;
+      }
+      setDrafts((json.drafts ?? []) as InviteDraft[]);
+    } finally {
+      setLoadingDrafts(false);
+    }
+  }
+
+  function handleLoadDraft(d: InviteDraft) {
+    /* form_data は招待フォーム全体のスナップショット。型は Record<string, unknown> なので
+       form の各キーに代入する形でマージ (未定義キーがあっても既存値を保持) */
+    const fd = d.form_data as Partial<typeof form>;
+    setForm((prev) => ({ ...prev, ...fd }));
+    setNote(d.note ?? '');
+    setCurrentDraftId(d.id);
+    setDraftModalOpen(false);
+    toast.success('下書きを読み込みました');
+  }
+
+  async function handleDeleteDraft(id: string) {
+    if (!confirm('この下書きを削除しますか?')) return;
+    const res = await fetch(`/api/employees/invite-drafts/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      toast.error('削除に失敗しました', { description: json.error });
+      return;
+    }
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+    if (currentDraftId === id) {
+      setCurrentDraftId(null);
+      setNote('');
+    }
+    toast.success('下書きを削除しました');
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tenantId) return;
@@ -147,13 +229,7 @@ export default function NewEmployeePage() {
       toast.warning(result.warning);
     }
 
-    if (result.resent) {
-      toast.success(result.message || `${form.last_name} ${form.first_name} さんに招待メールを再送信しました`);
-    } else {
-      toast.success(`${form.last_name} ${form.first_name} さんを招待しました`);
-    }
-
-    /* Resend 失敗で inviteLink が返ってきたらダイアログ表示。
+    /* Resend 失敗で inviteLink が返ってきたら InviteUrlDialog を表示。
        閉じたタイミングで一覧へ遷移するため、ここでは push しない。 */
     if (result.inviteLink) {
       setPendingInviteLink({ url: result.inviteLink, name: `${form.last_name} ${form.first_name}` });
@@ -161,6 +237,20 @@ export default function NewEmployeePage() {
       return;
     }
 
+    /* 182: 招待が成功した時点で、編集中の下書きがあれば自動削除 */
+    if (currentDraftId) {
+      try {
+        await fetch(`/api/employees/invite-drafts/${currentDraftId}`, { method: 'DELETE' });
+      } catch {
+        /* 下書き削除失敗は致命ではない。ログ程度。 */
+      }
+    }
+
+    if (result.resent) {
+      toast.success(result.message || `${form.last_name} ${form.first_name} さんに招待メールを再送信しました`);
+    } else {
+      toast.success(`${form.last_name} ${form.first_name} さんを招待しました`);
+    }
     router.push('/admin/employees');
     router.refresh();
   }
@@ -175,6 +265,30 @@ export default function NewEmployeePage() {
           <CardDescription>社員にメールで招待リンクが送信されます</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* 182: 下書き保存。長文入力中に離脱→別端末で再開 を可能にする */}
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-brand-gray/20 bg-brand-beige/30 px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-brand-gray-light shrink-0">📝</span>
+              {currentDraftId ? (
+                <span className="truncate">
+                  <strong>下書き編集中</strong>
+                  {note && <span className="ml-2 text-brand-gray-light">({note})</span>}
+                </span>
+              ) : (
+                <span className="text-brand-gray-light">入力途中で「下書き保存」しておけば、別端末からでも再開できます</span>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleOpenDraftList}
+              className="shrink-0"
+            >
+              📋 下書きから読込
+            </Button>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -385,6 +499,30 @@ export default function NewEmployeePage() {
               </div>
             </div>
 
+            {/* 182: 下書き保存用メモ + 保存ボタン (送信ボタンの上に配置)。
+                メモは admin の自由入力 (「Aさん 入社準備」等)。任意。 */}
+            <div className="rounded-md border border-brand-gray/20 bg-white p-3 space-y-2">
+              <Label htmlFor="draft-note" className="text-xs text-brand-gray">下書きメモ(任意)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="draft-note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="例: Aさん 入社準備、Bさん 再雇用 …"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSaveDraft}
+                  disabled={savingDraft}
+                  className="shrink-0"
+                >
+                  {savingDraft ? '保存中…' : currentDraftId ? '💾 下書き更新' : '💾 下書き保存'}
+                </Button>
+              </div>
+            </div>
+
             <div className="flex gap-3 pt-4">
               <Button
                 type="button"
@@ -399,7 +537,8 @@ export default function NewEmployeePage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              ※ 招待リンクは送信から約1時間で失効します。期限切れになった場合は社員一覧から再送信できます。
+              ※ 招待リンクは送信から約1時間で失効します。期限切れになった場合は社員一覧から再送信できます。<br />
+              ※ 招待が成功すると、編集中だった下書きは自動的に削除されます。
             </p>
           </form>
         </CardContent>
@@ -415,6 +554,56 @@ export default function NewEmployeePage() {
           router.refresh();
         }}
       />
+
+      {/* 182: 下書き一覧モーダル */}
+      <Dialog open={draftModalOpen} onOpenChange={(o) => { if (!o) setDraftModalOpen(false); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>下書き一覧</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto -mx-4 px-4 py-2">
+            {loadingDrafts ? (
+              <p className="py-8 text-center text-sm text-brand-gray-light">読み込み中…</p>
+            ) : drafts.length === 0 ? (
+              <p className="py-8 text-center text-sm text-brand-gray-light">下書きはありません</p>
+            ) : (
+              <ul className="divide-y divide-brand-gray/10">
+                {drafts.map((d) => {
+                  const fd = d.form_data as Partial<typeof form>;
+                  const fullName = `${fd.last_name ?? ''} ${fd.first_name ?? ''}`.trim();
+                  const updated = new Date(d.updated_at);
+                  const fmt = `${updated.getFullYear()}-${String(updated.getMonth() + 1).padStart(2, '0')}-${String(updated.getDate()).padStart(2, '0')} ${String(updated.getHours()).padStart(2, '0')}:${String(updated.getMinutes()).padStart(2, '0')}`;
+                  return (
+                    <li key={d.id} className="py-3 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">
+                          {d.note?.trim() || fullName || '(無題の下書き)'}
+                        </p>
+                        <p className="text-xs text-brand-gray-light mt-0.5">
+                          {fd.email && <span>{fd.email} / </span>}
+                          {fullName && <span>{fullName} / </span>}
+                          最終更新: {fmt}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleLoadDraft(d)}>
+                          読込
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleDeleteDraft(d.id)} className="text-brand-red border-brand-red/40 hover:bg-brand-red/[0.04]">
+                          削除
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDraftModalOpen(false)}>閉じる</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

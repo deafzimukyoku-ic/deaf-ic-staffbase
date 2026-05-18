@@ -43,10 +43,26 @@ interface ItemRow {
 }
 interface EmpRow {
   id: string;
+  /** 従業員番号 (string だが数値主体)。 ReportMatrix では数値優先で昇順ソートに使う */
+  employee_number: string | null;
   name: string;
   facility_id: string | null;
   facility_name: string;
   role: string;
+}
+
+/* 従業員番号順ソート: 数値変換できれば数値、それ以外は ja-locale 文字列比較、
+   未設定 (NULL / 空) は末尾。 §4.8 ProgressDashboard と同じ実装。 */
+function sortByEmployeeNumber(a: EmpRow, b: EmpRow): number {
+  const an = String(a.employee_number ?? '').trim();
+  const bn = String(b.employee_number ?? '').trim();
+  if (!an && !bn) return 0;
+  if (!an) return 1;
+  if (!bn) return -1;
+  const aNum = Number(an);
+  const bNum = Number(bn);
+  if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+  return an.localeCompare(bn, 'ja');
 }
 interface ViewAgg {
   employee_id: string;
@@ -182,7 +198,9 @@ function ReportBody({
   categoryFilter: string;
   onCategoryFilterChange: (v: string) => void;
 }) {
-  const { employees, views, categories } = data;
+  /* 社員一覧は従業員番号順に並び替え(数値優先、未設定は末尾) */
+  const employees = [...data.employees].sort(sortByEmployeeNumber);
+  const { views, categories } = data;
 
   /* カテゴリフィルタ適用後の items。
      'all' 表示時はカテゴリ順 → カテゴリ内 sort_order 順で並べ替えて、
