@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { EmployeeImagesCard } from '@/components/employee/EmployeeImagesCard';
+import { IssuedDocumentsSection } from '@/components/employee/IssuedDocumentsSection';
 import type { DocumentTemplate, DocumentSubmission } from '@/lib/types';
 
 interface TemplateWithSubmission {
@@ -223,6 +224,9 @@ export default function MyDocumentsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">書類</h1>
+
+      {/* 173: 会社→社員 発行書類 (在籍社員のみ表示。0 件なら何も描画しない) */}
+      <IssuedDocumentsSection />
 
       {employeeData && employeeId && tenantId && (
         <div className="mb-6">

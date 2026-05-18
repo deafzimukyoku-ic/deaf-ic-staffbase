@@ -47,7 +47,65 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-16（招待 URL 手動配布 fallback + 業務日報/日次出力 モバイル対応 完了） / 全体完了率: 約 97%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-18（書類発行 / shift_manager 一覧除外 / 送迎表列順 施設単位統一 実装完了） / 全体完了率: 約 97%</p>
+
+<!-- 2026-05-18 計画 #1: shift_manager 一覧除外 (案件 B) -->
+<div class="phase">
+  <h2>案件 B — shift_manager 一覧除外 (2026-05-18 完了) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>シフト統括 (role='shift_manager') を職員一覧 / ダッシュボード / 進捗管理 / リマインド対象から非表示にする。シフト機能 (/admin/shifts/*) には従来通りアクセス可</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>migration 156 の get_my_subordinate_progress を CREATE OR REPLACE で上書き (156 自体は CLAUDE.md §7 に従い編集禁止)。フロント側は employees クエリに .neq('role','shift_manager') を 1 行追加するだけ</td></tr>
+      <tr><td>B-1</td><td>migration 171: get_my_subordinate_progress RPC を CREATE OR REPLACE。target_emps CTE に「e.role &lt;&gt; 'shift_manager'」を追加。シグネチャ・戻り値・既存 GRANT は完全同一</td><td class="files">supabase/migrations/171_exclude_shift_manager_from_subordinate_progress.sql (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>pooler 経由で適用。pg_get_functiondef で本体検証。ロールバック手順: DROP FUNCTION → 156 再 apply</td></tr>
+      <tr><td>B-2</td><td>admin dashboard の employees クエリに .neq('role','shift_manager') 追加</td><td class="files">app/(admin)/admin/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>社員進捗一覧 / 概要カード社員数 / 達成率分母 / リマインドモーダル対象が自動除外 (後段 ProgressDashboard.tsx 不変)</td></tr>
+      <tr><td>B-3</td><td>閲覧レポート API の employees クエリに .neq('role','shift_manager') 追加</td><td class="files">app/api/reports/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ReportMatrix の行から shift_manager が消える (admin / manager どちらの閲覧でも)</td></tr>
+      <tr><td>B-4</td><td>リマインド送信 API の employees クエリに .neq('role','shift_manager') 追加</td><td class="files">app/api/admin/send-reminder/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>UI フィルタが効いていれば事実上通らないが、API 入口で安全側に倒す</td></tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① admin で /admin/dashboard → 「パズル シフト統括」が一覧に出ない ② admin リマインドモーダル → 候補に出ない ③ admin で /admin/reports → マトリクス行に出ない ④ manager で /mgr/dashboard → 部下進捗一覧に出ない (RPC 経由で除外) ⑤ manager で /mgr/reports → マトリクスに出ない ⑥ shift_manager 本人ログイン → /admin/shifts/* に従来通り入れる (middleware 不変) ⑦ employee_progress ビューに shift_manager 行が残っていても、フロント起点が employees join なので UI に現れない</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 2026-05-18 計画 #2: 送迎表列順 施設単位統一 (案件 C) -->
+<div class="phase">
+  <h2>案件 C — 送迎表列順 施設単位統一 (2026-05-18 完了) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>送迎表の列順 (迎時間/迎場所/迎担当/送時間/送場所/送担当) を施設単位で全員に共通の並びに統一する。現状は localStorage['deaf-ic:transport:column-order:{facilityId}'] でブラウザ/デバイス単位</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>TransportFull.tsx 行 42-43 のコメントに元々の設計意図「カラムが無いので localStorage」と書かれている。カラム追加で本来の設計に戻す。RLS / index 追加不要 (fss_admin_all / fss_manager_own を流用)</td></tr>
+      <tr><td>C-1</td><td>migration 172: facility_shift_settings に transport_column_order jsonb カラム追加 (NULL 許容)</td><td class="files">supabase/migrations/172_facility_shift_settings_transport_column_order.sql (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>NOT NULL にしない (既存行 NULL のままフロントで DEFAULT_TRANSPORT_COLUMN_ORDER フォールバック)。jsonb は配列を直接格納</td></tr>
+      <tr><td>C-2</td><td>lib/types.ts: FacilityShiftSettings 型に transport_column_order: TransportColumnKey[] | null 追加</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>any 禁止 (CLAUDE.md §9) のため TransportColumnKey を constants.ts から import</td></tr>
+      <tr><td>C-3</td><td>TransportFull.tsx (a) 読み込みを localStorage → settings.transport_column_order に変更。DEFAULT に含まれる key のみ採用 + 欠けている key を末尾に追加 (将来のカラム追加に耐える)</td><td class="files">components/shift/TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>行 327-349 付近の useEffect 内</td></tr>
+      <tr><td>C-4</td><td>TransportFull.tsx (b) handleColumnReorder を async 化し supabase.update で transport_column_order を保存。失敗時は setColumnOrder(prev) で巻き戻し + エラー表示</td><td class="files">components/shift/TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>行 830-843 付近</td></tr>
+      <tr><td>C-5</td><td>TransportFull.tsx (c) 行 42-43 のコメント差し替え (「カラムが無いので localStorage」→「カラムができたので施設単位 DB」)</td><td class="files">components/shift/TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① admin で並び替え → リロードしても保持 ② 別ブラウザの manager で同じ施設を開く → <strong>同じ並びが見える (★ コア要件)</strong> ③ 別端末 (PC ↔ iPhone) で同じアカウント → 同じ並び ④ 別施設に切替 → その施設の並びが反映 ⑤ employee / shift_manager ログイン → 並び替え UI は無効 (既存挙動継続) だが保存された並びは閲覧時に適用 ⑥ DB NULL の facility → DEFAULT_TRANSPORT_COLUMN_ORDER でフォールバック ⑦ 既存 localStorage の各ユーザーカスタム並びは失われる (統一が目的なので許容)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 2026-05-18 計画 #3: 書類発行 (会社→社員) (案件 A) -->
+<div class="phase">
+  <h2>案件 A — 書類発行 (会社→社員) (2026-05-18 完了) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>雇用契約書 / 辞令 / 給与明細 / 健診結果通知など「会社が社員に渡す書類」を、社員詳細ページから個別発行。在籍社員は /my/documents 上部カード、退職社員は Resend 経由メール添付。既存「社員→会社 提出」とは完全に独立した逆方向フロー</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>確定仕様: 退職者はメールのみ / コメントはオプション (チェックボックス) / 取り消し機能あり (revoked_at) / manager は自管轄施設のみ可 / プレビューは既存 iframe 流用 / 履歴は新しい順 / migration 173</td></tr>
+      <tr><td>A-1</td><td>migration 173: issued_documents テーブル + RLS (is_own_issued_document / can_admin_view_issued_document の 2 SECURITY DEFINER 関数 + SELECT/INSERT/UPDATE 3 ポリシー) + Storage 'issued-documents' バケット (20MB / application/pdf only) + Storage RLS + notifications.event_type CHECK に 'document_issued' 追加 (migration 142 を ALTER で上書き)</td><td class="files">supabase/migrations/173_issued_documents.sql (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tenant_id + facility_id 二重スコープ。発行者 (issued_by_name) はスナップショット保持で退職しても表示が消えない。pooler 経由で適用</td></tr>
+      <tr><td>A-2</td><td>lib/types.ts: IssuedDocument 型追加 (delivery_mode 'in_app' | 'email_only' / revoked_at / acknowledged_at 等)</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>A-3</td><td>新規 API: POST /api/issued-documents/create — ロール認可 (admin or 管轄 manager) → テンプレ取得 → renderMergedPdf + buildPlacementData で PDF 生成 → status 分岐 (active: Storage 保存 + DB insert + notifications INSERT, retired: メール送信 + DB insert)</td><td class="files">app/api/issued-documents/create/route.ts (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>退職者メール失敗時は 200 で email_error にメッセージ保存して UI で警告</td></tr>
+      <tr><td>A-4</td><td>新規 API: POST /api/issued-documents/[id]/acknowledge — 受領確認 (本人のみ acknowledged_at 更新)</td><td class="files">app/api/issued-documents/[id]/acknowledge/route.ts (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>A-5</td><td>新規 API: POST /api/issued-documents/[id]/revoke — 取り消し (admin / 管轄 manager のみ revoked_at + Storage 削除)</td><td class="files">app/api/issued-documents/[id]/revoke/route.ts (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>取り消し済は社員側カードがグレーアウト「取り消されました」表示、PDF DL 不可</td></tr>
+      <tr><td>A-6</td><td>新規 API: GET /api/issued-documents/[id]/pdf — Storage signed URL 60 秒 (本人 / admin / 管轄 manager)</td><td class="files">app/api/issued-documents/[id]/pdf/route.ts (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>A-7</td><td>新規: 発行モーダル (テンプレ選択 / コメント on-off / プレビュー / 退職者警告バッジ / 発行ボタン)</td><td class="files">components/admin/IssueDocumentDialog.tsx (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「マッピング未配置」テンプレは disabled。退職者かつ email NULL の場合は発行ボタン disabled。モバイル幅 w-[92vw] sm:max-w-2xl max-h-[90vh] flex flex-col</td></tr>
+      <tr><td>A-8</td><td>新規: 社員詳細「書類」タブの発行履歴カード (新しい順)</td><td class="files">components/admin/IssuedDocumentsCard.tsx (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>A-9</td><td>新規: /my/documents 上部「会社から届いた書類」セクション (在籍社員のみ表示。受領確認ボタン + プレビュー + DL + 取り消し済表示)</td><td class="files">components/employee/IssuedDocumentsSection.tsx (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>A-10</td><td>新規: 退職者宛メール文面テンプレ (Resend) — 既存 lib/email/reminder-email.ts を参考。<strong>文面サンプル要承認</strong></td><td class="files">lib/email/issued-document-email.ts (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>PDF を添付。本文には「あなた宛に書類が発行されました」「発行者名 / 発行日時 / 1 時間以内に保存推奨」</td></tr>
+      <tr><td>A-11</td><td>社員詳細ページ「書類」タブの「書類提出状況」セクション<strong>下</strong>に IssuedDocumentsCard 差し込み</td><td class="files">app/(admin)/admin/employees/[id]/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>A-12</td><td>/my/documents 既存カード一覧の<strong>上</strong>に IssuedDocumentsSection 差し込み (既存ロジックは触らない)</td><td class="files">app/(employee)/my/documents/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr><td>A-13</td><td>docs/reference-map.md 更新 (issued_documents テーブル + Storage バケット + API 4 本 + コンポーネント 3 本 + 'document_issued' event_type)</td><td class="files">docs/reference-map.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td>—</tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① admin / manager が在籍社員に発行 → /my/documents にカードが出る ② PDF プレビュー / DL / 受領確認が動作 ③ admin / manager が退職者に発行 → メールが届く (Resend ダッシュボードで配信確認) ④ 退職者 email が NULL → 発行ボタン disabled ⑤ 発行コメントなし / あり 両方動作 ⑥ 取り消し → 社員側カードがグレーアウト「取り消されました」表示、PDF DL 不可 ⑦ manager が他施設の社員 ID を直接 API に POST → 403 ⑧ マッピング未配置テンプレ → 発行ボタン無効 ⑨ 通知ベルへの反映、未読バッジ確認 (event_type='document_issued') ⑩ PC / タブレット / モバイル 表示確認 ⑪ shift_manager は employee と同等扱いで「自分宛発行書類の表示 / DL / 受領確認」のみ可能</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 招待 URL 手動配布 fallback (2026-05-16) -->
 <div class="phase">
@@ -245,12 +303,12 @@
     <tbody>
       <tr><td>CLAUDE.md 作成</td><td class="files">deaf-ic/CLAUDE.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>統合ルール確定</td></tr>
       <tr><td>progress.html 作成</td><td class="files">deaf-ic/docs/progress.html</td><td><span class="status prog">進行中</span></td><td class="pct">90%</td><td>本ファイル</td></tr>
-      <tr><td>reference-map.md 作成</td><td class="files">deaf-ic/docs/reference-map.md</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>スケルトンから開始</td></tr>
-      <tr><td>error-log.md 作成</td><td class="files">deaf-ic/docs/error-log.md</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>テンプレートのみ</td></tr>
+      <tr><td>reference-map.md 作成</td><td class="files">deaf-ic/docs/reference-map.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>スケルトンから開始</td></tr>
+      <tr><td>error-log.md 作成</td><td class="files">deaf-ic/docs/error-log.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>テンプレートのみ</td></tr>
       <tr><td>staffbase をベースにコピー</td><td class="files">deaf-ic/app, components, lib, supabase, public</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>node_modules含む</td></tr>
       <tr><td>diletto_assets/ 削除</td><td class="files">diletto_assets/</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>残るdiletto-*クラス名はPhase7で</td></tr>
       <tr><td>.env.example 整備</td><td class="files">.env.example</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>Stripe変数削除済</td></tr>
-      <tr><td>SPEC.md 作成</td><td class="files">SPEC.md</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>後日作成</td></tr>
+      <tr><td>SPEC.md 作成</td><td class="files">SPEC.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>後日作成</td></tr>
       <tr><td>npm run dev 起動確認</td><td class="files">-</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>localhost:6001</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】diletto_assets の残留なし / CLAUDE.mdと実コードの整合 / .env.exampleに必要変数が過不足なく揃う / 参照元2アプリは未改変</td></tr>
     </tbody>
@@ -272,7 +330,7 @@
       <tr><td>デモモード（DEV_SKIP_AUTH）</td><td class="files">middleware.ts, .env.local</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ローカル確認用に一時実装</td></tr>
       <tr><td>ロール3段階化</td><td class="files">lib/constants.ts EMPLOYEE_ROLES</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>admin/manager/employee</td></tr>
       <tr><td>Stripe依存削除</td><td class="files">package.json</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>"stripe": "^22.0.1" 削除</td></tr>
-      <tr><td>RLS更新（ロール）</td><td class="files">supabase/migrations/（新規）</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>Phase 6で facility RLS と一緒に</td></tr>
+      <tr><td>RLS更新（ロール）</td><td class="files">supabase/migrations/（新規）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>Phase 6で facility RLS と一緒に</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】Stripe参照が1つも残っていない（grep "stripe"）/ super_admin文字列残留なし / plan文字列残留なし / ロール定数は lib/constants.ts 経由のみ</td></tr>
     </tbody>
   </table>
@@ -335,17 +393,17 @@
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
-      <tr><td>shift-maker migrations 分析・差分抽出</td><td class="files">diletto-shift-maker/supabase/migrations/</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>40個を精査</td></tr>
-      <tr><td>tenants統合マイグレーション</td><td class="files">supabase/migrations/100_merge_tenants.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>staffbase側を主とする</td></tr>
-      <tr><td>children + facility_id</td><td class="files">supabase/migrations/101_children.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>RLS facility単位</td></tr>
-      <tr><td>schedule_entries + facility_id</td><td class="files">supabase/migrations/102_schedule_entries.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>shift_requests + facility_id</td><td class="files">supabase/migrations/103_shift_requests.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>shift_assignments + facility_id + publish_status</td><td class="files">supabase/migrations/104_shift_assignments.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>enum追加</td></tr>
-      <tr><td>transport_assignments + facility_id + publish_status</td><td class="files">supabase/migrations/105_transport_assignments.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>shift_change_requests + facility_id</td><td class="files">supabase/migrations/106_shift_change_requests.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>child_area_eligibility, attendance_audit_logs 他</td><td class="files">supabase/migrations/107_*.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>RPC関数移植（update_schedule_entry_attendance等）</td><td class="files">supabase/migrations/108_rpcs.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>facilities seed（4事業所）</td><td class="files">supabase/seed.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>事業所名・住所を確定してから</td></tr>
+      <tr><td>shift-maker migrations 分析・差分抽出</td><td class="files">diletto-shift-maker/supabase/migrations/</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>40個を精査</td></tr>
+      <tr><td>tenants統合マイグレーション</td><td class="files">supabase/migrations/100_merge_tenants.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>staffbase側を主とする</td></tr>
+      <tr><td>children + facility_id</td><td class="files">supabase/migrations/101_children.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>RLS facility単位</td></tr>
+      <tr><td>schedule_entries + facility_id</td><td class="files">supabase/migrations/102_schedule_entries.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>shift_requests + facility_id</td><td class="files">supabase/migrations/103_shift_requests.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>shift_assignments + facility_id + publish_status</td><td class="files">supabase/migrations/104_shift_assignments.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>enum追加</td></tr>
+      <tr><td>transport_assignments + facility_id + publish_status</td><td class="files">supabase/migrations/105_transport_assignments.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>shift_change_requests + facility_id</td><td class="files">supabase/migrations/106_shift_change_requests.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>child_area_eligibility, attendance_audit_logs 他</td><td class="files">supabase/migrations/107_*.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>RPC関数移植（update_schedule_entry_attendance等）</td><td class="files">supabase/migrations/108_rpcs.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>facilities seed（4事業所）</td><td class="files">supabase/seed.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>事業所名・住所を確定してから</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】全新規テーブルに facility_id + RLS / テーブル名衝突なし / staffbase既存マイグレーション未改変 / ローカルでマイグレーション通過</td></tr>
     </tbody>
   </table>
@@ -357,10 +415,10 @@
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
-      <tr><td>employees に shift-maker staff カラム追加</td><td class="files">supabase/migrations/110_employees_shift_fields.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>資格・対応エリア・勤務時間等</td></tr>
-      <tr><td>shift_assignments.staff_id → employees.id 参照</td><td class="files">supabase/migrations/111_fk_rewire.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>FK付け替え</td></tr>
-      <tr><td>shift-maker のstaffテーブル削除（未使用化）</td><td class="files">supabase/migrations/112_drop_legacy_staff.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>統合後に削除</td></tr>
-      <tr><td>types.ts 統合</td><td class="files">lib/types.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>StaffRow → EmployeeRow</td></tr>
+      <tr><td>employees に shift-maker staff カラム追加</td><td class="files">supabase/migrations/110_employees_shift_fields.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>資格・対応エリア・勤務時間等</td></tr>
+      <tr><td>shift_assignments.staff_id → employees.id 参照</td><td class="files">supabase/migrations/111_fk_rewire.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>FK付け替え</td></tr>
+      <tr><td>shift-maker のstaffテーブル削除（未使用化）</td><td class="files">supabase/migrations/112_drop_legacy_staff.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>統合後に削除</td></tr>
+      <tr><td>types.ts 統合</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>StaffRow → EmployeeRow</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】FK整合性 / 既存 employees コンポーネントが新カラムと衝突しない / reference-map更新 / RLS facility単位で通過</td></tr>
     </tbody>
   </table>
@@ -378,16 +436,16 @@
       <tr><td>Step 1-Full: 児童管理 忠実移植（shift-puzzle 1031行）</td><td class="files">app/globals.css (CSS shim), components/shift-compat/{Modal,Button,Badge}.tsx, lib/shift-utils.ts, components/shift/ChildrenSettingsFull.tsx, lib/types.ts (AreaLabel.address, ChildAreaEligibleStaffRow), app/(admin)/admin/children/page.tsx, app/(manager)/mgr/children/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shift-puzzle UIを忠実移植: ドラッグ並び替え/学年色背景/エリア併用（事業所共通+児童専用）/担当可能職員マトリクス/住所/時刻。CSSは --ink/--accent等のshift-puzzle変数をdiletto色にシム</td></tr>
       <tr><td>Step 2: 利用予定グリッド（admin/mgr） MVP</td><td class="files">lib/types.ts (ScheduleEntryRow等), components/shift/ScheduleGrid.tsx, components/shift/ScheduleCellEditor.tsx, app/(admin)/admin/shifts/schedule/page.tsx, app/(manager)/mgr/shifts/schedule/page.tsx, package.json (date-fns)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>月ステッパー + 児童×日グリッド + セルクリック編集（利用・迎え/送り時刻・エリア）。PDF/Excelインポートは Step 2b 以降</td></tr>
       <tr><td>サイドバー並べ替え + シフト設定アコーディオン追加</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx, app/(admin)/admin/shifts/{staff-settings,facility-settings}/page.tsx, app/(manager)/mgr/shifts/{staff-settings,facility-settings}/page.tsx, components/admin/Breadcrumb.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shift-puzzle の作業順序に合わせて再編。児童管理/職員シフト設定/事業所エリア設定を「シフト設定」アコーディオン配下に。新規2ページはプレースホルダ</td></tr>
-      <tr><td>利用予定ページ移植</td><td class="files">app/(manager)/admin/shifts/schedule/page.tsx, components/schedule/*</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>FullCalendar込み</td></tr>
-      <tr><td>PDFインポート移植（Claude API）</td><td class="files">app/api/shifts/import-pdf/route.ts, lib/anthropic/parsePdf.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>APIキー未設定時フォールバック</td></tr>
+      <tr><td>利用予定ページ移植</td><td class="files">app/(manager)/admin/shifts/schedule/page.tsx, components/schedule/*</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>FullCalendar込み</td></tr>
+      <tr><td>PDFインポート移植（Claude API）</td><td class="files">app/api/shifts/import-pdf/route.ts, lib/anthropic/parsePdf.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>APIキー未設定時フォールバック</td></tr>
       <tr><td>シフト表ページ移植【タスクA完了】</td><td class="files">app/(admin)/admin/shifts/page.tsx, app/(manager)/mgr/shifts/page.tsx, components/shift/{ShiftFull,ShiftGridFull,ApprovalQueueFull,MonthStepper}.tsx, lib/logic/{generateShift,qualifiedCoverage}.ts, lib/date/{isToday,holidays}.ts, lib/auth/shift-api-helpers.ts, lib/email/shift-notification-email.ts, app/api/shifts/{transition,shift-change-requests/[id]}/route.ts, app/api/cron/send-notifications/route.ts (拡張), supabase/migrations/{106,107}.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>案Z採用: ready で employee も閲覧可、shift_change_requests でフィードバック。公開フロー draft→ready→published の3段階ボタン込み。公開時は notification_queue 経由で NPO 全 admin にメール、ready 遷移時は該当 facility employee 全員にメール。</td></tr>
       <tr><td>シフト自動生成ロジック移植</td><td class="files">lib/logic/generateShift.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tenant_id + facility_id 対応 / publish_status='draft' 固定で保存 / 警告 (understaffed / no_qualified) を返す</td></tr>
-      <tr><td>送迎表ページ移植</td><td class="files">app/(manager)/admin/shifts/transport/page.tsx, components/transport/*</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>全事業所常時有効</td></tr>
-      <tr><td>送迎自動割当API移植</td><td class="files">app/api/shifts/transport/generate/route.ts, lib/logic/generateTransport.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>休み希望ページ移植（employee側）</td><td class="files">app/(employee)/my/requests/*</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>休み希望承認ページ（manager側）</td><td class="files">app/(manager)/admin/requests/*</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>児童管理ページ移植</td><td class="files">app/(manager)/admin/settings/children/*</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>素Tailwind UIをshadcn/ui化</td><td class="files">components/shift/*, components/schedule/*, components/transport/*</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>Button/Modal/Badge統一</td></tr>
+      <tr><td>送迎表ページ移植</td><td class="files">app/(manager)/admin/shifts/transport/page.tsx, components/transport/*</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>全事業所常時有効</td></tr>
+      <tr><td>送迎自動割当API移植</td><td class="files">app/api/shifts/transport/generate/route.ts, lib/logic/generateTransport.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>休み希望ページ移植（employee側）</td><td class="files">app/(employee)/my/requests/*</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>休み希望承認ページ（manager側）</td><td class="files">app/(manager)/admin/requests/*</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>児童管理ページ移植</td><td class="files">app/(manager)/admin/settings/children/*</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>素Tailwind UIをshadcn/ui化</td><td class="files">components/shift/*, components/schedule/*, components/transport/*</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>Button/Modal/Badge統一</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】全画面 manager は自facilityのみ表示 / FullCalendar ライセンス確認 / shadcn Button 4バリアント統一 / PC・タブレット両表示確認</td></tr>
     </tbody>
   </table>
@@ -406,7 +464,7 @@
       <tr><td>employee側 RLS: ready/published 両方閲覧（案Z）</td><td class="files">supabase/migrations/107_employee_ready_visibility.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>仮シフト確認のため ready から閲覧可。shift_change_requests でフィードバック</td></tr>
       <tr><td>公開時メール通知（NPO 全 admin）</td><td class="files">supabase/migrations/106 + lib/email/shift-notification-email.ts + cron 拡張</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>notification_queue 経由、Vercel Cron で最大10分以内に Resend 送信</td></tr>
       <tr><td>仮シフト確認依頼メール（該当 facility employee 全員）</td><td class="files">同上 (shift_ready)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>draft→ready 遷移時に enqueue</td></tr>
-      <tr><td>employee シフト閲覧画面（/my/shifts）</td><td class="files">app/(employee)/my/shifts/page.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>タスクF で実装</td></tr>
+      <tr><td>employee シフト閲覧画面（/my/shifts）</td><td class="files">app/(employee)/my/shifts/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>タスクF で実装</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】draft/ready/published 3状態が全UIで視覚識別可 / employeeから ready は見えない（RLS検証） / 公開後編集で再公開を促す導線 / 送迎表とシフトのステータス整合</td></tr>
     </tbody>
   </table>
@@ -418,11 +476,11 @@
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
-      <tr><td>RLS ヘルパー関数</td><td class="files">supabase/migrations/130_rls_helpers.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>my_facility_id(), my_role()</td></tr>
-      <tr><td>shift系テーブル RLS</td><td class="files">supabase/migrations/131_shift_rls.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>employees RLS（manager は自facility社員のみ）</td><td class="files">supabase/migrations/132_employees_rls.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>announcements/trainings/compliance の facility_scope RLS</td><td class="files">supabase/migrations/133_scope_rls.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>target_facility_ids絞込</td></tr>
-      <tr><td>RLSテスト（各ロール × 他facility）</td><td class="files">supabase/tests/rls.test.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>pgTAP or 手動</td></tr>
+      <tr><td>RLS ヘルパー関数</td><td class="files">supabase/migrations/130_rls_helpers.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>my_facility_id(), my_role()</td></tr>
+      <tr><td>shift系テーブル RLS</td><td class="files">supabase/migrations/131_shift_rls.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>employees RLS（manager は自facility社員のみ）</td><td class="files">supabase/migrations/132_employees_rls.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>announcements/trainings/compliance の facility_scope RLS</td><td class="files">supabase/migrations/133_scope_rls.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>target_facility_ids絞込</td></tr>
+      <tr><td>RLSテスト（各ロール × 他facility）</td><td class="files">supabase/tests/rls.test.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>pgTAP or 手動</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】admin は全facility、manager は自facilityのみ、employee は自分のみ — 全テーブルで検証 / クロスfacility漏洩ゼロ</td></tr>
     </tbody>
   </table>
@@ -434,12 +492,12 @@
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
-      <tr><td>アプリ名を全箇所で差替（staffbase→deaf-ic）</td><td class="files">package.json, app/layout.tsx metadata, sidebar等</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>NPO正式名称挿入</td></tr>
-      <tr><td>ロゴ差込口の用意（placeholder）</td><td class="files">components/branding/Logo.tsx, public/logo.svg</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>SVGは後日差替</td></tr>
-      <tr><td>favicon / OGP画像 placeholder</td><td class="files">app/favicon.ico, app/opengraph-image.png</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>後日差替</td></tr>
-      <tr><td>ログイン画面のタイトル差替</td><td class="files">app/(auth)/login/page.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>「認定NPO法人名古屋ろう国際センター」表示</td></tr>
-      <tr><td>サイドバー・ヘッダのブランディング差替</td><td class="files">components/layout/Sidebar.tsx, Header.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>ロゴ表示位置確保</td></tr>
-      <tr><td>diletto残存文字列の全掃討</td><td class="files">-</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>grep "diletto" "staffbase" "ShiftPuzzle"</td></tr>
+      <tr><td>アプリ名を全箇所で差替（staffbase→deaf-ic）</td><td class="files">package.json, app/layout.tsx metadata, sidebar等</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>NPO正式名称挿入</td></tr>
+      <tr><td>ロゴ差込口の用意（placeholder）</td><td class="files">components/branding/Logo.tsx, public/logo.svg</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>SVGは後日差替</td></tr>
+      <tr><td>favicon / OGP画像 placeholder</td><td class="files">app/favicon.ico, app/opengraph-image.png</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>後日差替</td></tr>
+      <tr><td>ログイン画面のタイトル差替</td><td class="files">app/(auth)/login/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「認定NPO法人名古屋ろう国際センター」表示</td></tr>
+      <tr><td>サイドバー・ヘッダのブランディング差替</td><td class="files">components/layout/Sidebar.tsx, Header.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ロゴ表示位置確保</td></tr>
+      <tr><td>diletto残存文字列の全掃討</td><td class="files">-</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>grep "diletto" "staffbase" "ShiftPuzzle"</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】色・フォント・レイアウトは現staffbaseのまま変更なし / ロゴ・アイコン・名称だけが差替ポイント / 後日ロゴ受領時に1箇所差替で全画面反映 / diletto/staffbase/ShiftPuzzleの文字列残留ゼロ</td></tr>
     </tbody>
   </table>
@@ -451,11 +509,11 @@
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
-      <tr><td>ANTHROPIC_API_KEY 未設定時のフォールバック</td><td class="files">lib/anthropic/*, lib/ai-client.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>エラーではなく機能非表示</td></tr>
-      <tr><td>PDF解析: 手動入力フォールバックUI</td><td class="files">components/schedule/ManualScheduleForm.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>AI診断: 機能非表示トグル</td><td class="files">lib/features.ts（新規）</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>feature flag</td></tr>
-      <tr><td>.env.example 整備</td><td class="files">.env.example</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>ANTHROPIC_API_KEY空で</td></tr>
-      <tr><td>README: APIキー設定手順</td><td class="files">README.md</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>NPO向け運用手順</td></tr>
+      <tr><td>ANTHROPIC_API_KEY 未設定時のフォールバック</td><td class="files">lib/anthropic/*, lib/ai-client.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>エラーではなく機能非表示</td></tr>
+      <tr><td>PDF解析: 手動入力フォールバックUI</td><td class="files">components/schedule/ManualScheduleForm.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>AI診断: 機能非表示トグル</td><td class="files">lib/features.ts（新規）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>feature flag</td></tr>
+      <tr><td>.env.example 整備</td><td class="files">.env.example</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ANTHROPIC_API_KEY空で</td></tr>
+      <tr><td>README: APIキー設定手順</td><td class="files">README.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>NPO向け運用手順</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】APIキー未設定でも全UIが壊れない / AI機能の表示/非表示が1箇所で制御可能 / エラーメッセージ日本語</td></tr>
     </tbody>
   </table>
@@ -467,13 +525,13 @@
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
-      <tr><td>新規 Supabase プロジェクト作成</td><td class="files">-</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>NPO側 or こちら側？要確認</td></tr>
-      <tr><td>全マイグレーション適用</td><td class="files">supabase/migrations/*</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>seed データ投入（4事業所・admin初期）</td><td class="files">supabase/seed.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>Vercel プロジェクト作成</td><td class="files">vercel.json</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>環境変数設定</td><td class="files">-</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>ドメイン接続（任意）</td><td class="files">-</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
-      <tr><td>受入テスト（NPO同席）</td><td class="files">docs/acceptance-test.md</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td></td></tr>
+      <tr><td>新規 Supabase プロジェクト作成</td><td class="files">-</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>NPO側 or こちら側？要確認</td></tr>
+      <tr><td>全マイグレーション適用</td><td class="files">supabase/migrations/*</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>seed データ投入（4事業所・admin初期）</td><td class="files">supabase/seed.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>Vercel プロジェクト作成</td><td class="files">vercel.json</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>環境変数設定</td><td class="files">-</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>ドメイン接続（任意）</td><td class="files">-</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
+      <tr><td>受入テスト（NPO同席）</td><td class="files">docs/acceptance-test.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td></td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】本番環境でも .env.example 全変数が実値で設定 / 本番DB RLS検証 / ログイン → 各ロール動作確認 / ロゴ受領・差込</td></tr>
     </tbody>
   </table>
@@ -511,7 +569,7 @@
       <tr><td>設定画面から「対象グループ」セクション完全削除</td><td class="files">app/(admin)/admin/settings/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「項目設定」はカスタム入力項目のみに戻る。タブ数も元の 7 個に戻す</td></tr>
       <tr><td>書類カードに「対象: 全員 (15名) / 条件で絞る (7名)」バッジ + AudienceDialog</td><td class="files">app/(admin)/admin/documents/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>モード: 全員 / 条件で絞る ラジオ。条件モード時はフラグ・施設・役職・個別指名のチェックリスト + 対象社員ライブプレビュー</td></tr>
       <tr><td>/my/documents・/admin/employees/[id]・admin/dashboard・bulk-pdf API を audience ベースに切替</td><td class="files">app/(employee)/my/documents/page.tsx, app/(admin)/admin/employees/[id]/page.tsx, app/(admin)/admin/dashboard/page.tsx, app/api/documents/bulk-pdf-zip-employee/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>employee_groups の参照は全廃</td></tr>
-      <tr><td><b>migration 122_template_audience を Supabase に適用</b></td><td class="files">supabase</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>ユーザー手動: Supabase Studio で SQL 実行 or CLI で push。既存 PDF テンプレは行 0 件 = 全員対象がデフォルト</td></tr>
+      <tr><td><b>migration 122_template_audience を Supabase に適用</b></td><td class="files">supabase</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ユーザー手動: Supabase Studio で SQL 実行 or CLI で push。既存 PDF テンプレは行 0 件 = 全員対象がデフォルト</td></tr>
       <tr class="check"><td colspan="5">【別視点チェック】migration 未適用状態でも /my/documents が落ちないこと（loadTemplateAudience は data null 時に空 Map を返す）/ 「全員」モード保存時に既存ルール行が DELETE されること / 「個別指名」のみ設定した書類は新人入社時に対象に含まれないこと（仕様）/ mgr ダッシュボードは admin と同じく audience ベース計算には未対応</td></tr>
     </tbody>
   </table>
@@ -742,21 +800,21 @@ function hasGateDefinition(fieldName, customFieldGates) {
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
       <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-A: 児童属性追加（料金関連）</td></tr>
-      <tr><td>migration 126</td><td class="files">supabase/migrations/126_children_billing_fields.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>municipality / copay_tier / copay_freeform_amount / daily_unit_cost / kumon_enabled 列追加</td></tr>
-      <tr><td>ChildRow 型拡張 + constants</td><td class="files">lib/types.ts, lib/constants.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>SNACK_FEE_PER_DAY=50, KUMON_MONTHLY_FEE=2000, COPAY_TIERS, NAGOYA</td></tr>
-      <tr><td>児童管理 UI に料金フィールド追加</td><td class="files">app/(admin)/admin/children, app/(manager)/mgr/children</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>市町村 / 公文 ON/OFF / 上限負担額（select+freeform）/ 1日単価（手入力）</td></tr>
+      <tr><td>migration 126</td><td class="files">supabase/migrations/126_children_billing_fields.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>municipality / copay_tier / copay_freeform_amount / daily_unit_cost / kumon_enabled 列追加</td></tr>
+      <tr><td>ChildRow 型拡張 + constants</td><td class="files">lib/types.ts, lib/constants.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>SNACK_FEE_PER_DAY=50, KUMON_MONTHLY_FEE=2000, COPAY_TIERS, NAGOYA</td></tr>
+      <tr><td>児童管理 UI に料金フィールド追加</td><td class="files">app/(admin)/admin/children, app/(manager)/mgr/children</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>市町村 / 公文 ON/OFF / 上限負担額（select+freeform）/ 1日単価（手入力）</td></tr>
 
       <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-B: イベント設定</td></tr>
-      <tr><td>migration 127</td><td class="files">supabase/migrations/127_events.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>events table（name, date, price, facility_id）+ RLS</td></tr>
-      <tr><td>イベント設定ページ</td><td class="files">app/(admin)/admin/shifts/events, app/(manager)/mgr/shifts/events</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>CRUD / 月切替 / facility 別</td></tr>
+      <tr><td>migration 127</td><td class="files">supabase/migrations/127_events.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>events table（name, date, price, facility_id）+ RLS</td></tr>
+      <tr><td>イベント設定ページ</td><td class="files">app/(admin)/admin/shifts/events, app/(manager)/mgr/shifts/events</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>CRUD / 月切替 / facility 別</td></tr>
 
       <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-C: 利用料金表 出力</td></tr>
-      <tr><td>migration 128</td><td class="files">supabase/migrations/128_billing.sql</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>billing_summaries + billing_event_participations テーブル + RLS</td></tr>
-      <tr><td>料金計算ロジック</td><td class="files">lib/logic/computeBilling.ts</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>無償化判定 / copay 計算 / イベント参加集計（純関数）</td></tr>
-      <tr><td>利用料金表ページ + A4 横印刷</td><td class="files">app/(admin)/admin/shifts/output/billing, components/shift/BillingFull.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>月選択 → 自動計算 → 手動イベントチェック → 保存 → 印刷。manager mirror 含む</td></tr>
+      <tr><td>migration 128</td><td class="files">supabase/migrations/128_billing.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>billing_summaries + billing_event_participations テーブル + RLS</td></tr>
+      <tr><td>料金計算ロジック</td><td class="files">lib/logic/computeBilling.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>無償化判定 / copay 計算 / イベント参加集計（純関数）</td></tr>
+      <tr><td>利用料金表ページ + A4 横印刷</td><td class="files">app/(admin)/admin/shifts/output/billing, components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>月選択 → 自動計算 → 手動イベントチェック → 保存 → 印刷。manager mirror 含む</td></tr>
 
       <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">66-D: サイドバー アコーディオン化</td></tr>
-      <tr><td>シフト設定アコーディオン</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>事業所設定 / 職員管理 / 児童管理 / イベント設定 を「⚙️ シフト設定」アコーディオン内へ集約</td></tr>
+      <tr><td>シフト設定アコーディオン</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>事業所設定 / 職員管理 / 児童管理 / イベント設定 を「⚙️ シフト設定」アコーディオン内へ集約</td></tr>
 
       <tr class="check"><td>別視点確認</td><td colspan="4">①「公文」=教材印刷代の社内呼称（Kumon ではない、誤解防止）②無償化は (年少/年中/年長) OR (preschool かつ 市町村='名古屋市')③利用負担額は 1日単価が無ければ上限額そのもの、あれば min(日数×単価, 上限)④イベント参加判定は手動チェック前提（present 自動セットは「初期値」のみ）⑤A4 横、列は PDF 完全準拠（市町村・氏名・出席日数・利用負担額・おやつ消耗品代・公文代・各イベント・請求額・受取日）⑥保存=billing_summaries 永続化、再印刷時は同じ数字が出る⑦manager 側も同等動作⑧月途中での児童属性変更は次回 fetch で反映、保存済み summary は不変</td></tr>
     </tbody>
@@ -795,7 +853,7 @@ function hasGateDefinition(fieldName, customFieldGates) {
       <tr><td>⑤ 入力フォームを共有定義に移行</td><td class="files">components/employee/ProfileSection3WorkStyle.tsx, ProfileSection4Comm.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ローカル selectFields を削除し lib/profile-options から import</td></tr>
       <tr><td>⑤ SubordinateDetail の生値表示を修正</td><td class="files">components/manager/SubordinateDetail.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>働き方 6 + コミュ 5 の InfoRow を profileOptionLabel() 経由に。comm_channel_preference（text/verbal）も正しく日本語化</td></tr>
       <tr><td>型チェック / lint / dev 起動確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0 エラー / 変更ファイル eslint 0 エラー / dev で /mgr/dashboard・/mgr/subordinates/[id]・/my/about コンパイル成功</td></tr>
-      <tr><td>migration 156 の適用 + 動作確認</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>当環境の Supabase MCP は別プロジェクト接続のため適用不可。deaf-ic プロジェクトへの MCP 再接続 or ダッシュボード SQL 実行が必要。適用後に manager ログインで達成率が実数表示されるか確認</td></tr>
+      <tr><td>migration 156 の適用 + 動作確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>当環境の Supabase MCP は別プロジェクト接続のため適用不可。deaf-ic プロジェクトへの MCP 再接続 or ダッシュボード SQL 実行が必要。適用後に manager ログインで達成率が実数表示されるか確認</td></tr>
       <tr class="check"><td>別視点確認</td><td colspan="4">① migration 156 適用後、manager で達成率が 0% でなく実数になるか ② リマインドモーダルの「完了」タブで最終完了日が出るか ③ admin ダッシュボード（ProgressDashboard）に影響が無いか ④ p_facility_id=null 全件取得 + クライアント側 facility フィルタの挙動が従来通りか ⑤ /mgr/subordinates/[id] で英語値が消え日本語表記になるか ⑥ 入力フォーム（/my/about）の選択肢が従来通り保存できるか ⑦ comm_consult_timing と comm_feedback_preference が同 value でも別ラベルで出るか</td></tr>
     </tbody>
   </table>
@@ -815,7 +873,7 @@ function hasGateDefinition(fieldName, customFieldGates) {
       <tr><td>シフト作成画面（公休・希望休 両方を選択可に）</td><td class="files">components/shift/ShiftFull.tsx, ShiftGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>セル編集モーダルに 出勤/公休/希望休/有給/休み の5択。グリッド色: 公休=青(--accent)・希望休=金(--gold)。職員行統計に「希望休n」追加</td></tr>
       <tr><td>その他シフト系 UI</td><td class="files">components/shift/MyShiftsView.tsx, ApprovalQueueFull.tsx, AddShiftStaffPicker.tsx, ShiftChangeRequestForm.tsx, TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>requested_off ラベル・色対応。ShiftChangeRequestForm の社員申請選択肢は public_holiday を除外し requested_off に（公休は管理者専用のため）</td></tr>
       <tr><td>型チェック / lint</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0 エラー / 変更ファイル eslint 新規エラーなし（既存6件は変更外）</td></tr>
-      <tr><td>動作確認（ローカルセッションで実施）</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>cloud セッションでは localhost に到達できず未確認。ローカルセッションで実機確認</td></tr>
+      <tr><td>動作確認（ローカルセッションで実施）</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>cloud セッションでは localhost に到達できず未確認。ローカルセッションで実機確認</td></tr>
       <tr class="check"><td>別視点確認</td><td colspan="4">① 社員の休み希望提出で「希望休」が requested_off として保存されるか ② シフト作成画面で公休(管理者)と希望休(社員)が別の色・別ボタンで区別表示されるか ③ generateShift で社員の希望休が requested_off セルになり、公休セルは生成されないか ④ 既存 public_holiday 16行が requested_off に移行済みか（migration 157 適用済） ⑤ ShiftChangeRequestForm で社員が公休を選べなくなっているか ⑥ TransportFull / AddShiftStaffPicker で希望休の人に警告バッジが出るか ⑦ full_day_available/am_off/pm_off の休み希望が保存できるようになったか（旧バグ修正）</td></tr>
     </tbody>
   </table>

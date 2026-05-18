@@ -86,7 +86,21 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: st
 }
 
 export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = {}, publishedTotals, allTotals, facilities = [], lastCompletedAt = {} }: Props) {
-  const active = rows.filter((r) => r.status === 'active');
+  /* 進捗一覧は従業員番号順 (社員番号は string だが数字主体のため数値変換できる場合は数値比較、
+     それ以外は文字列比較、未設定 (NULL / 空) は末尾) */
+  const active = rows
+    .filter((r) => r.status === 'active')
+    .sort((a, b) => {
+      const an = String((a as { employee_number?: string }).employee_number ?? '').trim();
+      const bn = String((b as { employee_number?: string }).employee_number ?? '').trim();
+      if (!an && !bn) return 0;
+      if (!an) return 1;
+      if (!bn) return -1;
+      const aNum = Number(an);
+      const bNum = Number(bn);
+      if (Number.isFinite(aNum) && Number.isFinite(bNum)) return aNum - bNum;
+      return an.localeCompare(bn, 'ja');
+    });
 
   // モーダル状態
   const [openKey, setOpenKey] = useState<CategoryKey | null>(null);

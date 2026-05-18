@@ -39,8 +39,9 @@ export default function AdminDashboardPage() {
         supabase.from('announcements').select('id').eq('tenant_id', tid),
         supabase.from('manuals').select('id').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('manuals').select('id').eq('tenant_id', tid),
-        /* gate 判定に必要な employee 列も取得 */
-        supabase.from('employees').select('id, last_name, first_name, last_name_kana, first_name_kana, status, facility_id, has_car_commute, is_shuttle_driver').eq('tenant_id', tid),
+        /* gate 判定に必要な employee 列 + 進捗一覧並び替え用 employee_number も取得。
+           171 以降 shift_manager は進捗一覧から除外 */
+        supabase.from('employees').select('id, employee_number, last_name, first_name, last_name_kana, first_name_kana, status, facility_id, has_car_commute, is_shuttle_driver').eq('tenant_id', tid).neq('role', 'shift_manager'),
         supabase.from('facilities').select('id, name').eq('tenant_id', tid).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
         supabase.from('document_submissions').select('employee_id, submitted_at').eq('status', 'submitted'),
         supabase.from('compliance_acknowledgments').select('employee_id, acknowledged_at'),

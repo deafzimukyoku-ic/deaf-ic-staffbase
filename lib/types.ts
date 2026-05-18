@@ -9,6 +9,7 @@ import type {
   TemplateType,
   DataMode,
   ProfileSectionKey,
+  TransportColumnKey,
 } from './constants';
 
 // --- Tenants ---
@@ -271,7 +272,35 @@ export interface FacilityShiftSettings {
   request_deadline_day: number;
   transport_min_end_time: string; // HH:MM:SS
   transport_pickup_cooldown_minutes: number;
+  /** 172: 送迎表の列順を施設単位で共有 (NULL なら DEFAULT_TRANSPORT_COLUMN_ORDER) */
+  transport_column_order: TransportColumnKey[] | null;
   updated_at: string;
+}
+
+/* 173: 会社→社員 書類発行履歴 (issued_documents)
+   in_app = 在籍社員へ /my/documents カード表示 / email_only = 退職社員へメール添付送信 */
+export type IssuedDocumentDeliveryMode = 'in_app' | 'email_only';
+export interface IssuedDocument {
+  id: string;
+  tenant_id: string;
+  facility_id: string | null;
+  employee_id: string;
+  document_template_id: string;
+  issued_by: string | null;
+  issued_by_name: string;
+  issued_at: string;
+  generated_pdf_path: string | null;
+  message: string | null;
+  delivery_mode: IssuedDocumentDeliveryMode;
+  email_sent_at: string | null;
+  email_to_address: string | null;
+  email_error: string | null;
+  viewed_at: string | null;
+  acknowledged_at: string | null;
+  revoked_at: string | null;
+  revoked_by: string | null;
+  revoked_reason: string | null;
+  created_at: string;
 }
 
 // 職員管理（shift-maker 固有編集項目。社員管理の employees に merge 済み）
@@ -465,6 +494,10 @@ export interface DocumentTemplate {
   page_count: number | null;
   template_type: TemplateType;
   data_mode: DataMode;
+  /* 174: 会社発行用 (招待自動発行 + 一括発行の対象) */
+  is_company_issued: boolean;
+  /* 174: 招待自動発行 / 一括発行時に issued_documents.message として記録する固定文言 */
+  auto_issue_message: string | null;
   created_at: string;
 }
 

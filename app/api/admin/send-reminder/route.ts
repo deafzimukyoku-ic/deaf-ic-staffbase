@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
     .in('id', employeeIds)
     .eq('tenant_id', me.tenant_id) // 他テナントの社員を指定されても拒否
     .eq('status', 'active')
+    .neq('role', 'shift_manager') // 171: shift_manager はリマインド対象外
     .not('email', 'is', null);
 
   if (!employees || employees.length === 0) {

@@ -24,6 +24,7 @@ import { EMPLOYEE_ROLES } from '@/lib/constants';
 import { AIDiagnosisPanel } from '@/components/admin/AIDiagnosisPanel';
 import { EmployeeImagesCard } from '@/components/employee/EmployeeImagesCard';
 import QualificationsInput from '@/components/employee/QualificationsInput';
+import { IssuedDocumentsCard } from '@/components/admin/IssuedDocumentsCard';
 import type { Employee, DocumentTemplate, DocumentSubmission, Facility } from '@/lib/types';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -1277,6 +1278,19 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               })}
             </div>
           )}
+
+          {/* 173: 会社→社員 書類発行履歴 (発行ボタンもこのカード内) */}
+          <div className="mt-6">
+            <IssuedDocumentsCard
+              employee={{
+                id: employee.id,
+                last_name: employee.last_name,
+                first_name: employee.first_name,
+                status: employee.status,
+                email: employee.email,
+              }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="ai" className="mt-4">

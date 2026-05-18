@@ -96,12 +96,14 @@ export async function GET(req: NextRequest) {
     .order('sort_order', { ascending: true });
 
   /* employees: active な社員。manager の場合は担当 facility に絞る。
-     対象オーディエンス（target_type='all' / 'facility'）の判定にも使う。 */
+     対象オーディエンス（target_type='all' / 'facility'）の判定にも使う。
+     171: shift_manager は閲覧レポート対象から除外 (運用上「進捗管理対象外」) */
   let empQuery = supabase
     .from('employees')
     .select('id, last_name, first_name, facility_id, role, status')
     .eq('tenant_id', me.tenant_id)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .neq('role', 'shift_manager');
   if (allowedFacilityIds) empQuery = empQuery.in('facility_id', allowedFacilityIds);
   const { data: employeesData, error: empErr } = await empQuery;
   if (empErr) return NextResponse.json({ error: empErr.message }, { status: 500 });

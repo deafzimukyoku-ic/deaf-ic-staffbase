@@ -39,8 +39,8 @@ import type {
  * - staff_id → employee_id 命名統一（migration 112 で配列カラムも employee_ids に）
  * - role: viewer/editor → employee/manager
  * - 自動生成のみ既存 /api/shifts/transport/generate（B-1）を使用
- * - 列順保存 → facility_shift_settings.transport_column_order を直接 update（追加カラムが
- *   無ければスキップ）
+ * - 列順保存 → facility_shift_settings.transport_column_order を直接 update
+ *   (172: 施設単位で全員に共通の並びを共有。ブラウザ/端末をまたいで揃う)
  *
  * ヤバいロジックは全て温存（pendingChanges localStorage / 同便マーク / 分割シフト / etc.）
  */
@@ -333,19 +333,17 @@ export default function TransportFull({ role }: Props) {
       setPickupCooldownMinutes(
         (settings?.transport_pickup_cooldown_minutes as number) ?? DEFAULT_PICKUP_COOLDOWN_MINUTES
       );
-      /* deaf-ic は transport_column_order カラムが無いので localStorage に永続化（後段） */
-      try {
-        const savedOrder = window.localStorage.getItem(
-          `deaf-ic:transport:column-order:${facilityId}`
+      /* 172: 列順は facility_shift_settings.transport_column_order を施設単位で共有。
+         NULL なら useState 初期値 (DEFAULT_TRANSPORT_COLUMN_ORDER) を維持。
+         将来カラム key が増減した場合でも安全に動くよう、保存値 ∩ DEFAULT で再構成 + 欠けは末尾追加 */
+      const savedOrder = (settings?.transport_column_order as unknown) ?? null;
+      if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+        const allowed = DEFAULT_TRANSPORT_COLUMN_ORDER as readonly string[];
+        const valid = savedOrder.filter(
+          (k): k is TransportColumnKey => typeof k === 'string' && allowed.includes(k)
         );
-        if (savedOrder) {
-          const parsed = JSON.parse(savedOrder);
-          if (Array.isArray(parsed)) {
-            setColumnOrder(parsed as TransportColumnKey[]);
-          }
-        }
-      } catch {
-        /* noop */
+        const missing = DEFAULT_TRANSPORT_COLUMN_ORDER.filter((k) => !valid.includes(k));
+        setColumnOrder([...valid, ...missing]);
       }
 
       setChildAreaEligibleStaff((eligRes.data ?? []) as ChildAreaEligibleStaffRow[]);
@@ -827,18 +825,18 @@ export default function TransportFull({ role }: Props) {
     }
   };
 
-  const handleColumnReorder = (next: TransportColumnKey[]) => {
+  const handleColumnReorder = async (next: TransportColumnKey[]) => {
     if (myRole !== 'admin' && myRole !== 'manager') return;
     const prev = columnOrder;
     setColumnOrder(next);
-    /* deaf-ic: facility_shift_settings に専用カラムが無いので localStorage で永続化 */
-    try {
-      window.localStorage.setItem(
-        `deaf-ic:transport:column-order:${facilityId}`,
-        JSON.stringify(next)
-      );
-    } catch {
+    /* 172: 施設単位で全員に共通の列順を共有 */
+    const { error: updErr } = await supabase
+      .from('facility_shift_settings')
+      .update({ transport_column_order: next })
+      .eq('facility_id', facilityId);
+    if (updErr) {
       setColumnOrder(prev);
+      setError('列順の保存に失敗しました');
     }
   };
 
