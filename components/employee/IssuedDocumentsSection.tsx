@@ -31,10 +31,23 @@ export function IssuedDocumentsSection() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    /* RLS により自分宛のみが返る。in_app (在籍時) のみ表示 (RLS bypass はなし) */
+    /* ⚠ RLS は「本人 OR 管轄 admin/manager」を SELECT 許可しているため、
+       admin / manager がこのページを開くと管轄全社員の発行履歴が混入する。
+       /my/documents は『自分宛』を見せる場所なので、auth.user → employees.id を引いて
+       明示的に employee_id でフィルタする (RLS には頼らない)。 */
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setRows([]); setLoading(false); return; }
+    const { data: meRow } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+    if (!meRow) { setRows([]); setLoading(false); return; }
+
     const { data } = await supabase
       .from('issued_documents')
       .select('id, issued_at, issued_by_name, acknowledged_at, revoked_at, message, delivery_mode, document_template_id')
+      .eq('employee_id', meRow.id)
       .eq('delivery_mode', 'in_app')
       .order('issued_at', { ascending: false });
     const list = (data ?? []) as Array<Row & { delivery_mode: string }>;

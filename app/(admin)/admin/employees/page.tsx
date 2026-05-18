@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmployeeTable } from '@/components/admin/EmployeeTable';
+import { BulkIssueCompanyDocumentsButton } from '@/components/admin/BulkIssueCompanyDocumentsButton';
 import type { Employee, Facility } from '@/lib/types';
 
 type RoleFilter = 'all' | 'admin' | 'manager' | 'employee';
@@ -98,6 +99,7 @@ export default function EmployeesPage() {
               <span>🔍</span> チーム診断
             </Button>
           </Link>
+          <BulkIssueCompanyDocumentsButton />
           <Link href="/admin/employees/new">
             <Button className="whitespace-nowrap">+ 社員を追加</Button>
           </Link>

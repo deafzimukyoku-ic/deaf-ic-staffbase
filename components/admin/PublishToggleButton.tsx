@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
+import type { NotificationContentType } from '@/lib/types';
 
 /**
  * 公開/非公開トグルスイッチ（migration 141）
@@ -10,8 +12,19 @@ import { toast } from 'sonner';
  * 4 機能（announcements / compliance_documents / trainings / manuals）共通の
  * is_published ON/OFF UI。iOS 風の左右トグルスイッチ。
  * クリックで supabase.from(table).update() し、親に新しい値を伝える。
+ *
+ * 非公開 → 公開 に切り替えた時は enqueueNotification で 2h 後のメール通知をキュー化、
+ * 公開 → 非公開 に切り替えた時は cancelNotification で未送信キューを取り消す。
+ * (非公開のまま 2h 経過しても cron 側 is_published gate でスキップされる二重防御)
  */
 type Table = 'announcements' | 'compliance_documents' | 'trainings' | 'manuals';
+
+const TABLE_TO_CONTENT_TYPE: Record<Table, NotificationContentType> = {
+  announcements: 'announcement',
+  compliance_documents: 'compliance',
+  trainings: 'training',
+  manuals: 'manual',
+};
 
 interface Props {
   table: Table;
@@ -54,7 +67,15 @@ export function PublishToggleButton({
       return;
     }
     onChanged?.(next);
-    toast.success(next ? '公開しました' : '非公開にしました');
+    /* 公開 → メール通知キュー化 (2h 後) / 非公開 → 未送信キュー取り消し */
+    const contentType = TABLE_TO_CONTENT_TYPE[table];
+    if (next) {
+      await enqueueNotification(contentType, id);
+      toast.success('公開しました。2時間後に対象社員へメール通知されます。');
+    } else {
+      await cancelNotification(contentType, id);
+      toast.success('非公開にしました');
+    }
   };
 
   return (

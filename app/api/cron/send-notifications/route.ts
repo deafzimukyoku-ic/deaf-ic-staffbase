@@ -122,16 +122,24 @@ async function processRow(supabase: any, row: QueueRow, appUrl: string): Promise
 
   const table = CONTENT_TABLE[row.content_type as LegacyNotificationContentType];
 
-  // コンテンツ取得
+  // コンテンツ取得 (is_published も取得して未公開コンテンツのメール送信を防ぐ)
   const fieldTitle = row.content_type === 'compliance' ? 'title, content' : row.content_type === 'training' ? 'title' : 'title, body';
   const { data: content } = await supabase
     .from(table)
-    .select(`id, tenant_id, target_type, target_facility_ids, ${fieldTitle}`)
+    .select(`id, tenant_id, target_type, target_facility_ids, is_published, ${fieldTitle}`)
     .eq('id', row.content_id)
     .maybeSingle();
 
   if (!content) {
     // 削除済み → キャンセル扱い
+    await supabase.from('notification_queue').update({ cancelled_at: new Date().toISOString() }).eq('id', row.id);
+    return 'skipped';
+  }
+
+  /* 非公開コンテンツ (is_published=false) はメール送信せず cancelled 扱い。
+     UI 側 enqueue でも is_published を gate しているが、ここは最終防衛線として念のため。
+     再公開した時に再 enqueue されれば改めてキューに乗る (PublishToggleButton 経由)。 */
+  if (content.is_published === false) {
     await supabase.from('notification_queue').update({ cancelled_at: new Date().toISOString() }).eq('id', row.id);
     return 'skipped';
   }

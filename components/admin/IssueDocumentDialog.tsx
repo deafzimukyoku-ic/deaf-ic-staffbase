@@ -34,6 +34,8 @@ interface TemplateRow {
   template_type: string;
   data_mode: string | null;
   pdf_storage_path: string | null;
+  is_company_issued: boolean;
+  auto_issue_message: string | null;
   placementCount: number;
 }
 
@@ -50,6 +52,8 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [issuing, setIssuing] = useState(false);
+  /* 174: 会社発行用のみ表示するか (デフォルト ON) */
+  const [companyOnly, setCompanyOnly] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -61,7 +65,7 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
     (async () => {
       const { data: tpls } = await supabase
         .from('document_templates')
-        .select('id, name, template_type, data_mode, pdf_storage_path, tenant_id')
+        .select('id, name, template_type, data_mode, pdf_storage_path, is_company_issued, auto_issue_message, tenant_id')
         .eq('template_type', 'pdf')
         .order('display_order');
       const list = (tpls ?? []) as Array<TemplateRow & { tenant_id: string }>;
@@ -136,6 +140,21 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
   const retiredNoEmail = isRetired && !employee.email;
   const canIssue = !!selectedId && !placementMissing && !retiredNoEmail && !issuing;
 
+  /* 表示テンプレ一覧 (companyOnly=true なら会社発行用だけに絞る) */
+  const visibleTemplates = companyOnly
+    ? templates.filter((t) => t.is_company_issued)
+    : templates;
+
+  /* テンプレ選択時にデフォルトコメント (auto_issue_message) があれば自動で反映 */
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.auto_issue_message) {
+      setWithMessage(true);
+      setMessage(selected.auto_issue_message);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   async function handleIssue() {
     if (!selectedId) return;
     setIssuing(true);
@@ -190,14 +209,29 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
         <div className="flex-1 overflow-y-auto space-y-3 pr-1">
           {/* テンプレ選択 */}
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1">テンプレート</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-foreground">テンプレート</label>
+              {/* 174: 会社発行用フィルタトグル */}
+              <label className="flex items-center gap-1.5 text-[11px] cursor-pointer text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={companyOnly}
+                  onChange={(e) => setCompanyOnly(e.target.checked)}
+                />
+                <span>会社発行用のみ表示</span>
+              </label>
+            </div>
             {loading ? (
               <p className="text-xs text-muted-foreground">読み込み中...</p>
-            ) : templates.length === 0 ? (
-              <p className="text-xs text-muted-foreground">発行可能な PDF テンプレートがありません</p>
+            ) : visibleTemplates.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {companyOnly
+                  ? '会社発行用のテンプレートがありません。書類テンプレート管理で「会社発行用」を ON にしてください。'
+                  : '発行可能な PDF テンプレートがありません'}
+              </p>
             ) : (
               <div className="space-y-1 max-h-44 overflow-y-auto border rounded-md p-2">
-                {templates.map((t) => {
+                {visibleTemplates.map((t) => {
                   const disabled = t.placementCount === 0 || !t.pdf_storage_path;
                   return (
                     <label
@@ -216,6 +250,9 @@ export function IssueDocumentDialog({ open, onOpenChange, employee, onIssued }: 
                         onChange={() => setSelectedId(t.id)}
                       />
                       <span className="flex-1 truncate">{t.name}</span>
+                      {t.is_company_issued && !disabled && (
+                        <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-300">会社発行</Badge>
+                      )}
                       {disabled && (
                         <Badge variant="outline" className="text-[10px]">タグ配置なし</Badge>
                       )}

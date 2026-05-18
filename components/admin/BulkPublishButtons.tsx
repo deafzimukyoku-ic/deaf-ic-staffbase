@@ -3,6 +3,15 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
+import type { NotificationContentType } from '@/lib/types';
+
+const TABLE_TO_CONTENT_TYPE: Record<'announcements' | 'compliance_documents' | 'trainings' | 'manuals', NotificationContentType> = {
+  announcements: 'announcement',
+  compliance_documents: 'compliance',
+  trainings: 'training',
+  manuals: 'manual',
+};
 
 /**
  * 一括公開/非公開トグル（migration 141）
@@ -73,7 +82,12 @@ export function BulkPublishButtons({ table, items, onChanged, scopeLabel, restri
       toast.error(`一括${word}に失敗しました`, { description: error.message });
       return;
     }
-    toast.success(`${total}件 を${word}にしました`);
+    /* 各 item ごとに enqueue / cancel を流す。失敗は queue 側で warn ログのみで握る */
+    const contentType = TABLE_TO_CONTENT_TYPE[table];
+    await Promise.all(
+      items.map((i) => (next ? enqueueNotification(contentType, i.id) : cancelNotification(contentType, i.id)))
+    );
+    toast.success(next ? `${total}件 を公開しました。2時間後に対象社員へメール通知されます。` : `${total}件 を非公開にしました`);
     onChanged?.();
   };
 

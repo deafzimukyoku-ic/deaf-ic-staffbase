@@ -314,6 +314,119 @@ export default function BillingFull({ scope }: Props) {
     setRows((prev) => prev.map((r) => (r.childId === childId ? { ...r, ...patch, dirty: true } : r)));
   };
 
+  /* 174-B: Excel (xlsx) 出力。exceljs を動的 import して初回のみロード。
+     列構成は印刷ビューと同じ (# / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ等 /
+     教材印刷代 / 各イベント / 参加費合計 / 請求額)。合計行も含める。 */
+  const handleDownloadExcel = async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '名古屋ろう国際センター 職員ステーション';
+    wb.created = new Date();
+
+    const facilityName = facility?.name ?? '';
+    const sheetName = `${year}年${month}月`;
+    const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4, xSplit: 3 }] });
+
+    /* タイトル行 */
+    ws.mergeCells(1, 1, 1, 7 + events.length + 2);
+    const titleCell = ws.getCell(1, 1);
+    titleCell.value = `${facilityName} 利用料金表  ${year}年${month}月`;
+    titleCell.font = { size: 14, bold: true };
+    titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(1).height = 22;
+
+    /* 出力日 (右端) */
+    const stampCell = ws.getCell(2, 7 + events.length + 2);
+    stampCell.value = `出力: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`;
+    stampCell.font = { size: 9, color: { argb: 'FF6B7280' } };
+    stampCell.alignment = { horizontal: 'right' };
+
+    /* ヘッダー (row 3) */
+    const headerRow = [
+      '#', '市町村', '氏名', '出席日数', '利用負担額', 'おやつ等', '教材印刷代',
+      ...events.map((ev) => `${ev.name} (${format(new Date(ev.date), 'M/d')} ¥${ev.price.toLocaleString('ja-JP')})`),
+      '参加費合計', '請求額',
+    ];
+    ws.addRow([]);  /* row 2 空 */
+    const hRow = ws.addRow(headerRow);
+    hRow.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'medium' }, right: { style: 'thin' },
+      };
+    });
+    ws.getRow(3).height = 32;
+
+    /* 列幅 */
+    ws.getColumn(1).width = 5;
+    ws.getColumn(2).width = 12;
+    ws.getColumn(3).width = 18;
+    ws.getColumn(4).width = 9;
+    ws.getColumn(5).width = 12;
+    ws.getColumn(6).width = 10;
+    ws.getColumn(7).width = 12;
+    for (let i = 0; i < events.length; i++) ws.getColumn(8 + i).width = 14;
+    ws.getColumn(8 + events.length).width = 12;
+    ws.getColumn(9 + events.length).width = 14;
+
+    /* データ行 */
+    rows.forEach((r, idx) => {
+      const c = computedById.get(r.childId);
+      const dataRow = [
+        idx + 1,
+        r.municipality ?? '',
+        r.childName,
+        r.attendanceDays,
+        r.copayAmount ?? 0,
+        c?.snackFee ?? 0,
+        c?.kumonFee ?? 0,
+        ...events.map((ev) => (r.participations[ev.id] ? Math.max(0, Math.floor(ev.price)) : 0)),
+        c?.eventTotal ?? 0,
+        c?.total ?? 0,
+      ];
+      const row = ws.addRow(dataRow);
+      row.eachCell((cell, colNum) => {
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        if (colNum >= 4) {
+          cell.numFmt = '#,##0';
+          cell.alignment = { horizontal: 'right' };
+        }
+      });
+    });
+
+    /* 合計行 */
+    const totalRow = ws.addRow([
+      '', '', '合計',
+      totals.attendanceDays,
+      totals.copay,
+      totals.snack,
+      totals.kumon,
+      ...events.map((ev) => totals.eventTotals[ev.id] ?? 0),
+      totals.eventGrand,
+      totals.grand,
+    ]);
+    totalRow.eachCell((cell, colNum) => {
+      cell.font = { bold: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+      cell.border = { top: { style: 'medium' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      if (colNum >= 4) {
+        cell.numFmt = '#,##0';
+        cell.alignment = { horizontal: 'right' };
+      }
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const fileName = `${facilityName || '事業所'}_利用料金表_${year}-${String(month).padStart(2, '0')}.xlsx`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const handleToggleEvent = (childId: string, eventId: string) => {
     setRows((prev) =>
       prev.map((r) =>
@@ -538,6 +651,7 @@ export default function BillingFull({ scope }: Props) {
           </div>
           <Button variant="secondary" onClick={() => changeMonth(1)}>次の月 ›</Button>
           <Button variant="secondary" onClick={() => window.print()}>🖨 A4横で印刷</Button>
+          <Button variant="secondary" onClick={handleDownloadExcel} disabled={rows.length === 0}>📊 Excel 出力</Button>
           <Button variant="primary" onClick={handleSave} disabled={saving || dirtyCount === 0}>
             {saving ? '保存中…' : dirtyCount > 0 ? `保存（${dirtyCount}件未保存）` : '保存済み'}
           </Button>

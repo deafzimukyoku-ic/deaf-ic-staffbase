@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { MAX_DOCUMENTS_PER_TENANT } from '@/lib/constants';
 import { DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import type { DocumentTemplate, Employee, Facility } from '@/lib/types';
 import { loadTemplateAudience, saveTemplateAudience, summarizeAudience, FLAG_OPTIONS, type AudienceRule } from '@/lib/template-audience';
@@ -113,6 +114,26 @@ export default function DocumentsPage() {
     else next.set(templateId, rules);
     setAudienceByTemplate(next);
     toast.success('配布対象を更新しました');
+    return true;
+  }
+
+  /* 174: 会社発行用フラグ + デフォルトコメントの保存 */
+  async function commitCompanyIssue(
+    templateId: string,
+    payload: { is_company_issued: boolean; auto_issue_message: string | null }
+  ) {
+    const { error } = await supabase
+      .from('document_templates')
+      .update(payload)
+      .eq('id', templateId);
+    if (error) {
+      toast.error('保存に失敗しました', { description: error.message });
+      return false;
+    }
+    setTemplates((prev) =>
+      prev.map((t) => (t.id === templateId ? { ...t, ...payload } : t))
+    );
+    toast.success('会社発行設定を更新しました');
     return true;
   }
 
@@ -352,6 +373,7 @@ export default function DocumentsPage() {
                   allEmployees={allEmployees}
                   allFacilities={allFacilities}
                   onCommitAudience={(rules) => commitAudience(t.id, rules)}
+                  onCommitCompanyIssue={(payload) => commitCompanyIssue(t.id, payload)}
                   onDelete={openDeleteDialog}
                 />
               );
@@ -420,6 +442,7 @@ function SortableTemplateCard({
   allEmployees,
   allFacilities,
   onCommitAudience,
+  onCommitCompanyIssue,
   onDelete,
 }: {
   template: DocumentTemplate;
@@ -429,9 +452,12 @@ function SortableTemplateCard({
   allEmployees: Employee[];
   allFacilities: Facility[];
   onCommitAudience: (rules: AudienceRule[]) => Promise<boolean>;
+  /* 174: 会社発行用フラグ + デフォルトコメント保存 */
+  onCommitCompanyIssue: (payload: { is_company_issued: boolean; auto_issue_message: string | null }) => Promise<boolean>;
   onDelete: (t: DocumentTemplate) => void;
 }) {
   const [audienceOpen, setAudienceOpen] = useState(false);
+  const [companyIssueOpen, setCompanyIssueOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: t.id,
   });
@@ -486,9 +512,33 @@ function SortableTemplateCard({
                   <span>対象: {audienceSummary.label} ({audienceSummary.count}名)</span>
                   <span className="text-[10px] opacity-60">✎</span>
                 </button>
+                {/* 174: 会社発行用バッジ。ON なら緑、OFF は淡灰。クリックで CompanyIssueDialog */}
+                <button
+                  type="button"
+                  onClick={() => setCompanyIssueOpen(true)}
+                  className={`inline-flex items-center gap-1 text-xs whitespace-nowrap rounded-md px-2 py-0.5 border transition-colors ${
+                    t.is_company_issued
+                      ? 'border-emerald-400/50 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      : 'border-diletto-gray/30 text-diletto-gray-light hover:bg-diletto-gray/5'
+                  }`}
+                  title="会社発行 (招待時自動発行 + 一括発行) の設定"
+                >
+                  <span>{t.is_company_issued ? '📨 会社発行用' : '会社発行: OFF'}</span>
+                  <span className="text-[10px] opacity-60">✎</span>
+                </button>
               </div>
             </div>
           </div>
+
+          <CompanyIssueDialog
+            open={companyIssueOpen}
+            onOpenChange={setCompanyIssueOpen}
+            templateName={t.name}
+            initialEnabled={t.is_company_issued}
+            initialMessage={t.auto_issue_message ?? ''}
+            placementCount={placementCount}
+            onCommit={onCommitCompanyIssue}
+          />
 
           <AudienceDialog
             open={audienceOpen}
@@ -766,6 +816,101 @@ function AudienceDialog({
                 {previewMatches.length > 8 && ` ほか ${previewMatches.length - 8} 名`}
               </p>
             )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>キャンセル</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* 174: 会社発行用フラグ + デフォルトコメントを編集するダイアログ */
+function CompanyIssueDialog({
+  open,
+  onOpenChange,
+  templateName,
+  initialEnabled,
+  initialMessage,
+  placementCount,
+  onCommit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  templateName: string;
+  initialEnabled: boolean;
+  initialMessage: string;
+  placementCount: number;
+  onCommit: (payload: { is_company_issued: boolean; auto_issue_message: string | null }) => Promise<boolean>;
+}) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [message, setMessage] = useState(initialMessage);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setEnabled(initialEnabled);
+      setMessage(initialMessage);
+    }
+  }, [open, initialEnabled, initialMessage]);
+
+  const placementMissing = placementCount === 0;
+
+  async function handleSave() {
+    setSaving(true);
+    const ok = await onCommit({
+      is_company_issued: enabled,
+      auto_issue_message: message.trim() || null,
+    });
+    setSaving(false);
+    if (ok) onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[92vw] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>会社発行の設定</DialogTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            「{templateName}」を、新規招待時に自動配布 / 既存社員に一括配布する対象にします。
+          </p>
+        </DialogHeader>
+
+        {placementMissing && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 text-xs px-3 py-2">
+            ⚠ このテンプレートはタグ配置が未設定のため、ON にしても発行できません。先にエディタで配置してください。
+          </div>
+        )}
+
+        <div className="space-y-3 py-1">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              disabled={placementMissing}
+            />
+            <span>会社発行用にする (招待時自動発行 + 一括発行の対象)</span>
+          </label>
+
+          <div>
+            <label className="block text-xs font-medium text-foreground mb-1">
+              デフォルト発行コメント (任意)
+            </label>
+            <Textarea
+              rows={3}
+              placeholder="例: ご入社ありがとうございます。ご確認ください。"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={500}
+              className="text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              招待時・一括発行時に発行コメントとして自動付与されます (空欄ならコメント無し)。
+            </p>
           </div>
         </div>
 

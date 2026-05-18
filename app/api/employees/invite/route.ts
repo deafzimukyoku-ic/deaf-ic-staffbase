@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { resend, FROM_EMAIL } from '@/lib/resend';
 import { brandedInviteHtml } from '@/lib/email/invite-html';
+import { issueDocument } from '@/lib/issued-documents/issue-helper';
 
 export async function POST(request: NextRequest) {
   // 1. 認証チェック
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
 
   const { data: me } = await supabase
     .from('employees')
-    .select('role, tenant_id')
+    .select('id, role, tenant_id, last_name, first_name')
     .eq('auth_user_id', user.id)
     .maybeSingle();
 
@@ -156,12 +157,14 @@ export async function POST(request: NextRequest) {
   const normalizedEnd = default_end_time && default_end_time.trim() !== '' ? default_end_time : null;
 
   // 3. employeeレコード作成 + 招待メール送信
+  const inviterName = `${me.last_name ?? ''} ${me.first_name ?? ''}`.trim() || '管理者';
   return await createEmployeeAndSendInvite({
     adminClient,
     supabase,
     authUserId,
     createdNewAuthUser,
     tenantId: me.tenant_id,
+    inviter: { id: me.id, name: inviterName },
     employeeData: { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position: positionName, role: normalizedRole, manager_facility_ids: manager_facility_ids ?? [], default_start_time: normalizedStart, default_end_time: normalizedEnd },
   });
 }
@@ -246,6 +249,8 @@ interface CreateParams {
   /** このリクエストで新規作成した auth.users かどうか（rollback 対象判定）。 */
   createdNewAuthUser: boolean;
   tenantId: string;
+  /** 174: 自動発行の issued_by に記録する招待者情報 */
+  inviter: { id: string; name: string };
   employeeData: {
     email: string;
     employee_number: string;
@@ -271,6 +276,7 @@ async function createEmployeeAndSendInvite({
   authUserId,
   createdNewAuthUser,
   tenantId,
+  inviter,
   employeeData,
 }: CreateParams) {
   const { email, employee_number, last_name, first_name, last_name_kana, first_name_kana, join_date, has_car_commute, is_shuttle_driver, facility_id, position, role, manager_facility_ids, default_start_time, default_end_time } = employeeData;
@@ -337,6 +343,45 @@ async function createEmployeeAndSendInvite({
     }
   }
 
+  /* 174: 会社発行用テンプレを自動発行。失敗しても招待自体は完了扱い */
+  let autoIssueWarning: string | null = null;
+  try {
+    const { data: companyTpls } = await adminClient
+      .from('document_templates')
+      .select('id, name, pdf_storage_path, auto_issue_message')
+      .eq('tenant_id', tenantId)
+      .eq('is_company_issued', true);
+    const targets = (companyTpls ?? []) as Array<{
+      id: string;
+      name: string;
+      pdf_storage_path: string | null;
+      auto_issue_message: string | null;
+    }>;
+    if (targets.length > 0) {
+      let issuedCount = 0;
+      const failedNames: string[] = [];
+      for (const t of targets) {
+        if (!t.pdf_storage_path) continue;
+        const res = await issueDocument(adminClient, {
+          tenantId,
+          employeeId: createdEmp.id,
+          templateId: t.id,
+          issuerEmployeeId: inviter.id,
+          issuerName: inviter.name,
+          message: t.auto_issue_message,
+        });
+        if (res.success) issuedCount++;
+        else failedNames.push(t.name);
+      }
+      if (failedNames.length > 0) {
+        autoIssueWarning = `${issuedCount} 件の書類を自動発行しましたが、一部失敗 (${failedNames.join(' / ')})`;
+      }
+    }
+  } catch (e) {
+    console.error('auto issue company documents failed:', e);
+    autoIssueWarning = '会社発行用書類の自動発行に失敗しました。書類タブから個別に発行してください。';
+  }
+
   // Recovery link生成（PKCE方式: code付きリダイレクト）
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:4003';
 
@@ -376,19 +421,22 @@ async function createEmployeeAndSendInvite({
     html: brandedInviteHtml({ company, employeeName, inviteLink, isResend: false }),
   });
 
+  /* 174: 招待時自動発行の警告を managerFacilitiesWarning と合流 */
+  const combinedWarnings = [managerFacilitiesWarning, autoIssueWarning].filter(Boolean).join(' / ');
+
   if (mailErr) {
     // メール送信失敗してもemployeeレコードは作成済み。URL を返して手動配布に切替。
     return NextResponse.json({
       success: true,
-      warning: managerFacilitiesWarning
-        ? `社員は作成されましたが、招待メールの送信に失敗しました（下記 URL を 1 時間以内に共有してください）。${managerFacilitiesWarning}`
+      warning: combinedWarnings
+        ? `社員は作成されましたが、招待メールの送信に失敗しました（下記 URL を 1 時間以内に共有してください）。${combinedWarnings}`
         : '社員は作成されましたが、招待メールの送信に失敗しました。下記 URL を別チャネルで 1 時間以内に共有してください。',
       inviteLink,
     });
   }
 
-  if (managerFacilitiesWarning) {
-    return NextResponse.json({ success: true, warning: managerFacilitiesWarning });
+  if (combinedWarnings) {
+    return NextResponse.json({ success: true, warning: combinedWarnings });
   }
 
   return NextResponse.json({ success: true });
