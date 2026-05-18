@@ -23,6 +23,30 @@
 
 ---
 
+## 通知メールが集約されず 1 通ずつ送られる
+
+- **発生日**: 〜2026-05-18
+- **発生箇所**: `app/api/notifications/enqueue/route.ts:36-65` (旧コード)
+- **フェーズ**: 通知メール集約 + cron 信頼化 (Phase A)
+- **エラー内容**: お知らせ / 遵守事項 / 研修 / 業務マニュアル を短時間に複数件投稿しても、送信メールが 1 通の digest にまとまらず投稿ごとに 1 通ずつ送られていた
+- **原因**: 旧 enqueue は投稿ごとに独立 `scheduled_at = created_at + 2h` を設定し、同テナント他 pending 行を再スケジュールしなかった。cron が 30 分毎に走ると別投稿は別 tick で拾われて 1 通ずつ送信されていた。「2 時間ウィンドウで集約」の意図がコードに存在しなかった
+- **解決方法**: enqueue/route.ts を rolling window 化。新規/編集/連投時に同テナントの全 pending 行を最新の `(now + DELAY_HOURS=2)` に揃え、最古行の `first_scheduled_at + MAX_DELAY_HOURS=6` を hardCap として強制送信。migration 180 で `first_scheduled_at` カラム追加 + 24h overdue 破棄 + pending 抽出最適化 INDEX
+- **再発防止**: `docs/reference-map.md §0` に migration 180 の意味を明記。`first_scheduled_at` は rolling 揃え替えでは触らない (上限カウントの起点を保持) ことをコメント化
+
+---
+
+## GitHub Actions cron が discard で長期間停止
+
+- **発生日**: 2026-04-24〜2026-05-18 (実測: 4/24 作成 12 件が 5/15 まで 21 日放置、5/18 3 件が 1h44m 遅延、5/16 1 件が 3h14m 遅延)
+- **発生箇所**: `.github/workflows/notification-cron.yml`
+- **フェーズ**: 通知メール集約 + cron 信頼化 (Phase B)
+- **エラー内容**: GitHub Actions schedule で 30 分毎に Vercel `/api/cron/send-notifications` を叩く構成だったが、長時間 1 度も発火しない期間があり通知が出ない
+- **原因**: GitHub Actions schedule は公式 best-effort 仕様で SLA 無し。高負荷時に discard が多発する。30 分間隔に下げても解消せず。Vercel Hobby プランは cron 1 日 1 回しか実行できないため代替に GH Actions を使っていたが信頼性不足
+- **解決方法**: Supabase pg_cron + pg_net で 10 分毎に Vercel エンドポイントを叩く方式へ移行 (migration 181)。Supabase 内完結で信頼性確保。Vault に `cron_target_url` / `cron_secret` を登録し pg_cron の SQL から `vault.decrypted_secrets` 経由で読む。Vercel 側の `CRON_SECRET` は同じタイミングで rotate して Redeploy
+- **再発防止**: `.github/workflows/notification-cron.yml` を削除予定 (24h 観測後)。`docs/reference-map.md §0` に migration 181 / pg_cron ジョブ名 `dispatch_notification_queue` を記載
+
+---
+
 ## 書類タブのバッジ件数 ≠ 赤い「再提出する」ボタン数
 
 - **発生日**: 2026-05-18
