@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,16 @@ interface ManualWithRead extends Manual {
   isRead: boolean;
 }
 
+/* useSearchParams を使うため、prerender (CSR bailout) 回避用に Suspense でラップ */
 export default function MyManualsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /></div>}>
+      <MyManualsPageInner />
+    </Suspense>
+  );
+}
+
+function MyManualsPageInner() {
   const [items, setItems] = useState<ManualWithRead[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
