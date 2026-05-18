@@ -3,11 +3,20 @@ import { createClient } from '@/lib/supabase/server';
 import type { NotificationContentType } from '@/lib/types';
 
 const VALID_TYPES: NotificationContentType[] = ['announcement', 'compliance', 'training', 'manual'];
+
+/* 180: ローリングウィンドウ集約。
+   - DELAY_HOURS=2: 連投が止まってから送信までの待ち時間
+   - MAX_DELAY_HOURS=6: 最初の投稿から強制送信までの上限 (hardCap)
+   旧仕様は投稿ごとに独立 scheduled_at を設定し、同テナント他 pending 行を
+   再スケジュールしなかったため、cron が別 tick で 1 通ずつ送ってしまう問題があった。
+   新仕様では新規/編集時に同テナントの未送信行を全て同じ scheduled_at に揃え、
+   最古行の first_scheduled_at + MAX_DELAY_HOURS を hardCap として永遠の繰延を防ぐ。 */
 const DELAY_HOURS = 2;
+const MAX_DELAY_HOURS = 6;
 
 // POST /api/notifications/enqueue
 // Body: { content_type, content_id }
-// 作成/編集時に呼ぶ。未送信キューがあればscheduled_atをリセット、なければ新規作成
+// 作成/編集/連投時に呼ぶ。同テナントの未送信行を全部 rolling window で揃える
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
 
@@ -33,9 +42,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'パラメータが不正です' }, { status: 400 });
   }
 
-  const scheduledAt = new Date(Date.now() + DELAY_HOURS * 60 * 60 * 1000).toISOString();
+  const now = new Date();
+  const proposedScheduled = new Date(now.getTime() + DELAY_HOURS * 3600_000);
 
-  // 未送信・未キャンセルの既存キューがあればUPDATE（編集扱いでタイマーリセット）
+  /* 同テナントの未送信行のうち最古の first_scheduled_at を取得 (hardCap 計算用) */
+  const { data: oldest } = await supabase
+    .from('notification_queue')
+    .select('first_scheduled_at')
+    .eq('tenant_id', me.tenant_id)
+    .is('sent_at', null)
+    .is('cancelled_at', null)
+    .order('first_scheduled_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  /* hardCap: 最初の投稿から MAX_DELAY_HOURS で必ず送る。proposed が超えていれば丸める */
+  let finalScheduled = proposedScheduled;
+  if (oldest?.first_scheduled_at) {
+    const firstAt = new Date(oldest.first_scheduled_at as string);
+    const hardCap = new Date(firstAt.getTime() + MAX_DELAY_HOURS * 3600_000);
+    if (proposedScheduled > hardCap) finalScheduled = hardCap;
+  }
+  const finalIso = finalScheduled.toISOString();
+
+  /* 既存 (content_type, content_id) があれば UPDATE (= 同じ行のタイマーリセット)。
+     first_scheduled_at は触らない (上限カウントの起点を保持) */
   const { data: existing } = await supabase
     .from('notification_queue')
     .select('id')
@@ -45,25 +76,46 @@ export async function POST(req: NextRequest) {
     .is('cancelled_at', null)
     .maybeSingle();
 
+  let myRowId: string;
   if (existing) {
     const { error } = await supabase
       .from('notification_queue')
-      .update({ scheduled_at: scheduledAt, created_by: me.id })
+      .update({ scheduled_at: finalIso, created_by: me.id })
       .eq('id', existing.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ status: 'updated', scheduled_at: scheduledAt });
+    myRowId = existing.id as string;
+  } else {
+    const { data: inserted, error } = await supabase
+      .from('notification_queue')
+      .insert({
+        tenant_id: me.tenant_id,
+        content_type: contentType,
+        content_id: contentId,
+        scheduled_at: finalIso,
+        first_scheduled_at: now.toISOString(),
+        created_by: me.id,
+      })
+      .select('id')
+      .single();
+    if (error || !inserted) {
+      return NextResponse.json({ error: error?.message ?? 'insert failed' }, { status: 500 });
+    }
+    myRowId = inserted.id as string;
   }
 
-  const { error } = await supabase
+  /* 同テナントの他の未送信行も新しい scheduled_at に揃える (ローリングウィンドウ集約)。
+     hardCap が適用されたケース (finalScheduled < proposedScheduled) では、
+     他行も同時に hardCap に押し戻され、最古行の MAX_DELAY_HOURS 上限が全行に効く */
+  await supabase
     .from('notification_queue')
-    .insert({
-      tenant_id: me.tenant_id,
-      content_type: contentType,
-      content_id: contentId,
-      scheduled_at: scheduledAt,
-      created_by: me.id,
-    });
+    .update({ scheduled_at: finalIso })
+    .eq('tenant_id', me.tenant_id)
+    .is('sent_at', null)
+    .is('cancelled_at', null)
+    .neq('id', myRowId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ status: 'created', scheduled_at: scheduledAt });
+  return NextResponse.json({
+    status: existing ? 'updated' : 'created',
+    scheduled_at: finalIso,
+  });
 }
