@@ -4,10 +4,10 @@
 
 - **アプリ名**: deaf-ic
 - **納品先**: 認定NPO法人名古屋ろう国際センター（配下事業所 現時点4箇所）
-- **目的**: `diletto-shift-maker`（シフトパズル・送迎管理）と `diletto-staffbase`（社員管理・書類・研修・お知らせ・AI診断）を**1アプリ・1Supabase・1デプロイ**に統合してNPOに納品する。
-- **参照元**:
-  - `C:/Users/2han2/Projects/deaf-ic/diletto-shift-maker/`
-  - `C:/Users/2han2/Projects/deaf-ic/diletto-staffbase/`
+- **目的**: 旧 `diletto-shift-maker`（シフトパズル・送迎管理）と旧 `diletto-staffbase`（社員管理・書類・研修・お知らせ・AI診断）を**1アプリ・1Supabase・1デプロイ**に統合してNPOに納品する。
+- **参照元** (2026-05-19 統合完了に伴いローカル削除済 / 必要なら GitHub から再 clone 可能):
+  - `https://github.com/2han2be4han/diletto-shift-maker` (旧シフトパズル)
+  - `https://github.com/2han2be4han/diletto-staffbase` (旧社員管理)
 - **統合方針**: staffbase をベースに shift-maker を facility 対応で取り込む（Option 1）
 
 ### 技術スタック（staffbase ベースを踏襲）

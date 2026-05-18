@@ -41,10 +41,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# --- deaf-ic 固有: 参照元アプリは push しない（CLAUDE.md で「直接編集禁止」とした参照リポジトリ） ---
-/diletto-shift-maker/
-/diletto-staffbase/
-
 # --- ローカル作業用ログ・Claude Code 状態（service role key 等を含む可能性あり） ---
 dev.log
 /.claude/
