@@ -15,7 +15,7 @@ interface Props {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between">
-      <span className="text-diletto-gray-light">{label}</span>
+      <span className="text-brand-gray-light">{label}</span>
       <span className="text-[#111] text-right max-w-[60%]">{value}</span>
     </div>
   );
@@ -25,7 +25,7 @@ function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
     <div>
-      <p className="text-xs text-diletto-gray-light mb-1">{label}</p>
+      <p className="text-xs text-brand-gray-light mb-1">{label}</p>
       <p className="text-sm text-[#111] whitespace-pre-wrap">{value}</p>
     </div>
   );
@@ -119,7 +119,7 @@ export function SubordinateDetail({ employee: e }: Props) {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs text-diletto-gray-light mb-2">強み</p>
+                <p className="text-xs text-brand-gray-light mb-2">強み</p>
                 <ul className="space-y-1 text-sm">
                   {e.strength_1 && <li>・{e.strength_1}</li>}
                   {e.strength_2 && <li>・{e.strength_2}</li>}
@@ -127,7 +127,7 @@ export function SubordinateDetail({ employee: e }: Props) {
                 </ul>
               </div>
               <div>
-                <p className="text-xs text-diletto-gray-light mb-2">弱み</p>
+                <p className="text-xs text-brand-gray-light mb-2">弱み</p>
                 <ul className="space-y-1 text-sm">
                   {e.weakness_1 && <li>・{e.weakness_1}</li>}
                   {e.weakness_2 && <li>・{e.weakness_2}</li>}

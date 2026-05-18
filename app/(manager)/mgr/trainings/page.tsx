@@ -223,7 +223,7 @@ export default function ManagerTrainingsPage() {
     if (me) await reloadTrainings(me.tenant_id);
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   const uncategorizedDocs = trainings.filter(d => !d.category_id);
   const catMap = new Map(categories.map(c => [c.id, c]));
@@ -246,7 +246,7 @@ export default function ManagerTrainingsPage() {
           </div>
         </div>
 
-        <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して研修内容を確認・編集してください。新規追加はカテゴリを開いて行います。</p>
+        <p className="text-sm text-brand-gray mb-6">カテゴリを選択して研修内容を確認・編集してください。新規追加はカテゴリを開いて行います。</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {categories.map((cat) => {
@@ -255,7 +255,7 @@ export default function ManagerTrainingsPage() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
               >
                 <div className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" style={{ backgroundColor: cat.color }} />
                 <div className="flex justify-between items-start mb-auto relative">
@@ -264,8 +264,8 @@ export default function ManagerTrainingsPage() {
                   </span>
                 </div>
                 <div className="relative">
-                  <span className="text-sm font-bold text-diletto-ink block truncate mb-1">{cat.name}</span>
-                  <span className="text-[10px] text-diletto-gray">{catDocs.length} 項目</span>
+                  <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
+                  <span className="text-[10px] text-brand-gray">{catDocs.length} 項目</span>
                 </div>
               </button>
             );
@@ -274,14 +274,14 @@ export default function ManagerTrainingsPage() {
           {uncategorizedDocs.length > 0 && (
             <button
               onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📎', color: '#94a3b8' } as Category)}
-              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
             >
               <div className="flex justify-between items-start mb-auto relative">
                 <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📎</span>
               </div>
               <div className="relative">
-                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                <span className="text-[10px] text-diletto-gray block">{uncategorizedDocs.length} 項目</span>
+                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                <span className="text-[10px] text-brand-gray block">{uncategorizedDocs.length} 項目</span>
               </div>
             </button>
           )}
@@ -298,7 +298,7 @@ export default function ManagerTrainingsPage() {
   return (
     <div>
       <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-brand-gray-light hover:text-brand-ink shrink-0">
           ← 戻る
         </Button>
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -328,11 +328,11 @@ export default function ManagerTrainingsPage() {
           return (
             <DragSortItem key={t.id} index={idx}>
               {(handle) => (
-            <Card className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
+            <Card className="rounded-lg shadow-sm border-brand-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
               <CardContent className="flex flex-wrap items-center gap-3 py-4">
                 <DragHandleIcon {...handle} />
                 <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
-                  <p className="font-bold text-diletto-ink break-words md:truncate">{t.title}</p>
+                  <p className="font-bold text-brand-ink break-words md:truncate">{t.title}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <TargetAttributeBadges
                       targetType={t.target_type}
@@ -361,7 +361,7 @@ export default function ManagerTrainingsPage() {
                         onChanged={() => me && reloadTrainings(me.tenant_id)}
                       />
                       <Button variant="ghost" size="sm" onClick={() => openEdit(t)} className="h-8 rounded-md text-xs font-bold">編集</Button>
-                      <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-diletto-red" onClick={() => handleDelete(t.id)}>削除</Button>
+                      <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-brand-red" onClick={() => handleDelete(t.id)}>削除</Button>
                     </>
                   )}
                   <Link href={`/mgr/trainings/${t.id}/submissions`}>
@@ -375,7 +375,7 @@ export default function ManagerTrainingsPage() {
           );
         })}
         {visible.length === 0 && (
-          <Card><CardContent className="py-12 text-center text-diletto-gray-light">該当する研修はありません</CardContent></Card>
+          <Card><CardContent className="py-12 text-center text-brand-gray-light">該当する研修はありません</CardContent></Card>
         )}
       </DragSortList>
 
@@ -392,8 +392,8 @@ export default function ManagerTrainingsPage() {
                     type="button"
                     onClick={() => toggleFacility(f.id)}
                     className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${form.target_facility_ids.includes(f.id)
-                      ? 'bg-diletto-blue text-white border-diletto-blue shadow-sm'
-                      : 'bg-white text-diletto-gray border-diletto-gray/15 hover:border-diletto-blue/30'
+                      ? 'bg-brand-blue text-white border-brand-blue shadow-sm'
+                      : 'bg-white text-brand-gray border-brand-gray/15 hover:border-brand-blue/30'
                       }`}
                   >
                     {f.name}

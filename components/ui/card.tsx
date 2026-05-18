@@ -12,7 +12,7 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden rounded-md border border-[hsl(40,8%,85%)] bg-white py-4 text-sm text-card-foreground shadow-diletto-sm transition-shadow hover:shadow-diletto has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-md *:[img:last-child]:rounded-b-md",
+        "group/card flex flex-col gap-4 overflow-hidden rounded-md border border-[hsl(40,8%,85%)] bg-white py-4 text-sm text-card-foreground shadow-brand-sm transition-shadow hover:shadow-brand has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-md *:[img:last-child]:rounded-b-md",
         className
       )}
       {...props}
@@ -38,7 +38,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-title"
       className={cn(
-        "text-lg font-semibold leading-none tracking-tight text-diletto-ink group-data-[size=sm]/card:text-sm",
+        "text-lg font-semibold leading-none tracking-tight text-brand-ink group-data-[size=sm]/card:text-sm",
         className
       )}
       {...props}
@@ -50,7 +50,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-sm text-diletto-gray", className)}
+      className={cn("text-sm text-brand-gray", className)}
       {...props}
     />
   )

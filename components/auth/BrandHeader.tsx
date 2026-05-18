@@ -16,7 +16,7 @@ const MOBILE_LINKS = [
 ];
 
 /* ─── ヘッダー（diletto_assets/common.js / common.css 準拠） ─── */
-export function DilettoHeader() {
+export function BrandHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   function toggleMenu() {

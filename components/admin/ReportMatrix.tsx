@@ -124,11 +124,11 @@ export function ReportMatrix() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap">
         <h1 className="text-2xl font-bold whitespace-nowrap">📊 閲覧レポート</h1>
         <div className="flex items-center gap-2 shrink-0">
-          <label className="text-xs text-diletto-gray whitespace-nowrap">期間</label>
+          <label className="text-xs text-brand-gray whitespace-nowrap">期間</label>
           <select
             value={days}
             onChange={(e) => setDays(e.target.value)}
-            className="h-9 rounded-md border border-diletto-gray/20 bg-white px-3 text-sm"
+            className="h-9 rounded-md border border-brand-gray/20 bg-white px-3 text-sm"
           >
             {PERIOD_OPTIONS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
@@ -139,12 +139,12 @@ export function ReportMatrix() {
 
       <Tabs value={category} onValueChange={(v) => setCategory(v as Category)}>
         {/* モバイル: 横スクロール / lg 以上: 等幅。設定画面のタブと統一感 */}
-        <TabsList className="w-full max-w-full h-12 bg-diletto-beige/40 border border-diletto-gray/10 rounded-xl p-1 overflow-x-auto no-scrollbar justify-start lg:justify-stretch gap-0.5">
+        <TabsList className="w-full max-w-full h-12 bg-brand-beige/40 border border-brand-gray/10 rounded-xl p-1 overflow-x-auto no-scrollbar justify-start lg:justify-stretch gap-0.5">
           {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => (
             <TabsTrigger
               key={c}
               value={c}
-              className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all"
+              className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all"
             >
               <span className="mr-1">{CATEGORY_LABELS[c].icon}</span>
               {CATEGORY_LABELS[c].label}
@@ -154,8 +154,8 @@ export function ReportMatrix() {
 
         {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => (
           <TabsContent key={c} value={c}>
-            {loading && <p className="py-8 text-center text-sm text-diletto-gray-light">読み込み中...</p>}
-            {error && <p className="py-8 text-center text-sm text-diletto-red">エラー: {error}</p>}
+            {loading && <p className="py-8 text-center text-sm text-brand-gray-light">読み込み中...</p>}
+            {error && <p className="py-8 text-center text-sm text-brand-red">エラー: {error}</p>}
             {!loading && !error && data && (
               <ReportBody
                 data={data}
@@ -375,7 +375,7 @@ function ReportBody({
   if (items.length === 0) {
     return (
       <Card>
-        <CardContent className="py-12 text-center text-sm text-diletto-gray-light">
+        <CardContent className="py-12 text-center text-sm text-brand-gray-light">
           {CATEGORY_LABELS[category].label}が登録されていません
         </CardContent>
       </Card>
@@ -384,7 +384,7 @@ function ReportBody({
   if (employees.length === 0) {
     return (
       <Card>
-        <CardContent className="py-12 text-center text-sm text-diletto-gray-light">
+        <CardContent className="py-12 text-center text-sm text-brand-gray-light">
           対象社員がいません
         </CardContent>
       </Card>
@@ -396,11 +396,11 @@ function ReportBody({
       {/* カテゴリフィルタ + CSV ダウンロード - モバイルでは縦並び */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <label className="text-xs text-diletto-gray whitespace-nowrap shrink-0">カテゴリ</label>
+          <label className="text-xs text-brand-gray whitespace-nowrap shrink-0">カテゴリ</label>
           <select
             value={categoryFilter}
             onChange={(e) => onCategoryFilterChange(e.target.value)}
-            className="h-9 flex-1 min-w-0 rounded-md border border-diletto-gray/20 bg-white px-3 text-sm"
+            className="h-9 flex-1 min-w-0 rounded-md border border-brand-gray/20 bg-white px-3 text-sm"
           >
             <option value="all">すべて ({data.items.length})</option>
             {categories.map((cat) => {
@@ -483,7 +483,7 @@ function ReportBody({
                   ))}
                 </tr>
               )}
-              <tr className="bg-diletto-bg sticky top-0 z-10">
+              <tr className="bg-brand-bg sticky top-0 z-10">
                 <th
                   className="text-left px-3 py-2 sticky left-0 z-20 whitespace-nowrap"
                   style={{
@@ -512,7 +512,7 @@ function ReportBody({
                     }}
                   >
                     <span className="block max-w-[220px] truncate" title={it.title}>{it.title}</span>
-                    <span className="text-[10px] text-diletto-gray-light font-normal">
+                    <span className="text-[10px] text-brand-gray-light font-normal">
                       {it.target_type === 'facility' ? '🏢 施設限定' : '全員'}
                     </span>
                   </th>
@@ -532,7 +532,7 @@ function ReportBody({
                     {e.name}
                   </td>
                   <td
-                    className="px-3 py-2 text-diletto-gray-light whitespace-nowrap bg-white"
+                    className="px-3 py-2 text-brand-gray-light whitespace-nowrap bg-white"
                     style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
                   >
                     {e.facility_name || '-'}
@@ -544,7 +544,7 @@ function ReportBody({
                       return (
                         <td
                           key={it.id}
-                          className="px-2 py-2 text-center text-diletto-gray-light/40 bg-white"
+                          className="px-2 py-2 text-center text-brand-gray-light/40 bg-white"
                           style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
                         >
                           —
@@ -556,7 +556,7 @@ function ReportBody({
                       return (
                         <td
                           key={it.id}
-                          className="px-2 py-2 text-center text-diletto-red whitespace-nowrap"
+                          className="px-2 py-2 text-center text-brand-red whitespace-nowrap"
                           style={{
                             background: '#fcf2f2',
                             boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)',
@@ -593,10 +593,10 @@ function ReportBody({
                         className="px-2 py-2 whitespace-nowrap bg-white"
                         style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
                       >
-                        <div className="text-diletto-blue font-medium" title={tooltipText} style={{ cursor: 'help' }}>
+                        <div className="text-brand-blue font-medium" title={tooltipText} style={{ cursor: 'help' }}>
                           ✓ {v.count} 回
                         </div>
-                        <div className="text-[10px] text-diletto-gray-light">{formatDate(v.last_viewed_at)}</div>
+                        <div className="text-[10px] text-brand-gray-light">{formatDate(v.last_viewed_at)}</div>
                         {category === 'training' && (
                           <div className="mt-1 flex items-center gap-1">
                             {sub ? (
@@ -605,10 +605,10 @@ function ReportBody({
                                 title={subTooltipText}
                                 style={{ cursor: 'help' }}
                                 className={
-                                  sub.result === 'passed' ? 'bg-diletto-green/10 text-diletto-green border-diletto-green/30' :
-                                  sub.result === 'failed' ? 'bg-diletto-red/10 text-diletto-red border-diletto-red/30' :
+                                  sub.result === 'passed' ? 'bg-brand-green/10 text-brand-green border-brand-green/30' :
+                                  sub.result === 'failed' ? 'bg-brand-red/10 text-brand-red border-brand-red/30' :
                                   sub.result === 'resubmit' ? 'bg-amber-100 text-amber-800 border-amber-300' :
-                                  'bg-diletto-gray/10 text-diletto-gray border-diletto-gray/20'
+                                  'bg-brand-gray/10 text-brand-gray border-brand-gray/20'
                                 }
                               >
                                 {sub.result === 'passed' ? '合格' :
@@ -616,13 +616,13 @@ function ReportBody({
                                  sub.result === 'resubmit' ? '再提出' : '未判定'}
                               </Badge>
                             ) : (
-                              <span className="text-[10px] text-diletto-gray-light">提出待ち</span>
+                              <span className="text-[10px] text-brand-gray-light">提出待ち</span>
                             )}
                             {sub && (
                               <button
                                 type="button"
                                 onClick={() => openReview(e.id, e.name, it.id, it.title)}
-                                className="text-[10px] underline text-diletto-blue hover:text-diletto-ink"
+                                className="text-[10px] underline text-brand-blue hover:text-brand-ink"
                               >
                                 判定
                               </button>
@@ -650,8 +650,8 @@ function ReportBody({
           {reviewTarget?.submission ? (
             <div className="space-y-4 py-2">
               <div>
-                <div className="text-xs text-diletto-gray-light mb-1">受講の感想 ({reviewTarget.submission.summary_text?.length || 0} 文字)</div>
-                <div className="rounded-md border border-diletto-gray/15 bg-diletto-beige/30 p-3 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                <div className="text-xs text-brand-gray-light mb-1">受講の感想 ({reviewTarget.submission.summary_text?.length || 0} 文字)</div>
+                <div className="rounded-md border border-brand-gray/15 bg-brand-beige/30 p-3 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
                   {reviewTarget.submission.summary_text || '（記入なし）'}
                 </div>
               </div>
@@ -665,11 +665,11 @@ function ReportBody({
                       onClick={() => setReviewResult(r)}
                       className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
                         reviewResult === r
-                          ? r === 'passed' ? 'bg-diletto-green text-white border-diletto-green'
-                          : r === 'failed' ? 'bg-diletto-red text-white border-diletto-red'
+                          ? r === 'passed' ? 'bg-brand-green text-white border-brand-green'
+                          : r === 'failed' ? 'bg-brand-red text-white border-brand-red'
                           : r === 'resubmit' ? 'bg-amber-500 text-white border-amber-500'
-                          : 'bg-diletto-gray text-white border-diletto-gray'
-                          : 'bg-white text-diletto-ink border-diletto-gray/30 hover:bg-diletto-beige'
+                          : 'bg-brand-gray text-white border-brand-gray'
+                          : 'bg-white text-brand-ink border-brand-gray/30 hover:bg-brand-beige'
                       }`}
                     >
                       {r === 'passed' ? '合格' : r === 'failed' ? '不合格' : r === 'resubmit' ? '再提出' : '未判定'}
@@ -688,7 +688,7 @@ function ReportBody({
               </div>
             </div>
           ) : (
-            <p className="py-4 text-sm text-diletto-gray">提出データがありません。</p>
+            <p className="py-4 text-sm text-brand-gray">提出データがありません。</p>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setReviewTarget(null)}>キャンセル</Button>
@@ -712,8 +712,8 @@ function SummaryCard({ label, value, highlight }: { label: string; value: string
   return (
     <Card>
       <CardContent className="py-3">
-        <p className="text-[10px] text-diletto-gray-light font-bold uppercase tracking-wider">{label}</p>
-        <p className={`text-xl font-bold mt-1 ${highlight ? 'text-diletto-red' : 'text-diletto-ink'}`}>{value}</p>
+        <p className="text-[10px] text-brand-gray-light font-bold uppercase tracking-wider">{label}</p>
+        <p className={`text-xl font-bold mt-1 ${highlight ? 'text-brand-red' : 'text-brand-ink'}`}>{value}</p>
       </CardContent>
     </Card>
   );

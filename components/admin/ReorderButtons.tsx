@@ -61,7 +61,7 @@ export function ReorderButtons({ table, itemId, items, onReordered }: Props) {
         disabled={!canUp}
         onClick={() => canUp && swap(index - 1)}
         aria-label="上へ移動"
-        className="w-6 h-5 flex items-center justify-center rounded bg-white border border-diletto-gray/15 text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink disabled:opacity-30 disabled:cursor-not-allowed transition"
+        className="w-6 h-5 flex items-center justify-center rounded bg-white border border-brand-gray/15 text-brand-gray hover:bg-brand-beige hover:text-brand-ink disabled:opacity-30 disabled:cursor-not-allowed transition"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
           <polyline points="18 15 12 9 6 15" />
@@ -72,7 +72,7 @@ export function ReorderButtons({ table, itemId, items, onReordered }: Props) {
         disabled={!canDown}
         onClick={() => canDown && swap(index + 1)}
         aria-label="下へ移動"
-        className="w-6 h-5 flex items-center justify-center rounded bg-white border border-diletto-gray/15 text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink disabled:opacity-30 disabled:cursor-not-allowed transition"
+        className="w-6 h-5 flex items-center justify-center rounded bg-white border border-brand-gray/15 text-brand-gray hover:bg-brand-beige hover:text-brand-ink disabled:opacity-30 disabled:cursor-not-allowed transition"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
           <polyline points="6 9 12 15 18 9" />

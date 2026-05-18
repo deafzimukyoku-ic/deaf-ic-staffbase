@@ -17,8 +17,8 @@ export default function MappingPage({ params }: { params: Promise<{ id: string }
 
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-      <span className="ml-3 text-sm text-diletto-gray">エディタに移動中...</span>
+      <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+      <span className="ml-3 text-sm text-brand-gray">エディタに移動中...</span>
     </div>
   );
 }

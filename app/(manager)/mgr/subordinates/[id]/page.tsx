@@ -57,8 +57,8 @@ export default function SubordinateDetailPage({ params }: { params: Promise<{ id
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-        <span className="ml-3 text-sm text-diletto-gray">読み込み中...</span>
+        <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+        <span className="ml-3 text-sm text-brand-gray">読み込み中...</span>
       </div>
     );
   }
@@ -66,7 +66,7 @@ export default function SubordinateDetailPage({ params }: { params: Promise<{ id
   if (unauthorized || !employee) {
     return (
       <div className="text-center py-12">
-        <p className="text-diletto-red mb-4">この社員の情報を閲覧する権限がありません。</p>
+        <p className="text-brand-red mb-4">この社員の情報を閲覧する権限がありません。</p>
         <Button variant="outline" onClick={() => router.push('/mgr/subordinates')}>
           一覧に戻る
         </Button>
@@ -86,12 +86,12 @@ export default function SubordinateDetailPage({ params }: { params: Promise<{ id
               {emp.last_name as string} {emp.first_name as string}
             </h1>
             {emp.status === 'active' ? (
-              <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">在籍</Badge>
+              <Badge className="bg-brand-green/10 text-brand-green border-brand-green/20">在籍</Badge>
             ) : (
-              <Badge className="bg-diletto-red/[0.06] text-diletto-red border-diletto-red/15">退職</Badge>
+              <Badge className="bg-brand-red/[0.06] text-brand-red border-brand-red/15">退職</Badge>
             )}
           </div>
-          <p className="text-sm text-diletto-gray mt-1">
+          <p className="text-sm text-brand-gray mt-1">
             {emp.employee_number as string} / {emp.facility ? (Array.isArray(emp.facility) ? (emp.facility as any)[0]?.name : (emp.facility as any).name) : '-'}
           </p>
         </div>

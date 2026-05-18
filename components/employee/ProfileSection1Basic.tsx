@@ -159,7 +159,7 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
                   className="flex-1"
                 />
               </div>
-              <p className="text-[11px] text-diletto-gray-light px-1">
+              <p className="text-[11px] text-brand-gray-light px-1">
                 シフト・送迎表モードの初期勤務時間として使われます。
               </p>
             </div>
@@ -182,7 +182,7 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
                 ここで入力された値は employees.qualifications text[] にそのまま保存される（事業所マスタ非依存）。 */}
             <div className="space-y-2">
               <Label>保有資格</Label>
-              <p className="text-[11px] text-diletto-gray-light px-1">
+              <p className="text-[11px] text-brand-gray-light px-1">
                 個人で取得した資格を自由に追加できます（プロフィール表示用）。シフト・送迎の有資格者判定は事業所側で別途管理されます。
               </p>
               <QualificationsInput

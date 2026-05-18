@@ -79,7 +79,7 @@ export default function MatrixPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-diletto-gray-light">読み込み中...</p>
+        <p className="text-sm text-brand-gray-light">読み込み中...</p>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export default function MatrixPage() {
   if (!template) {
     return (
       <div className="text-center py-12">
-        <p className="text-diletto-gray">テンプレートが見つかりません</p>
+        <p className="text-brand-gray">テンプレートが見つかりません</p>
       </div>
     );
   }
@@ -99,7 +99,7 @@ export default function MatrixPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/admin/documents')}
-            className="text-sm text-diletto-gray hover:text-diletto-ink transition-colors"
+            className="text-sm text-brand-gray hover:text-brand-ink transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="15 18 9 12 15 6" />
@@ -107,7 +107,7 @@ export default function MatrixPage() {
           </button>
           <div>
             <h1 className="text-xl font-bold">{template.name}</h1>
-            <p className="text-sm text-diletto-gray">マトリクスデータ入力</p>
+            <p className="text-sm text-brand-gray">マトリクスデータ入力</p>
           </div>
         </div>
         <Button

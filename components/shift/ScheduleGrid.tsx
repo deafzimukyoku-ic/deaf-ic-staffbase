@@ -178,8 +178,8 @@ export function ScheduleGrid({ scope }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-        <span className="ml-3 text-sm text-diletto-gray">読み込み中...</span>
+        <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+        <span className="ml-3 text-sm text-brand-gray">読み込み中...</span>
       </div>
     );
   }
@@ -190,15 +190,15 @@ export function ScheduleGrid({ scope }: Props) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <span className="text-3xl">📅</span>
-          <h1 className="text-2xl font-bold text-diletto-ink">利用予定</h1>
+          <h1 className="text-2xl font-bold text-brand-ink">利用予定</h1>
         </div>
       </div>
 
       {/* フィルタ + 月ステッパー */}
-      <div className="flex flex-wrap items-center gap-3 bg-white rounded-md border border-diletto-gray/10 p-3">
+      <div className="flex flex-wrap items-center gap-3 bg-white rounded-md border border-brand-gray/10 p-3">
         <div className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={() => setMonth(addMonths(month, -1))}>← 前月</Button>
-          <div className="px-4 min-w-[140px] text-center font-bold text-diletto-ink">
+          <div className="px-4 min-w-[140px] text-center font-bold text-brand-ink">
             {format(month, 'yyyy年 M月', { locale: ja })}
           </div>
           <Button variant="outline" size="sm" onClick={() => setMonth(addMonths(month, 1))}>次月 →</Button>
@@ -206,7 +206,7 @@ export function ScheduleGrid({ scope }: Props) {
             variant="ghost"
             size="sm"
             onClick={() => { const d = new Date(); d.setDate(1); setMonth(d); }}
-            className="text-xs text-diletto-gray-light"
+            className="text-xs text-brand-gray-light"
           >
             今月
           </Button>
@@ -214,11 +214,11 @@ export function ScheduleGrid({ scope }: Props) {
 
         {scope === 'admin' && facilities.length > 1 && (
           <div className="flex items-center gap-2 ml-auto">
-            <Label className="text-[10px] font-bold text-diletto-gray-light uppercase">事業所</Label>
+            <Label className="text-[10px] font-bold text-brand-gray-light uppercase">事業所</Label>
             <select
               value={facilityFilter}
               onChange={(e) => setFacilityFilter(e.target.value)}
-              className="h-9 rounded-md border border-diletto-gray/15 bg-white px-3 text-sm"
+              className="h-9 rounded-md border border-brand-gray/15 bg-white px-3 text-sm"
               aria-label="事業所フィルタ"
             >
               <option value="all">すべて</option>
@@ -227,7 +227,7 @@ export function ScheduleGrid({ scope }: Props) {
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-xs text-diletto-gray-light">
+        <div className="flex items-center gap-2 text-xs text-brand-gray-light">
           <span>児童 {visibleChildren.length} 人</span>
           <span>·</span>
           <span>予定 {entries.filter((e) => visibleChildren.some((c) => c.id === e.child_id)).length} 件</span>
@@ -236,17 +236,17 @@ export function ScheduleGrid({ scope }: Props) {
 
       {/* グリッド */}
       {visibleChildren.length === 0 ? (
-        <Card className="border-dashed border-2 border-diletto-gray/20 bg-transparent rounded-md">
-          <CardContent className="py-16 text-center text-diletto-gray-light">
+        <Card className="border-dashed border-2 border-brand-gray/20 bg-transparent rounded-md">
+          <CardContent className="py-16 text-center text-brand-gray-light">
             在籍中の児童がいません。先に「児童管理」で登録してください。
           </CardContent>
         </Card>
       ) : (
-        <div className="bg-white rounded-md border border-diletto-gray/10 overflow-auto">
+        <div className="bg-white rounded-md border border-brand-gray/10 overflow-auto">
           <table className="border-collapse text-sm">
             <thead>
-              <tr className="bg-diletto-beige/50 sticky top-0 z-10">
-                <th className="sticky left-0 z-20 bg-diletto-beige/95 border-r border-diletto-gray/15 px-3 py-2 text-left font-bold text-diletto-ink min-w-[140px]">
+              <tr className="bg-brand-beige/50 sticky top-0 z-10">
+                <th className="sticky left-0 z-20 bg-brand-beige/95 border-r border-brand-gray/15 px-3 py-2 text-left font-bold text-brand-ink min-w-[140px]">
                   児童
                 </th>
                 {days.map((d) => {
@@ -256,10 +256,10 @@ export function ScheduleGrid({ scope }: Props) {
                   return (
                     <th
                       key={d.toISOString()}
-                      className={`border-r border-diletto-gray/10 px-1 py-1 text-center min-w-[44px] font-normal ${
-                        isTodayFlag ? 'bg-diletto-blue/10 text-diletto-blue font-bold' :
-                        isWeekend ? 'bg-gray-50 text-diletto-gray-light' :
-                        'text-diletto-gray'
+                      className={`border-r border-brand-gray/10 px-1 py-1 text-center min-w-[44px] font-normal ${
+                        isTodayFlag ? 'bg-brand-blue/10 text-brand-blue font-bold' :
+                        isWeekend ? 'bg-gray-50 text-brand-gray-light' :
+                        'text-brand-gray'
                       }`}
                     >
                       <div className="text-xs">{format(d, 'd')}</div>
@@ -271,13 +271,13 @@ export function ScheduleGrid({ scope }: Props) {
             </thead>
             <tbody>
               {visibleChildren.map((child) => (
-                <tr key={child.id} className="border-t border-diletto-gray/5 hover:bg-gray-50/30">
-                  <td className="sticky left-0 bg-white border-r border-diletto-gray/15 px-3 py-2 min-w-[140px]">
+                <tr key={child.id} className="border-t border-brand-gray/5 hover:bg-gray-50/30">
+                  <td className="sticky left-0 bg-white border-r border-brand-gray/15 px-3 py-2 min-w-[140px]">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-diletto-ink text-sm truncate">{child.name}</span>
+                      <span className="font-bold text-brand-ink text-sm truncate">{child.name}</span>
                     </div>
                     <div className="flex items-center gap-1 mt-0.5">
-                      <Badge className="bg-diletto-beige text-diletto-ink border-none text-[9px] px-1.5 py-0">
+                      <Badge className="bg-brand-beige text-brand-ink border-none text-[9px] px-1.5 py-0">
                         {GRADE_LABELS[child.grade_type]}
                       </Badge>
                     </div>
@@ -297,16 +297,16 @@ export function ScheduleGrid({ scope }: Props) {
                       <td
                         key={dateStr}
                         onClick={() => openCell(child, dateStr)}
-                        className={`border-r border-b border-diletto-gray/5 p-1 text-center cursor-pointer transition-colors h-12 ${
-                          entry ? 'bg-diletto-blue/5 hover:bg-diletto-blue/10' :
+                        className={`border-r border-b border-brand-gray/5 p-1 text-center cursor-pointer transition-colors h-12 ${
+                          entry ? 'bg-brand-blue/5 hover:bg-brand-blue/10' :
                           isWeekend ? 'bg-gray-50/50 hover:bg-gray-100' :
-                          'hover:bg-diletto-beige/50'
+                          'hover:bg-brand-beige/50'
                         }`}
                       >
                         {entry && (
                           <div className="flex flex-col gap-0 leading-tight">
                             {pickupArea && <span className="text-sm" title={`迎: ${pickupArea.name}`}>{pickupArea.emoji}</span>}
-                            {!pickupArea && !dropoffArea && <span className="text-xs text-diletto-blue font-bold">✓</span>}
+                            {!pickupArea && !dropoffArea && <span className="text-xs text-brand-blue font-bold">✓</span>}
                             {dropoffArea && <span className="text-sm" title={`送: ${dropoffArea.name}`}>{dropoffArea.emoji}</span>}
                           </div>
                         )}
@@ -321,7 +321,7 @@ export function ScheduleGrid({ scope }: Props) {
       )}
 
       {/* ヘルプ */}
-      <p className="text-xs text-diletto-gray-light">
+      <p className="text-xs text-brand-gray-light">
         💡 セルをクリックして利用予定を登録・編集できます。絵文字は迎え/送りエリアを示します。
       </p>
 

@@ -152,8 +152,8 @@ function SidebarNav({
       {items.map((item, idx) => {
         if (item.kind === 'section') {
           return (
-            <div key={`sec-${idx}`} className="pt-3 mt-2 border-t border-diletto-gray/15">
-              <p className="px-3 pt-1 pb-1 text-[10px] font-bold text-diletto-gray-light uppercase tracking-widest">
+            <div key={`sec-${idx}`} className="pt-3 mt-2 border-t border-brand-gray/15">
+              <p className="px-3 pt-1 pb-1 text-[10px] font-bold text-brand-gray-light uppercase tracking-widest">
                 {item.label}
               </p>
             </div>
@@ -169,8 +169,8 @@ function SidebarNav({
                 onClick={() => setOpen((prev) => ({ ...prev, [item.key]: !expanded }))}
                 className={`flex w-full items-center gap-3 rounded-md text-sm font-medium transition-all duration-300 px-3 py-2.5 ${
                   anyActive
-                    ? 'bg-diletto-beige text-diletto-ink'
-                    : 'text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink'
+                    ? 'bg-brand-beige text-brand-ink'
+                    : 'text-brand-gray hover:bg-brand-beige hover:text-brand-ink'
                 }`}
                 aria-expanded={expanded}
               >
@@ -179,7 +179,7 @@ function SidebarNav({
                 <span className={`text-xs transition-transform ${expanded ? 'rotate-90' : ''}`}>▶</span>
               </button>
               {expanded && (
-                <div className="ml-3 mt-1 space-y-1 border-l border-diletto-gray/10 pl-2">
+                <div className="ml-3 mt-1 space-y-1 border-l border-brand-gray/10 pl-2">
                   {item.children.map((c) => {
                     const active = isActive(pathname, c.href);
                     return (
@@ -189,8 +189,8 @@ function SidebarNav({
                         onClick={onNavigate}
                         className={`flex items-center gap-2 rounded-md text-sm transition-all px-3 py-2 ${
                           active
-                            ? 'bg-diletto-ink text-white shadow-sm font-medium'
-                            : 'text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink'
+                            ? 'bg-brand-ink text-white shadow-sm font-medium'
+                            : 'text-brand-gray hover:bg-brand-beige hover:text-brand-ink'
                         }`}
                       >
                         <span className="text-[8px] shrink-0 opacity-60">●</span>
@@ -211,8 +211,8 @@ function SidebarNav({
             onClick={onNavigate}
             className={`flex items-center gap-3 rounded-md text-sm font-medium transition-all duration-300 px-3 py-2.5 ${
               active
-                ? 'bg-diletto-ink text-white shadow-sm'
-                : 'text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink'
+                ? 'bg-brand-ink text-white shadow-sm'
+                : 'text-brand-gray hover:bg-brand-beige hover:text-brand-ink'
             }`}
           >
             <span className="text-base shrink-0">{item.icon}</span>
@@ -226,8 +226,8 @@ function SidebarNav({
 
 function ModeLabel({ mode }: { mode: Mode }) {
   return (
-    <div className="px-4 py-2 border-b border-diletto-gray/10 bg-diletto-beige/50">
-      <p className="text-[10px] font-bold text-diletto-gray-light uppercase tracking-widest">
+    <div className="px-4 py-2 border-b border-brand-gray/10 bg-brand-beige/50">
+      <p className="text-[10px] font-bold text-brand-gray-light uppercase tracking-widest">
         {mode === 'staff' ? '📋 社員管理モード' : '🚐 シフト・送迎モード'}
       </p>
     </div>
@@ -250,7 +250,7 @@ function SidebarContent({
   const homeHref = mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard';
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="flex border-b border-diletto-gray/10 h-[60px] items-center px-4">
+      <div className="flex border-b border-brand-gray/10 h-[60px] items-center px-4">
         <Link href={homeHref} onClick={onNavigate}>
           <Logo size="md" />
         </Link>
@@ -258,7 +258,7 @@ function SidebarContent({
       <ModeLabel mode={mode} />
       {/* 常時表示スクロールバーで「下にもう項目あるよ」を視覚化。
          ScrollArea は base-ui のカスタム実装だが thumb が控えめすぎるので native overflow に置換。
-         WebKit 系のスクロールバーをカラーリングして diletto テイストに合わせる。 */}
+         WebKit 系のスクロールバーをカラーリングして brand テイストに合わせる。 */}
       <div className="flex-1 overflow-y-auto py-3 sidebar-scroll">
         <SidebarNav
           pathname={pathname}
@@ -289,7 +289,7 @@ function ModeFab({
     <button
       type="button"
       onClick={onSwitch}
-      className="print-hide fixed bottom-6 right-6 z-50 flex items-center gap-2 h-14 rounded-full bg-diletto-ink text-white shadow-lg hover:bg-black transition-all hover:shadow-xl group overflow-hidden whitespace-nowrap pl-3 pr-3 max-w-14 hover:max-w-xs hover:pr-5 duration-300"
+      className="print-hide fixed bottom-6 right-6 z-50 flex items-center gap-2 h-14 rounded-full bg-brand-ink text-white shadow-lg hover:bg-black transition-all hover:shadow-xl group overflow-hidden whitespace-nowrap pl-3 pr-3 max-w-14 hover:max-w-xs hover:pr-5 duration-300"
       aria-label={label}
       title={label}
     >
@@ -425,18 +425,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       : '';
 
   return (
-    <div className="flex h-screen bg-diletto-beige">
+    <div className="flex h-screen bg-brand-beige">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col border-r border-diletto-gray/10 w-64">
+      <aside className="hidden lg:flex lg:flex-col border-r border-brand-gray/10 w-64">
         <SidebarContent pathname={pathname} mode={mode} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
       </aside>
 
       {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
-        <header className="flex h-[60px] items-center gap-3 border-b border-diletto-gray/10 bg-white px-4 lg:hidden">
+        <header className="flex h-[60px] items-center gap-3 border-b border-brand-gray/10 bg-white px-4 lg:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger className="flex items-center justify-center h-9 w-9 shrink-0 rounded-md text-diletto-ink hover:bg-diletto-beige">
+            <SheetTrigger className="flex items-center justify-center h-9 w-9 shrink-0 rounded-md text-brand-ink hover:bg-brand-beige">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
@@ -453,36 +453,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <select
                 value={shiftFacilityId ?? ''}
                 onChange={(e) => setStoredFacilityId(e.target.value)}
-                className="h-8 rounded-md border border-diletto-gray/15 bg-white px-2 text-xs font-medium text-diletto-ink max-w-[100px]"
+                className="h-8 rounded-md border border-brand-gray/15 bg-white px-2 text-xs font-medium text-brand-ink max-w-[100px]"
                 aria-label="表示中の事業所"
               >
                 {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
               </select>
             )}
             <NotificationsBell />
-            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0">
+            <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors whitespace-nowrap shrink-0">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-brand-gray hover:text-brand-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>
         </header>
 
         {/* Desktop topbar */}
-        <header className="hidden lg:flex h-[60px] items-center justify-between border-b border-diletto-gray/10 bg-white px-6">
+        <header className="hidden lg:flex h-[60px] items-center justify-between border-b border-brand-gray/10 bg-white px-6">
           <div>
             {greetingText ? (
               <>
-                <p className="text-base font-bold text-diletto-ink">おかえりなさい、{greetingText}</p>
-                <p className="text-xs text-diletto-gray-light">
+                <p className="text-base font-bold text-brand-ink">おかえりなさい、{greetingText}</p>
+                <p className="text-xs text-brand-gray-light">
                   {mode === 'staff'
                     ? 'アカウントの概要と利用状況を確認できます。'
                     : 'シフト・送迎の運用を管理できます。'}
                 </p>
               </>
             ) : (
-              <p className="text-xs text-diletto-gray-light">読み込み中...</p>
+              <p className="text-xs text-brand-gray-light">読み込み中...</p>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -490,17 +490,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <select
                 value={shiftFacilityId ?? ''}
                 onChange={(e) => setStoredFacilityId(e.target.value)}
-                className="h-9 rounded-md border border-diletto-gray/15 bg-white px-3 text-sm font-medium text-diletto-ink"
+                className="h-9 rounded-md border border-brand-gray/15 bg-white px-3 text-sm font-medium text-brand-ink"
                 aria-label="表示中の事業所"
               >
                 {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
               </select>
             )}
             <NotificationsBell />
-            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">
+            <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-brand-gray hover:text-brand-ink" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>

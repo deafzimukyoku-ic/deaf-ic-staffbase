@@ -20,8 +20,8 @@ export default async function EmployeeRequestsPage() {
 
   if (!me?.facility_id) {
     return (
-      <div className="rounded-md bg-white border border-diletto-gray/10 p-8 text-center">
-        <p className="text-sm text-diletto-gray">所属事業所が未設定です。管理者にお問い合わせください。</p>
+      <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
+        <p className="text-sm text-brand-gray">所属事業所が未設定です。管理者にお問い合わせください。</p>
       </div>
     );
   }

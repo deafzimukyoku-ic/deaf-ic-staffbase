@@ -114,20 +114,20 @@ export default function TrainingSubmissionsPage({ params }: { params: Promise<{ 
 
   const resultLabel: Record<string, string> = { pending: '未判定', passed: '合格', failed: '不合格', resubmit: '再提出' };
   const resultColor: Record<string, string> = {
-    pending: 'bg-diletto-gold/[0.08] text-diletto-gold',
-    passed: 'bg-diletto-green/10 text-diletto-green',
-    failed: 'bg-diletto-red/[0.06] text-diletto-red',
-    resubmit: 'bg-diletto-blue/[0.07] text-diletto-blue',
+    pending: 'bg-brand-gold/[0.08] text-brand-gold',
+    passed: 'bg-brand-green/10 text-brand-green',
+    failed: 'bg-brand-red/[0.06] text-brand-red',
+    resubmit: 'bg-brand-blue/[0.07] text-brand-blue',
   };
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   return (
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">提出一覧</h1>
-          <p className="text-sm text-diletto-gray mt-1">{trainingTitle}</p>
+          <p className="text-sm text-brand-gray mt-1">{trainingTitle}</p>
         </div>
         <Button variant="outline" onClick={() => router.push('/admin/trainings')}>戻る</Button>
       </div>
@@ -140,18 +140,18 @@ export default function TrainingSubmissionsPage({ params }: { params: Promise<{ 
                 <span className="font-medium">{sub.employees.last_name} {sub.employees.first_name}</span>
                 <Badge className={resultColor[sub.result]}>{resultLabel[sub.result]}</Badge>
               </div>
-              <p className="text-sm text-diletto-gray whitespace-pre-wrap border rounded p-3 bg-diletto-beige mb-2">
+              <p className="text-sm text-brand-gray whitespace-pre-wrap border rounded p-3 bg-brand-beige mb-2">
                 {sub.summary_text}
               </p>
               {sub.admin_comment && (
-                <p className="text-xs text-diletto-gray border-l-2 border-diletto-blue pl-2 mb-2">{sub.admin_comment}</p>
+                <p className="text-xs text-brand-gray border-l-2 border-brand-blue pl-2 mb-2">{sub.admin_comment}</p>
               )}
               <Button variant="outline" size="sm" onClick={() => openReview(sub)}>判定する</Button>
             </CardContent>
           </Card>
         ))}
         {submissions.length === 0 && (
-          <Card><CardContent className="py-12 text-center text-diletto-gray-light">まだ提出がありません</CardContent></Card>
+          <Card><CardContent className="py-12 text-center text-brand-gray-light">まだ提出がありません</CardContent></Card>
         )}
       </div>
 

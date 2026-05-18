@@ -14,12 +14,12 @@ export function CategoryFilterBar({ categories, value, onChange }: Props) {
   if (categories.length === 0) return null;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <span className="text-xs text-diletto-gray-light">カテゴリで絞り込み:</span>
+      <span className="text-xs text-brand-gray-light">カテゴリで絞り込み:</span>
       <button
         type="button"
         onClick={() => onChange(null)}
         className={`px-3 py-1 rounded-full text-xs transition-colors ${
-          value === null ? 'bg-diletto-ink text-white' : 'bg-diletto-gray/10 text-diletto-gray hover:bg-diletto-gray/20'
+          value === null ? 'bg-brand-ink text-white' : 'bg-brand-gray/10 text-brand-gray hover:bg-brand-gray/20'
         }`}
       >すべて</button>
       {categories.map(c => (
@@ -28,7 +28,7 @@ export function CategoryFilterBar({ categories, value, onChange }: Props) {
           type="button"
           onClick={() => onChange(c.id)}
           className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs transition-colors ${
-            value === c.id ? 'text-white' : 'bg-diletto-gray/10 text-diletto-gray hover:bg-diletto-gray/20'
+            value === c.id ? 'text-white' : 'bg-brand-gray/10 text-brand-gray hover:bg-brand-gray/20'
           }`}
           style={value === c.id ? { backgroundColor: c.color } : undefined}
         >
@@ -39,7 +39,7 @@ export function CategoryFilterBar({ categories, value, onChange }: Props) {
         type="button"
         onClick={() => onChange('__unassigned__')}
         className={`px-3 py-1 rounded-full text-xs transition-colors ${
-          value === '__unassigned__' ? 'bg-diletto-ink text-white' : 'bg-diletto-gray/10 text-diletto-gray hover:bg-diletto-gray/20'
+          value === '__unassigned__' ? 'bg-brand-ink text-white' : 'bg-brand-gray/10 text-brand-gray hover:bg-brand-gray/20'
         }`}
       >未分類</button>
     </div>

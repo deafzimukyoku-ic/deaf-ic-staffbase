@@ -60,8 +60,8 @@ export default function MatrixCell({
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        className={`w-full h-full px-2 py-1.5 text-sm border-2 border-diletto-blue outline-none ${
-          isHeader ? 'font-semibold bg-diletto-blue/10' : 'bg-white'
+        className={`w-full h-full px-2 py-1.5 text-sm border-2 border-brand-blue outline-none ${
+          isHeader ? 'font-semibold bg-brand-blue/10' : 'bg-white'
         }`}
       />
     );
@@ -73,9 +73,9 @@ export default function MatrixCell({
       onClick={() => { if (isHeader) { setEditing(true); setEditValue(value); } }}
       className={`w-full h-full px-2 py-1.5 text-sm truncate cursor-default select-none ${
         isHeader
-          ? 'font-semibold bg-diletto-blue/10 text-diletto-blue cursor-text'
+          ? 'font-semibold bg-brand-blue/10 text-brand-blue cursor-text'
           : isError
-          ? 'text-diletto-red bg-diletto-red/5'
+          ? 'text-brand-red bg-brand-red/5'
           : ''
       }`}
       title={value !== displayValue ? `式: ${value}` : undefined}

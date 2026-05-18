@@ -33,17 +33,17 @@ export function FacilityScopeSelector({ tenantId, targetType, targetFacilityIds,
   }
 
   return (
-    <div className="rounded-lg border-2 border-diletto-blue/40 bg-diletto-blue/[0.04] p-4 space-y-3">
+    <div className="rounded-lg border-2 border-brand-blue/40 bg-brand-blue/[0.04] p-4 space-y-3">
       <div className="flex items-center gap-2">
         <span className="text-base">📣</span>
-        <Label className="text-sm font-bold text-diletto-ink">{label}</Label>
+        <Label className="text-sm font-bold text-brand-ink">{label}</Label>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <label
           className={`flex items-center justify-center gap-2 cursor-pointer rounded-md border-2 py-2.5 px-3 text-sm font-medium transition-all ${
             targetType === 'all'
-              ? 'border-diletto-blue bg-diletto-blue text-white shadow-sm'
-              : 'border-diletto-gray/20 bg-white text-diletto-gray hover:border-diletto-blue/40'
+              ? 'border-brand-blue bg-brand-blue text-white shadow-sm'
+              : 'border-brand-gray/20 bg-white text-brand-gray hover:border-brand-blue/40'
           }`}
         >
           <input
@@ -57,8 +57,8 @@ export function FacilityScopeSelector({ tenantId, targetType, targetFacilityIds,
         <label
           className={`flex items-center justify-center gap-2 cursor-pointer rounded-md border-2 py-2.5 px-3 text-sm font-medium transition-all ${
             targetType === 'facility'
-              ? 'border-diletto-blue bg-diletto-blue text-white shadow-sm'
-              : 'border-diletto-gray/20 bg-white text-diletto-gray hover:border-diletto-blue/40'
+              ? 'border-brand-blue bg-brand-blue text-white shadow-sm'
+              : 'border-brand-gray/20 bg-white text-brand-gray hover:border-brand-blue/40'
           }`}
         >
           <input
@@ -72,15 +72,15 @@ export function FacilityScopeSelector({ tenantId, targetType, targetFacilityIds,
       </div>
 
       {targetType === 'facility' && (
-        <div className="rounded-md border border-diletto-blue/30 bg-white p-3 space-y-1.5">
+        <div className="rounded-md border border-brand-blue/30 bg-white p-3 space-y-1.5">
           {facilities.length === 0 ? (
-            <p className="text-xs text-diletto-gray-light">施設が登録されていません。設定＞組織から登録してください。</p>
+            <p className="text-xs text-brand-gray-light">施設が登録されていません。設定＞組織から登録してください。</p>
           ) : (
             facilities.map((f) => (
               <label key={f.id} className="flex items-center gap-2 text-sm cursor-pointer py-1">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-diletto-blue"
+                  className="h-4 w-4 accent-brand-blue"
                   checked={targetFacilityIds.includes(f.id)}
                   onChange={() => toggleFacility(f.id)}
                 />
@@ -89,11 +89,11 @@ export function FacilityScopeSelector({ tenantId, targetType, targetFacilityIds,
             ))
           )}
           {targetType === 'facility' && targetFacilityIds.length === 0 && (
-            <p className="text-[11px] text-diletto-red mt-1 font-medium">※ 少なくとも1つの施設を選択してください</p>
+            <p className="text-[11px] text-brand-red mt-1 font-medium">※ 少なくとも1つの施設を選択してください</p>
           )}
         </div>
       )}
-      <p className="text-[11px] text-diletto-gray-light">
+      <p className="text-[11px] text-brand-gray-light">
         施設未所属の社員は「全社員」を選択した場合のみ配信されます。
       </p>
     </div>
@@ -130,7 +130,7 @@ export function TargetScopeBadge({
   const names = targetFacilityIds.map((id) => map.get(id) ?? '（削除済み）').filter(Boolean);
   const label = names.length > 0 ? names.join(', ') : '（未選択）';
   return (
-    <Badge variant="outline" className="text-[10px] font-normal border-diletto-blue/40 text-diletto-blue">
+    <Badge variant="outline" className="text-[10px] font-normal border-brand-blue/40 text-brand-blue">
       対象: {label}
     </Badge>
   );

@@ -204,7 +204,7 @@ export default function EditorPage() {
   if (!template || !pdfUrl) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-diletto-gray-light">読み込み中...</p>
+        <p className="text-sm text-brand-gray-light">読み込み中...</p>
       </div>
     );
   }
@@ -213,11 +213,11 @@ export default function EditorPage() {
     <>
       <div className="h-[calc(100vh-64px)] flex flex-col">
         {/* ヘッダー */}
-        <div className="flex items-center justify-between px-4 h-12 border-b border-diletto-gray/10 bg-white shrink-0">
+        <div className="flex items-center justify-between px-4 h-12 border-b border-brand-gray/10 bg-white shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push('/admin/documents')}
-              className="text-sm text-diletto-gray hover:text-diletto-ink transition-colors"
+              className="text-sm text-brand-gray hover:text-brand-ink transition-colors"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="15 18 9 12 15 6" />
@@ -225,7 +225,7 @@ export default function EditorPage() {
             </button>
             <h1 className="text-sm font-semibold truncate">{template.name}</h1>
             {dirty && (
-              <span className="text-[10px] text-diletto-gray bg-diletto-bg px-1.5 py-0.5 rounded">未保存</span>
+              <span className="text-[10px] text-brand-gray bg-brand-bg px-1.5 py-0.5 rounded">未保存</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -265,11 +265,11 @@ export default function EditorPage() {
       {previewUrl && (
         <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl flex flex-col" style={{ height: '95vh' }}>
-            <div className="flex items-center justify-between px-4 h-12 border-b border-diletto-gray/10 shrink-0">
+            <div className="flex items-center justify-between px-4 h-12 border-b border-brand-gray/10 shrink-0">
               <h2 className="text-sm font-semibold">サンプルプレビュー</h2>
               <button
                 onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }}
-                className="text-diletto-gray hover:text-diletto-ink transition-colors"
+                className="text-brand-gray hover:text-brand-ink transition-colors"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />

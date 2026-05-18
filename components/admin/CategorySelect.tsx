@@ -46,7 +46,7 @@ export function CategorySelect({
 
   return (
     <div className={className}>
-      {label && <label className="text-[11px] text-diletto-gray-light block mb-1">{label}</label>}
+      {label && <label className="text-[11px] text-brand-gray-light block mb-1">{label}</label>}
       <div className="flex items-center gap-2">
         {selected && (
           <>
@@ -67,7 +67,7 @@ export function CategorySelect({
             else onChange(v);
           }}
           disabled={loading}
-          className="flex-1 rounded-md border border-diletto-gray/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/30"
+          className="flex-1 rounded-md border border-brand-gray/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
         >
           {includeAllOption && <option value="__all__">すべて</option>}
           <option value="">未分類</option>

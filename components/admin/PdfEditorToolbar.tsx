@@ -100,13 +100,13 @@ export default function PdfEditorToolbar({
   }
 
   return (
-    <div className="w-64 border-l border-diletto-gray/10 bg-white flex flex-col h-full overflow-hidden">
+    <div className="w-64 border-l border-brand-gray/10 bg-white flex flex-col h-full overflow-hidden">
       {/* タグ一覧 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        <h3 className="text-[10px] font-bold text-diletto-gray uppercase tracking-wider">
+        <h3 className="text-[10px] font-bold text-brand-gray uppercase tracking-wider">
           タグ一覧
         </h3>
-        <p className="text-[11px] text-diletto-gray-light leading-relaxed">
+        <p className="text-[11px] text-brand-gray-light leading-relaxed">
           タグをドラッグしてPDF上に配置できます
         </p>
 
@@ -123,8 +123,8 @@ export default function PdfEditorToolbar({
                 className={`
                   group flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm cursor-grab active:cursor-grabbing transition-all
                   ${placed
-                    ? 'border-diletto-blue/30 bg-diletto-blue/5 text-diletto-blue'
-                    : 'border-diletto-gray/20 bg-white text-diletto-ink hover:border-diletto-blue/30'}
+                    ? 'border-brand-blue/30 bg-brand-blue/5 text-brand-blue'
+                    : 'border-brand-gray/20 bg-white text-brand-ink hover:border-brand-blue/30'}
                 `}
               >
                 <span className="truncate" style={{ fontFamily: 'IPAex Mincho, MS Mincho, serif' }}>|__{tag.display_name}__</span>
@@ -133,7 +133,7 @@ export default function PdfEditorToolbar({
                     e.stopPropagation();
                     onDeleteTag(tag.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 text-diletto-red hover:text-diletto-red/80 transition-opacity ml-1"
+                  className="opacity-0 group-hover:opacity-100 text-brand-red hover:text-brand-red/80 transition-opacity ml-1"
                   title="タグを削除"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -146,8 +146,8 @@ export default function PdfEditorToolbar({
         </div>
 
         {/* タグ追加UI — チェックボックス複数選択で一括追加 */}
-          <div className="space-y-2 pt-2 border-t border-diletto-gray/10">
-            <label className="block text-[10px] font-bold text-diletto-gray uppercase tracking-wider">
+          <div className="space-y-2 pt-2 border-t border-brand-gray/10">
+            <label className="block text-[10px] font-bold text-brand-gray uppercase tracking-wider">
               フィールド追加（複数選択可）
             </label>
             {/* ソース種別選択 — 切替時に選択状態をリセット */}
@@ -157,7 +157,7 @@ export default function PdfEditorToolbar({
                 setSelectedSource(e.target.value);
                 setSelectedFields([]);
               }}
-              className="flex h-8 w-full rounded-md border border-diletto-gray/20 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-diletto-blue/40"
+              className="flex h-8 w-full rounded-md border border-brand-gray/20 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
             >
               {sourceTypes.map((s) => (
                 <option key={s} value={s}>{sourceTypeLabels[s]}</option>
@@ -166,7 +166,7 @@ export default function PdfEditorToolbar({
 
             {/* 全選択 / 解除 */}
             {availableFields.length > 0 && (
-              <div className="flex items-center justify-between text-[10px] text-diletto-gray">
+              <div className="flex items-center justify-between text-[10px] text-brand-gray">
                 <span>
                   {selectedFields.length > 0 ? `${selectedFields.length} 件選択中` : `${availableFields.length} 件`}
                 </span>
@@ -174,7 +174,7 @@ export default function PdfEditorToolbar({
                   <button
                     type="button"
                     onClick={selectAllAvailable}
-                    className="text-diletto-blue hover:text-diletto-ink underline"
+                    className="text-brand-blue hover:text-brand-ink underline"
                   >
                     すべて選択
                   </button>
@@ -182,7 +182,7 @@ export default function PdfEditorToolbar({
                     type="button"
                     onClick={clearSelection}
                     disabled={selectedFields.length === 0}
-                    className="text-diletto-gray hover:text-diletto-ink underline disabled:opacity-30 disabled:no-underline"
+                    className="text-brand-gray hover:text-brand-ink underline disabled:opacity-30 disabled:no-underline"
                   >
                     解除
                   </button>
@@ -191,9 +191,9 @@ export default function PdfEditorToolbar({
             )}
 
             {/* チェックボックス一覧 */}
-            <div className="border border-diletto-gray/20 rounded-md max-h-64 overflow-y-auto bg-white">
+            <div className="border border-brand-gray/20 rounded-md max-h-64 overflow-y-auto bg-white">
               {availableFields.length === 0 ? (
-                <p className="px-2 py-3 text-[10px] text-diletto-gray-light text-center">
+                <p className="px-2 py-3 text-[10px] text-brand-gray-light text-center">
                   {currentFieldList.length === 0
                     ? 'フィールドがありません'
                     : 'このカテゴリのフィールドは全て追加済みです'}
@@ -202,13 +202,13 @@ export default function PdfEditorToolbar({
                 availableFields.map((f) => (
                   <label
                     key={f.value}
-                    className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-diletto-bg border-b border-diletto-gray/5 last:border-b-0"
+                    className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-brand-bg border-b border-brand-gray/5 last:border-b-0"
                   >
                     <input
                       type="checkbox"
                       checked={selectedFields.includes(f.value)}
                       onChange={(e) => toggleField(f.value, e.target.checked)}
-                      className="h-3.5 w-3.5 rounded accent-diletto-blue shrink-0"
+                      className="h-3.5 w-3.5 rounded accent-brand-blue shrink-0"
                     />
                     <span className="truncate">{f.label}</span>
                   </label>
@@ -231,19 +231,19 @@ export default function PdfEditorToolbar({
       </div>
 
       {/* 選択中の配置の書式設定 */}
-      <div className="border-t border-diletto-gray/10 p-4 space-y-3 shrink-0">
-        <h3 className="text-[10px] font-bold text-diletto-gray uppercase tracking-wider">
+      <div className="border-t border-brand-gray/10 p-4 space-y-3 shrink-0">
+        <h3 className="text-[10px] font-bold text-brand-gray uppercase tracking-wider">
           書式設定
         </h3>
 
         {selectedPlacement ? (
           <>
             <div>
-              <label className="block text-xs font-medium text-diletto-ink mb-1">フォントサイズ</label>
+              <label className="block text-xs font-medium text-brand-ink mb-1">フォントサイズ</label>
               <select
                 value={selectedPlacement.font_size}
                 onChange={(e) => onFontSizeChange(selectedPlacement.id, Number(e.target.value))}
-                className="flex h-9 w-full rounded-md border border-diletto-gray/20 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/40"
+                className="flex h-9 w-full rounded-md border border-brand-gray/20 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
               >
                 {FONT_SIZES.map((s) => (
                   <option key={s} value={s}>{s}pt</option>
@@ -253,19 +253,19 @@ export default function PdfEditorToolbar({
 
             <button
               onClick={() => onDeletePlacement(selectedPlacement.id)}
-              className="w-full h-9 rounded-md text-sm font-medium text-diletto-red bg-diletto-red/10 border border-transparent hover:border-diletto-red/30 transition-all"
+              className="w-full h-9 rounded-md text-sm font-medium text-brand-red bg-brand-red/10 border border-transparent hover:border-brand-red/30 transition-all"
             >
               この配置を削除
             </button>
           </>
         ) : (
-          <p className="text-xs text-diletto-gray-light leading-relaxed">
+          <p className="text-xs text-brand-gray-light leading-relaxed">
             タグを選択すると<br />サイズ設定ができます
           </p>
         )}
 
         {onPreview && (
-          <div className="pt-3 border-t border-diletto-gray/10">
+          <div className="pt-3 border-t border-brand-gray/10">
             <Button
               size="sm"
               variant="outline"
@@ -275,7 +275,7 @@ export default function PdfEditorToolbar({
             >
               {previewLoading ? 'プレビュー生成中...' : '📋 サンプルプレビュー'}
             </Button>
-            <p className="text-[10px] text-diletto-gray-light mt-1">
+            <p className="text-[10px] text-brand-gray-light mt-1">
               実際のデータが入った状態を確認
             </p>
           </div>

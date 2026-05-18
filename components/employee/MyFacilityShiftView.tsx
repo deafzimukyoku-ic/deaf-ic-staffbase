@@ -45,11 +45,11 @@ interface FacilityRow {
 }
 
 const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; bg: string; color: string }> = {
-  normal:         { label: '出勤',   bg: 'bg-diletto-blue/5',   color: 'text-diletto-ink' },
+  normal:         { label: '出勤',   bg: 'bg-brand-blue/5',   color: 'text-brand-ink' },
   public_holiday: { label: '公休',   bg: 'bg-purple-50',        color: 'text-purple-700' },
   requested_off:  { label: '希望休', bg: 'bg-amber-50',         color: 'text-amber-700' },
   paid_leave:     { label: '有給',   bg: 'bg-emerald-50',       color: 'text-emerald-700' },
-  off:            { label: '休み',   bg: 'bg-gray-50',          color: 'text-diletto-gray' },
+  off:            { label: '休み',   bg: 'bg-gray-50',          color: 'text-brand-gray' },
 };
 
 const DOW_SHORT = ['日', '月', '火', '水', '木', '金', '土'];
@@ -146,14 +146,14 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
 
   if (loading) {
     return (
-      <div className="h-64 flex items-center justify-center text-sm text-diletto-gray">読み込み中...</div>
+      <div className="h-64 flex items-center justify-center text-sm text-brand-gray">読み込み中...</div>
     );
   }
 
   if (employees.length === 0) {
     return (
-      <div className="rounded-md bg-white border border-diletto-gray/10 p-8 text-center">
-        <p className="text-sm text-diletto-gray">対象社員が見つかりません。</p>
+      <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
+        <p className="text-sm text-brand-gray">対象社員が見つかりません。</p>
       </div>
     );
   }
@@ -161,8 +161,8 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
   /* 同 facility にシフトが 1 件も無い場合 (= まだ未公開) */
   if (shifts.length === 0) {
     return (
-      <div className="rounded-md bg-white border border-diletto-gray/10 p-8 text-center">
-        <p className="text-sm text-diletto-gray">
+      <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
+        <p className="text-sm text-brand-gray">
           {year}年{month}月の {myFacilityIds.length === 1 ? facilities[0]?.name : '所属事業所'} のシフトはまだ公開されていません。
         </p>
       </div>
@@ -187,10 +187,10 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-bold text-diletto-ink">
+        <h2 className="text-sm font-bold text-brand-ink">
           {year}年{month}月 — {myFacilityIds.length === 1 ? facilities[0]?.name : `所属事業所のシフト (${facilities.length} 施設)`}
         </h2>
-        <span className="text-[10px] text-diletto-gray">公開済みのみ表示 / 表は読み取り専用</span>
+        <span className="text-[10px] text-brand-gray">公開済みのみ表示 / 表は読み取り専用</span>
       </div>
 
       {/* 凡例 */}
@@ -203,7 +203,7 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
       </div>
 
       {/* 表 (横スクロール) */}
-      <div className="rounded-md border border-diletto-gray/10 bg-white overflow-x-auto">
+      <div className="rounded-md border border-brand-gray/10 bg-white overflow-x-auto">
         <table className="text-xs border-collapse w-max min-w-full">
           <thead>
             <tr>
@@ -221,7 +221,7 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
                 <th
                   key={d.date}
                   className={`text-center px-1 py-2 font-medium whitespace-nowrap min-w-[56px] ${
-                    d.date === today ? 'bg-diletto-blue/10' : ''
+                    d.date === today ? 'bg-brand-blue/10' : ''
                   }`}
                   style={{
                     background: d.date === today ? undefined : '#f5f4f0',
@@ -229,21 +229,21 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
                   }}
                 >
                   <div className={`text-[10px] ${
-                    d.isHoliday || d.dow === 0 ? 'text-diletto-red'
-                    : d.dow === 6 ? 'text-diletto-blue'
-                    : 'text-diletto-gray'
+                    d.isHoliday || d.dow === 0 ? 'text-brand-red'
+                    : d.dow === 6 ? 'text-brand-blue'
+                    : 'text-brand-gray'
                   }`}>
                     {DOW_SHORT[d.dow]}
                   </div>
                   <div className={`text-sm font-bold ${
-                    d.isHoliday || d.dow === 0 ? 'text-diletto-red'
-                    : d.dow === 6 ? 'text-diletto-blue'
-                    : 'text-diletto-ink'
+                    d.isHoliday || d.dow === 0 ? 'text-brand-red'
+                    : d.dow === 6 ? 'text-brand-blue'
+                    : 'text-brand-ink'
                   }`}>
                     {d.day}
                   </div>
                   {d.isHoliday && (
-                    <div className="text-[9px] text-diletto-red truncate" title={d.holidayName ?? ''}>
+                    <div className="text-[9px] text-brand-red truncate" title={d.holidayName ?? ''}>
                       祝
                     </div>
                   )}
@@ -256,14 +256,14 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
               <tr key={e.id}>
                 <td
                   className={`sticky left-0 z-10 px-3 py-1.5 font-medium whitespace-nowrap ${
-                    e.id === employeeId ? 'bg-diletto-blue/5' : 'bg-white'
+                    e.id === employeeId ? 'bg-brand-blue/5' : 'bg-white'
                   }`}
                   style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
                 >
                   <div className="flex flex-col">
                     <span>{e.last_name} {e.first_name}{e.id === employeeId ? ' (あなた)' : ''}</span>
                     {myFacilityIds.length > 1 && e.facility_id && (
-                      <span className="text-[9px] text-diletto-gray-light">{facNameById.get(e.facility_id) ?? ''}</span>
+                      <span className="text-[9px] text-brand-gray-light">{facNameById.get(e.facility_id) ?? ''}</span>
                     )}
                   </div>
                 </td>
@@ -273,10 +273,10 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
                     return (
                       <td
                         key={d.date}
-                        className={`text-center px-1 py-1.5 ${d.date === today ? 'bg-diletto-blue/[0.03]' : ''}`}
+                        className={`text-center px-1 py-1.5 ${d.date === today ? 'bg-brand-blue/[0.03]' : ''}`}
                         style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
                       >
-                        <span className="text-diletto-gray-light/40">—</span>
+                        <span className="text-brand-gray-light/40">—</span>
                       </td>
                     );
                   }

@@ -14,17 +14,17 @@ export function PlaceholderPage({ title, icon, description, phase }: Props) {
     <div>
       <div className="flex items-center gap-3 mb-6">
         <span className="text-3xl">{icon}</span>
-        <h1 className="text-2xl font-bold text-diletto-ink">{title}</h1>
+        <h1 className="text-2xl font-bold text-brand-ink">{title}</h1>
       </div>
-      <Card className="border-dashed border-2 border-diletto-gray/20 bg-transparent rounded-md">
+      <Card className="border-dashed border-2 border-brand-gray/20 bg-transparent rounded-md">
         <CardContent className="py-16 text-center">
           <div className="text-6xl mb-4 opacity-30">🚧</div>
-          <p className="text-lg font-bold text-diletto-ink mb-2">準備中</p>
+          <p className="text-lg font-bold text-brand-ink mb-2">準備中</p>
           {description && (
-            <p className="text-sm text-diletto-gray max-w-md mx-auto mb-4">{description}</p>
+            <p className="text-sm text-brand-gray max-w-md mx-auto mb-4">{description}</p>
           )}
           {phase && (
-            <p className="text-xs text-diletto-gray-light">実装フェーズ: {phase}</p>
+            <p className="text-xs text-brand-gray-light">実装フェーズ: {phase}</p>
           )}
         </CardContent>
       </Card>

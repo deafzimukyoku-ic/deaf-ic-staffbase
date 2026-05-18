@@ -40,7 +40,7 @@ const FOOTER_BOTTOM_LINKS = [
 ];
 
 /* ─── フッター（diletto_assets/common.js / common.css 準拠） ─── */
-export function DilettoFooter() {
+export function BrandFooter() {
   const mapTitleStyle: React.CSSProperties = {
     fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.1em', color: '#a8a8a0', marginBottom: 20,
   };

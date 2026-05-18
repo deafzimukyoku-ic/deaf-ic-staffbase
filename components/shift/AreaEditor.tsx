@@ -57,11 +57,11 @@ export function AreaEditor({ label, areas, selectedIds, onChange }: Props) {
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-diletto-gray/10 p-4 bg-gray-50/50">
-      <Label className="text-sm font-bold text-diletto-ink">{label}</Label>
+    <div className="space-y-3 rounded-md border border-brand-gray/10 p-4 bg-gray-50/50">
+      <Label className="text-sm font-bold text-brand-ink">{label}</Label>
 
       {areas.length === 0 && (
-        <p className="text-xs text-diletto-gray-light py-2">まだエリアがありません。下のフォームから追加してください。</p>
+        <p className="text-xs text-brand-gray-light py-2">まだエリアがありません。下のフォームから追加してください。</p>
       )}
 
       {areas.length > 0 && (
@@ -72,22 +72,22 @@ export function AreaEditor({ label, areas, selectedIds, onChange }: Props) {
               <div
                 key={a.id}
                 className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-colors ${
-                  checked ? 'bg-white border-diletto-blue/30' : 'bg-white/50 border-diletto-gray/10'
+                  checked ? 'bg-white border-brand-blue/30' : 'bg-white/50 border-brand-gray/10'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={() => toggleSelected(a.id)}
-                  className="h-4 w-4 accent-diletto-blue cursor-pointer"
+                  className="h-4 w-4 accent-brand-blue cursor-pointer"
                   aria-label={`${a.name} を有効化`}
                 />
                 <span className="text-lg shrink-0">{a.emoji}</span>
-                <span className="text-sm flex-1 text-diletto-ink">{a.name}</span>
+                <span className="text-sm flex-1 text-brand-ink">{a.name}</span>
                 <button
                   type="button"
                   onClick={() => removeArea(a.id)}
-                  className="text-xs text-diletto-red hover:underline"
+                  className="text-xs text-brand-red hover:underline"
                   aria-label={`${a.name} を削除`}
                 >
                   削除
@@ -98,9 +98,9 @@ export function AreaEditor({ label, areas, selectedIds, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex gap-2 items-end pt-2 border-t border-diletto-gray/10">
+      <div className="flex gap-2 items-end pt-2 border-t border-brand-gray/10">
         <div className="w-20">
-          <Label className="text-[10px] text-diletto-gray-light">絵文字</Label>
+          <Label className="text-[10px] text-brand-gray-light">絵文字</Label>
           <Input
             value={newEmoji}
             onChange={(e) => setNewEmoji(e.target.value)}
@@ -110,7 +110,7 @@ export function AreaEditor({ label, areas, selectedIds, onChange }: Props) {
           />
         </div>
         <div className="flex-1">
-          <Label className="text-[10px] text-diletto-gray-light">エリア名</Label>
+          <Label className="text-[10px] text-brand-gray-light">エリア名</Label>
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}

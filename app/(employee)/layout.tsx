@@ -134,9 +134,9 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="min-h-screen bg-diletto-beige">
+    <div className="min-h-screen bg-brand-beige">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-diletto-gray/10 bg-white">
+      <header className="sticky top-0 z-50 border-b border-brand-gray/10 bg-white">
         <div className="mx-auto flex h-[60px] max-w-7xl items-center justify-between px-4">
           <Link href="/my/dashboard" className="flex items-center min-w-0">
             <Logo size="sm" />
@@ -145,12 +145,12 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             {(userRole === 'manager' || userRole === 'admin') && (
               <Link
                 href={userRole === 'manager' ? '/mgr/dashboard' : '/admin/dashboard'}
-                className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0"
+                className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors whitespace-nowrap shrink-0"
               >
                 管理画面
               </Link>
             )}
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-brand-gray hover:text-brand-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>
@@ -168,14 +168,14 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                   href={tab.href}
                   className={`relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors duration-300 ${
                     active
-                      ? 'border-b-2 border-diletto-blue text-diletto-blue'
-                      : 'text-diletto-gray hover:text-diletto-ink'
+                      ? 'border-b-2 border-brand-blue text-brand-blue'
+                      : 'text-brand-gray hover:text-brand-ink'
                   }`}
                 >
                   <span className="inline-flex items-center gap-1.5">
                     {tab.label}
                     {count > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold leading-none">
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-red text-white text-[10px] font-bold leading-none">
                         {count > 99 ? '99+' : count}
                       </span>
                     )}

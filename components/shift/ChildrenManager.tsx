@@ -225,8 +225,8 @@ export function ChildrenManager({ scope }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-        <span className="ml-3 text-sm text-diletto-gray">読み込み中...</span>
+        <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+        <span className="ml-3 text-sm text-brand-gray">読み込み中...</span>
       </div>
     );
   }
@@ -237,21 +237,21 @@ export function ChildrenManager({ scope }: Props) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <span className="text-3xl">👶</span>
-          <h1 className="text-2xl font-bold text-diletto-ink">児童管理</h1>
-          <span className="text-sm text-diletto-gray-light">{visibleChildren.length} 人</span>
+          <h1 className="text-2xl font-bold text-brand-ink">児童管理</h1>
+          <span className="text-sm text-brand-gray-light">{visibleChildren.length} 人</span>
         </div>
         <Button onClick={openNew}>+ 児童を追加</Button>
       </div>
 
       {/* フィルタ */}
-      <div className="flex flex-wrap items-center gap-3 bg-white rounded-md border border-diletto-gray/10 p-3">
+      <div className="flex flex-wrap items-center gap-3 bg-white rounded-md border border-brand-gray/10 p-3">
         {scope === 'admin' && facilities.length > 1 && (
           <div className="flex items-center gap-2">
-            <Label className="text-[10px] font-bold text-diletto-gray-light uppercase">事業所</Label>
+            <Label className="text-[10px] font-bold text-brand-gray-light uppercase">事業所</Label>
             <select
               value={facilityFilter}
               onChange={(e) => setFacilityFilter(e.target.value)}
-              className="h-9 rounded-md border border-diletto-gray/15 bg-white px-3 text-sm"
+              className="h-9 rounded-md border border-brand-gray/15 bg-white px-3 text-sm"
               aria-label="事業所フィルタ"
             >
               <option value="all">すべて</option>
@@ -268,8 +268,8 @@ export function ChildrenManager({ scope }: Props) {
               onClick={() => setGradeGroup(key)}
               className={`px-3 h-9 rounded-md text-xs font-bold border transition-all ${
                 gradeGroup === key
-                  ? 'bg-diletto-ink text-white border-diletto-ink'
-                  : 'bg-white text-diletto-gray border-diletto-gray/15 hover:border-diletto-ink/30'
+                  ? 'bg-brand-ink text-white border-brand-ink'
+                  : 'bg-white text-brand-gray border-brand-gray/15 hover:border-brand-ink/30'
               }`}
             >
               {GRADE_GROUPS[key].label}
@@ -277,12 +277,12 @@ export function ChildrenManager({ scope }: Props) {
           ))}
         </div>
 
-        <label className="ml-auto flex items-center gap-2 text-xs text-diletto-gray cursor-pointer">
+        <label className="ml-auto flex items-center gap-2 text-xs text-brand-gray cursor-pointer">
           <input
             type="checkbox"
             checked={showRetired}
             onChange={(e) => setShowRetired(e.target.checked)}
-            className="h-4 w-4 accent-diletto-blue"
+            className="h-4 w-4 accent-brand-blue"
           />
           退所児童も表示
         </label>
@@ -290,8 +290,8 @@ export function ChildrenManager({ scope }: Props) {
 
       {/* 一覧 */}
       {visibleChildren.length === 0 ? (
-        <Card className="border-dashed border-2 border-diletto-gray/20 bg-transparent rounded-md">
-          <CardContent className="py-16 text-center text-diletto-gray-light">
+        <Card className="border-dashed border-2 border-brand-gray/20 bg-transparent rounded-md">
+          <CardContent className="py-16 text-center text-brand-gray-light">
             該当する児童はいません
           </CardContent>
         </Card>
@@ -315,28 +315,28 @@ export function ChildrenManager({ scope }: Props) {
             return (
               <DragSortItem key={c.id} index={idx}>
                 {(handle) => (
-              <Card className="border-diletto-gray/5 shadow-sm rounded-md overflow-hidden bg-white" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
+              <Card className="border-brand-gray/5 shadow-sm rounded-md overflow-hidden bg-white" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <DragHandleIcon {...handle} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-bold text-diletto-ink text-base">{c.name}</p>
-                          <Badge className="bg-diletto-beige text-diletto-ink border-none text-[10px]">
+                          <p className="font-bold text-brand-ink text-base">{c.name}</p>
+                          <Badge className="bg-brand-beige text-brand-ink border-none text-[10px]">
                             {GRADE_LABELS[c.grade_type]}
                           </Badge>
                           {facility && (
-                            <Badge variant="outline" className="text-[10px] border-diletto-gray/20">
+                            <Badge variant="outline" className="text-[10px] border-brand-gray/20">
                               {facility.name}
                             </Badge>
                           )}
                           {!c.is_active && (
-                            <Badge className="bg-diletto-red/10 text-diletto-red border-none text-[10px]">退所</Badge>
+                            <Badge className="bg-brand-red/10 text-brand-red border-none text-[10px]">退所</Badge>
                           )}
                         </div>
                         {(c.home_address || c.parent_contact) && (
-                          <p className="text-xs text-diletto-gray-light mt-1">
+                          <p className="text-xs text-brand-gray-light mt-1">
                             {c.home_address && <>🏠 {c.home_address}</>}
                             {c.home_address && c.parent_contact && <span className="mx-2">·</span>}
                             {c.parent_contact && <>☎ {c.parent_contact}</>}
@@ -346,9 +346,9 @@ export function ChildrenManager({ scope }: Props) {
                           <div className="flex flex-wrap gap-3 mt-2 text-xs">
                             {pickupActive.length > 0 && (
                               <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-[10px] font-bold text-diletto-gray-light">迎:</span>
+                                <span className="text-[10px] font-bold text-brand-gray-light">迎:</span>
                                 {pickupActive.map((a) => (
-                                  <span key={a.id} className="bg-gray-50 border border-diletto-gray/10 rounded px-2 py-0.5">
+                                  <span key={a.id} className="bg-gray-50 border border-brand-gray/10 rounded px-2 py-0.5">
                                     {a.emoji} {a.name}
                                   </span>
                                 ))}
@@ -356,9 +356,9 @@ export function ChildrenManager({ scope }: Props) {
                             )}
                             {dropoffActive.length > 0 && (
                               <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-[10px] font-bold text-diletto-gray-light">送:</span>
+                                <span className="text-[10px] font-bold text-brand-gray-light">送:</span>
                                 {dropoffActive.map((a) => (
-                                  <span key={a.id} className="bg-gray-50 border border-diletto-gray/10 rounded px-2 py-0.5">
+                                  <span key={a.id} className="bg-gray-50 border border-brand-gray/10 rounded px-2 py-0.5">
                                     {a.emoji} {a.name}
                                   </span>
                                 ))}
@@ -370,7 +370,7 @@ export function ChildrenManager({ scope }: Props) {
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <Button variant="outline" size="sm" onClick={() => openEdit(c)} className="h-8 rounded-md text-xs font-bold">編集</Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(c.id, c.name)} className="h-8 rounded-md text-xs font-bold text-diletto-red">削除</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDelete(c.id, c.name)} className="h-8 rounded-md text-xs font-bold text-brand-red">削除</Button>
                     </div>
                   </div>
                 </CardContent>
@@ -403,7 +403,7 @@ export function ChildrenManager({ scope }: Props) {
                 <select
                   value={form.grade_type}
                   onChange={(e) => setForm({ ...form, grade_type: e.target.value as GradeType })}
-                  className="h-10 w-full rounded-md border border-diletto-gray/15 bg-white px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-brand-gray/15 bg-white px-3 text-sm"
                   aria-label="学年"
                 >
                   {GRADE_TYPES.filter((g) => g !== 'junior_high').map((g) => (
@@ -417,14 +417,14 @@ export function ChildrenManager({ scope }: Props) {
                   value={form.facility_id}
                   onChange={(e) => setForm({ ...form, facility_id: e.target.value })}
                   disabled={scope === 'manager'}
-                  className="h-10 w-full rounded-md border border-diletto-gray/15 bg-white px-3 text-sm disabled:bg-gray-50 disabled:text-diletto-gray-light"
+                  className="h-10 w-full rounded-md border border-brand-gray/15 bg-white px-3 text-sm disabled:bg-gray-50 disabled:text-brand-gray-light"
                   aria-label="所属事業所"
                 >
                   <option value="">-- 選択してください --</option>
                   {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
                 {scope === 'manager' && (
-                  <p className="text-[10px] text-diletto-gray-light">マネージャーは自事業所のみ登録できます</p>
+                  <p className="text-[10px] text-brand-gray-light">マネージャーは自事業所のみ登録できます</p>
                 )}
               </div>
               <div className="space-y-2">
@@ -434,7 +434,7 @@ export function ChildrenManager({ scope }: Props) {
                     type="checkbox"
                     checked={form.is_active}
                     onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                    className="h-4 w-4 accent-diletto-blue"
+                    className="h-4 w-4 accent-brand-blue"
                   />
                   <span className="text-sm">{form.is_active ? '在籍中' : '退所'}</span>
                 </label>

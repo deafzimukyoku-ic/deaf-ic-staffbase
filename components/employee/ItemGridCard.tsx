@@ -35,8 +35,8 @@ export function ItemGridCard({
       onClick={onClick}
       className={`group relative flex flex-col text-left h-full pl-5 pr-4 py-4 bg-white rounded-md border shadow-sm hover:shadow-md transition-all overflow-hidden ${
         acknowledged
-          ? 'border-diletto-gray/10'
-          : 'border-diletto-red/30 ring-1 ring-diletto-red/10'
+          ? 'border-brand-gray/10'
+          : 'border-brand-red/30 ring-1 ring-brand-red/10'
       }`}
       style={{
         // 上から下へカテゴリ色の薄いグラデーション (上 12% → 下 透明)
@@ -57,9 +57,9 @@ export function ItemGridCard({
         <CategoryBadge category={category} />
         <NewBadge createdAt={createdAt} />
         {acknowledged ? (
-          <span className="text-[10px] bg-diletto-green/10 text-diletto-green border border-diletto-green/30 px-1.5 py-0.5 rounded font-bold">✓ {ackLabel}</span>
+          <span className="text-[10px] bg-brand-green/10 text-brand-green border border-brand-green/30 px-1.5 py-0.5 rounded font-bold">✓ {ackLabel}</span>
         ) : (
-          <span className="text-[10px] bg-diletto-red text-white px-1.5 py-0.5 rounded font-bold">{pendingLabel}</span>
+          <span className="text-[10px] bg-brand-red text-white px-1.5 py-0.5 rounded font-bold">{pendingLabel}</span>
         )}
         {hasMedia && (
           <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">📎 添付</span>
@@ -67,16 +67,16 @@ export function ItemGridCard({
       </div>
 
       {/* タイトル */}
-      <h3 className="text-base font-bold text-diletto-ink line-clamp-2 mb-2">{title || '（無題）'}</h3>
+      <h3 className="text-base font-bold text-brand-ink line-clamp-2 mb-2">{title || '（無題）'}</h3>
 
       {/* 抜粋 */}
-      <p className="text-xs text-diletto-gray line-clamp-3 leading-relaxed flex-1">
+      <p className="text-xs text-brand-gray line-clamp-3 leading-relaxed flex-1">
         {excerpt || '（本文なし）'}
       </p>
 
       {/* フッタ: 開くリンクのみ（既読/未読バッジは上段に統合済） */}
-      <div className="flex items-center justify-end mt-3 pt-3 border-t border-diletto-gray/5">
-        <span className="text-[10px] text-diletto-gray-light group-hover:text-diletto-blue transition-colors">
+      <div className="flex items-center justify-end mt-3 pt-3 border-t border-brand-gray/5">
+        <span className="text-[10px] text-brand-gray-light group-hover:text-brand-blue transition-colors">
           開く →
         </span>
       </div>

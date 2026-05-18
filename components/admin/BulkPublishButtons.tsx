@@ -97,7 +97,7 @@ export function BulkPublishButtons({ table, items, onChanged, scopeLabel, restri
   return (
     <span className="inline-flex items-center gap-2 select-none">
       {scopeLabel && (
-        <span className="text-xs text-diletto-gray-light font-bold">{scopeLabel}:</span>
+        <span className="text-xs text-brand-gray-light font-bold">{scopeLabel}:</span>
       )}
       <button
         type="button"

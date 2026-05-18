@@ -15,7 +15,7 @@ export function MonthStatusBadge({ status, compact }: Props) {
   const label = isComplete ? '完成' : '未完成';
   const dot = isComplete ? '●' : '⏳';
   const classes = isComplete
-    ? 'bg-diletto-green/10 text-diletto-green border border-diletto-green/20'
+    ? 'bg-brand-green/10 text-brand-green border border-brand-green/20'
     : 'bg-yellow-50 text-yellow-800 border border-yellow-300/40';
 
   const sizeClasses = compact ? 'text-[10px] px-2 py-0.5' : 'text-xs px-2.5 py-1';

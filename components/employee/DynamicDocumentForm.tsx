@@ -52,7 +52,7 @@ export function DynamicDocumentForm({ templateName, mapping, formData, onChange,
           {docxPath && (
             <button
               onClick={loadPreview}
-              className="text-xs text-diletto-blue hover:underline transition-colors"
+              className="text-xs text-brand-blue hover:underline transition-colors"
             >
               {previewOpen ? '閉じる' : '書類プレビュー'}
             </button>
@@ -62,15 +62,15 @@ export function DynamicDocumentForm({ templateName, mapping, formData, onChange,
       <CardContent className="space-y-4">
         {/* プレビュー */}
         {previewOpen && (
-          <div className="border border-diletto-gray/15 rounded-md p-4 bg-white max-h-[400px] overflow-y-auto">
+          <div className="border border-brand-gray/15 rounded-md p-4 bg-white max-h-[400px] overflow-y-auto">
             {previewLoading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin h-5 w-5 border-2 border-diletto-blue border-t-transparent rounded-full" />
-                <span className="ml-2 text-sm text-diletto-gray">読み込み中...</span>
+                <div className="animate-spin h-5 w-5 border-2 border-brand-blue border-t-transparent rounded-full" />
+                <span className="ml-2 text-sm text-brand-gray">読み込み中...</span>
               </div>
             ) : (
               <div
-                className="prose prose-sm max-w-none text-diletto-ink"
+                className="prose prose-sm max-w-none text-brand-ink"
                 dangerouslySetInnerHTML={{ __html: previewHtml || '' }}
               />
             )}
@@ -79,13 +79,13 @@ export function DynamicDocumentForm({ templateName, mapping, formData, onChange,
 
         {/* フォーム */}
         {formFields.length === 0 ? (
-          <p className="text-sm text-diletto-gray-light">この書類は入力項目がありません（自動差し込みのみ）</p>
+          <p className="text-sm text-brand-gray-light">この書類は入力項目がありません（自動差し込みのみ）</p>
         ) : (
           formFields.map((f, i) => (
             <div key={`${f.key}-${i}`} className="space-y-2">
               <Label>
                 {f.label || f.key}
-                {f.required && <span className="text-diletto-red ml-1">*</span>}
+                {f.required && <span className="text-brand-red ml-1">*</span>}
               </Label>
 
               {(() => {

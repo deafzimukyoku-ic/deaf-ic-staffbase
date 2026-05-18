@@ -121,10 +121,10 @@ export default function ResetPasswordConfirmPage() {
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-diletto-beige px-4">
+      <div className="flex min-h-screen items-center justify-center bg-brand-beige px-4">
         <div className="flex items-center gap-3">
-          <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-          <span className="text-sm text-diletto-gray">認証を確認中...</span>
+          <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+          <span className="text-sm text-brand-gray">認証を確認中...</span>
         </div>
       </div>
     );
@@ -132,7 +132,7 @@ export default function ResetPasswordConfirmPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-diletto-beige px-4">
+      <div className="flex min-h-screen items-center justify-center bg-brand-beige px-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -144,7 +144,7 @@ export default function ResetPasswordConfirmPage() {
             <CardTitle className="text-base font-bold tracking-tight">
               認定NPO法人 名古屋ろう国際センター
             </CardTitle>
-            <CardDescription className="text-diletto-red">{error}</CardDescription>
+            <CardDescription className="text-brand-red">{error}</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground mb-4">
@@ -169,7 +169,7 @@ export default function ResetPasswordConfirmPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-diletto-beige px-4">
+    <div className="flex min-h-screen items-center justify-center bg-brand-beige px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -184,7 +184,7 @@ export default function ResetPasswordConfirmPage() {
           <CardDescription>職員ステーション — 新しいパスワードを設定</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border border-diletto-blue/30 bg-blue-50 p-3 mb-4 text-sm leading-relaxed">
+          <div className="rounded-md border border-brand-blue/30 bg-blue-50 p-3 mb-4 text-sm leading-relaxed">
             💡 <strong>新しいパスワードを決めてください。</strong><br />
             お好きな文字列を <strong>8文字以上</strong> で入力 → <strong>同じパスワードをもう一度</strong> 入力して「決定する」を押してください。
           </div>

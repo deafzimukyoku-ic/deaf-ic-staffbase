@@ -7,7 +7,7 @@ import MessagesView from '@/components/messages/MessagesView';
 
 export default function AdminMessagesPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-diletto-gray">読み込み中...</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-brand-gray">読み込み中...</div>}>
       <MessagesView scope="admin" />
     </Suspense>
   );

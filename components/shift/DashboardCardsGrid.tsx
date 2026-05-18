@@ -80,7 +80,7 @@ export default function DashboardCardsGrid({ cards, statuses, scope }: Props) {
           <Link
             key={c.href}
             href={c.href}
-            className="relative p-5 bg-white rounded-md border border-diletto-gray/10 shadow-sm hover:shadow-md hover:border-diletto-blue/30 transition-all group"
+            className="relative p-5 bg-white rounded-md border border-brand-gray/10 shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all group"
           >
             {status && status !== 'empty' && (
               <div className="absolute top-3 right-3">
@@ -88,8 +88,8 @@ export default function DashboardCardsGrid({ cards, statuses, scope }: Props) {
               </div>
             )}
             <div className="text-3xl mb-3">{c.icon}</div>
-            <div className="text-base font-bold text-diletto-ink mb-1">{c.title}</div>
-            <div className="text-xs text-diletto-gray leading-relaxed">{c.desc}</div>
+            <div className="text-base font-bold text-brand-ink mb-1">{c.title}</div>
+            <div className="text-xs text-brand-gray leading-relaxed">{c.desc}</div>
           </Link>
         );
       })}

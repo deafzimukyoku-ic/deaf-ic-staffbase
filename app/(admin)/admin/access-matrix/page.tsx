@@ -205,7 +205,7 @@ export default function AccessMatrixPage() {
       <div className="flex items-baseline justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">権限マトリクス</h1>
-          <p className="text-xs text-diletto-gray-light mt-1">
+          <p className="text-xs text-brand-gray-light mt-1">
             管理者・マネージャーの施設アクセス権限を一覧編集できます。所属施設は社員詳細ページから変更してください。
           </p>
         </div>
@@ -222,7 +222,7 @@ export default function AccessMatrixPage() {
       )}
 
       {/* 凡例: 同じ〇マークで色分け（マークの種類で区別しない） */}
-      <div className="mb-3 flex flex-wrap gap-3 text-xs text-diletto-gray items-center">
+      <div className="mb-3 flex flex-wrap gap-3 text-xs text-brand-gray items-center">
         <span className="inline-flex items-center gap-1.5">
           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: 'var(--ink-2, #1f2937)', color: '#fff' }}>所属</span>
           所属施設（クリック不可・社員詳細で変更）
@@ -242,25 +242,25 @@ export default function AccessMatrixPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-diletto-gray-light py-10 text-center">読み込み中...</p>
+        <p className="text-sm text-brand-gray-light py-10 text-center">読み込み中...</p>
       ) : (
-        <div className="overflow-x-auto bg-white rounded-lg border border-diletto-gray/15">
+        <div className="overflow-x-auto bg-white rounded-lg border border-brand-gray/15">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-diletto-beige/50 border-b border-diletto-gray/15">
-                <th className="text-left px-3 py-2 text-xs font-bold text-diletto-gray-light uppercase">
+              <tr className="bg-brand-beige/50 border-b border-brand-gray/15">
+                <th className="text-left px-3 py-2 text-xs font-bold text-brand-gray-light uppercase">
                   従業員番号
                 </th>
-                <th className="text-left px-3 py-2 text-xs font-bold text-diletto-gray-light uppercase">
+                <th className="text-left px-3 py-2 text-xs font-bold text-brand-gray-light uppercase">
                   名前
                 </th>
-                <th className="text-left px-3 py-2 text-xs font-bold text-diletto-gray-light uppercase">
+                <th className="text-left px-3 py-2 text-xs font-bold text-brand-gray-light uppercase">
                   ロール
                 </th>
                 {facilities.map((f) => (
                   <th
                     key={f.id}
-                    className="text-center px-3 py-2 text-xs font-bold text-diletto-gray-light uppercase whitespace-nowrap"
+                    className="text-center px-3 py-2 text-xs font-bold text-brand-gray-light uppercase whitespace-nowrap"
                   >
                     {f.name}
                   </th>
@@ -272,27 +272,27 @@ export default function AccessMatrixPage() {
                 <tr>
                   <td
                     colSpan={3 + facilities.length}
-                    className="text-center py-10 text-diletto-gray-light"
+                    className="text-center py-10 text-brand-gray-light"
                   >
                     管理者・マネージャーが登録されていません。
                   </td>
                 </tr>
               )}
               {employees.map((emp) => (
-                <tr key={emp.id} className="border-b border-diletto-gray/10 hover:bg-diletto-beige/30">
-                  <td className="px-3 py-2 font-mono text-xs text-diletto-gray">
+                <tr key={emp.id} className="border-b border-brand-gray/10 hover:bg-brand-beige/30">
+                  <td className="px-3 py-2 font-mono text-xs text-brand-gray">
                     {emp.employee_number}
                   </td>
                   <td className="px-3 py-2 font-bold whitespace-nowrap">
                     <Link
                       href={`/admin/employees/${emp.id}`}
-                      className="text-diletto-blue hover:underline"
+                      className="text-brand-blue hover:underline"
                       title="社員詳細を開く"
                     >
                       {emp.last_name} {emp.first_name}
                     </Link>
                     {emp.email && (
-                      <div className="text-[10px] text-diletto-gray-light font-normal">
+                      <div className="text-[10px] text-brand-gray-light font-normal">
                         {emp.email}
                       </div>
                     )}
@@ -305,7 +305,7 @@ export default function AccessMatrixPage() {
                         if (next === emp.role) return;
                         setRoleChangeTarget({ emp, next });
                       }}
-                      className="h-7 rounded border border-diletto-gray/20 bg-white px-2 text-xs font-bold"
+                      className="h-7 rounded border border-brand-gray/20 bg-white px-2 text-xs font-bold"
                       title="ロール変更"
                     >
                       <option value="admin">管理者</option>
@@ -339,7 +339,7 @@ export default function AccessMatrixPage() {
                     return (
                       <td
                         key={f.id}
-                        className={`text-center px-3 py-2 ${clickable ? 'cursor-pointer hover:bg-diletto-blue/5' : 'cursor-default'}`}
+                        className={`text-center px-3 py-2 ${clickable ? 'cursor-pointer hover:bg-brand-blue/5' : 'cursor-default'}`}
                         onClick={() => {
                           if (!clickable || !action) return;
                           setCellChangeTarget({ emp, facility: f, action });
@@ -383,10 +383,10 @@ export default function AccessMatrixPage() {
               </b>{' '}
               さんのロールを{' '}
               <b>「{ROLE_LABELS[roleChangeTarget.emp.role]}」</b> から{' '}
-              <b className="text-diletto-blue">「{ROLE_LABELS[roleChangeTarget.next]}」</b>{' '}
+              <b className="text-brand-blue">「{ROLE_LABELS[roleChangeTarget.next]}」</b>{' '}
               に変更しますか？
               {roleChangeTarget.next === 'employee' && (
-                <span className="block mt-2 text-xs text-diletto-red">
+                <span className="block mt-2 text-xs text-brand-red">
                   ※ 一般社員に降格すると、このページの一覧から消え、担当施設の設定も全て解除されます。
                 </span>
               )}
@@ -415,7 +415,7 @@ export default function AccessMatrixPage() {
                 {cellChangeTarget.emp.last_name} {cellChangeTarget.emp.first_name}
               </b>{' '}
               さんを{' '}
-              <b className="text-diletto-blue">「{cellChangeTarget.facility.name}」</b> の担当
+              <b className="text-brand-blue">「{cellChangeTarget.facility.name}」</b> の担当
               {cellChangeTarget.action === 'add' ? 'に追加' : 'から外'}しますか？
             </p>
           )}
@@ -567,14 +567,14 @@ function AddManagerDialog({
             <select
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value as 'admin' | 'manager' | 'shift_manager' })}
-              className="w-full h-9 rounded-lg border border-diletto-gray/20 bg-white px-2 text-sm mt-1"
+              className="w-full h-9 rounded-lg border border-brand-gray/20 bg-white px-2 text-sm mt-1"
             >
               <option value="manager">マネージャー</option>
               <option value="admin">管理者</option>
               <option value="shift_manager">シフト統括（事業所共用 / 送迎・シフト専用）</option>
             </select>
             {form.role === 'shift_manager' && (
-              <p className="text-[10px] text-diletto-gray-light mt-1 leading-tight">
+              <p className="text-[10px] text-brand-gray-light mt-1 leading-tight">
                 ※ 事業所の操作端末用アカウント。シフト・送迎・日次出力などのみ操作可能。書類・お知らせ等にはアクセス不可。
               </p>
             )}
@@ -621,7 +621,7 @@ function AddManagerDialog({
             <select
               value={form.facility_id}
               onChange={(e) => setForm({ ...form, facility_id: e.target.value })}
-              className="w-full h-9 rounded-lg border border-diletto-gray/20 bg-white px-2 text-sm mt-1"
+              className="w-full h-9 rounded-lg border border-brand-gray/20 bg-white px-2 text-sm mt-1"
             >
               <option value="">（未設定）</option>
               {facilities.map((f) => (
@@ -646,8 +646,8 @@ function AddManagerDialog({
                         onClick={() => toggleManagerFacility(f.id)}
                         className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                           checked
-                            ? 'bg-diletto-blue text-white border-diletto-blue'
-                            : 'bg-white text-diletto-gray border-diletto-gray/20 hover:bg-diletto-beige'
+                            ? 'bg-brand-blue text-white border-brand-blue'
+                            : 'bg-white text-brand-gray border-brand-gray/20 hover:bg-brand-beige'
                         }`}
                       >
                         {f.name} {checked ? '✓' : ''}

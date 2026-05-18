@@ -221,7 +221,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
   };
 
   if (loading) {
-    return <div className="h-64 flex items-center justify-center text-sm text-diletto-gray">読み込み中...</div>;
+    return <div className="h-64 flex items-center justify-center text-sm text-brand-gray">読み込み中...</div>;
   }
 
   // 各 status の日数
@@ -273,10 +273,10 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
         })}
         {!readOnly && (
           <>
-            <button onClick={setAllSundaysPublic} className="ml-auto text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-blue/5">
+            <button onClick={setAllSundaysPublic} className="ml-auto text-xs px-2 py-1 rounded border border-brand-gray/20 text-brand-gray hover:bg-brand-blue/5">
               日曜を一括「希望休」に
             </button>
-            <button onClick={clearAll} className="text-xs px-2 py-1 rounded border border-diletto-gray/20 text-diletto-gray hover:bg-diletto-red/5">
+            <button onClick={clearAll} className="text-xs px-2 py-1 rounded border border-brand-gray/20 text-brand-gray hover:bg-brand-red/5">
               クリア
             </button>
           </>
@@ -288,7 +288,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
         {/* 曜日ヘッダー */}
         <div className="grid grid-cols-7 gap-1 mb-2">
           {DOW.map((d, i) => (
-            <div key={d} className={`text-center text-xs font-semibold py-1 ${i === 0 ? 'text-diletto-red' : i === 6 ? 'text-diletto-blue' : 'text-diletto-gray-light'}`}>
+            <div key={d} className={`text-center text-xs font-semibold py-1 ${i === 0 ? 'text-brand-red' : i === 6 ? 'text-brand-blue' : 'text-brand-gray-light'}`}>
               {d}
             </div>
           ))}
@@ -316,7 +316,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
             }
             const useGradient = status === 'am_off' || status === 'pm_off';
 
-            const numberColor = holiday || dow === 0 ? 'text-diletto-red' : dow === 6 ? 'text-diletto-blue' : 'text-diletto-ink';
+            const numberColor = holiday || dow === 0 ? 'text-brand-red' : dow === 6 ? 'text-brand-blue' : 'text-brand-ink';
 
             return (
               <div key={c.date} className="relative">
@@ -327,7 +327,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
                   className={`
                     w-full flex flex-col items-center justify-center py-2 rounded-md transition-all active:scale-95 border-[1.5px]
                     ${useGradient ? 'border-blue-400' : cfg ? `${cfg.bg} ${cfg.border}` : isWeekend || holiday ? 'bg-black/[0.02] border-transparent' : 'bg-white border-transparent'}
-                    ${isToday ? 'ring-2 ring-diletto-blue/40' : ''}
+                    ${isToday ? 'ring-2 ring-brand-blue/40' : ''}
                     ${readOnly ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:brightness-95'}
                   `}
                   style={{ minHeight: '52px', ...(bgStyle ?? {}) }}
@@ -340,8 +340,8 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
 
                 {/* インラインピッカー: 木〜土のセルは right-0 にして画面右端の見切れ防止（モバイル対応） */}
                 {isEditing && !readOnly && (
-                  <div className={`absolute z-30 top-full mt-1 w-56 p-2 rounded-md shadow-lg bg-white border border-diletto-gray/15 ${dow >= 4 ? 'right-0' : 'left-0'}`}>
-                    <div className="text-[11px] font-bold mb-1.5 text-diletto-gray">
+                  <div className={`absolute z-30 top-full mt-1 w-56 p-2 rounded-md shadow-lg bg-white border border-brand-gray/15 ${dow >= 4 ? 'right-0' : 'left-0'}`}>
+                    <div className="text-[11px] font-bold mb-1.5 text-brand-gray">
                       {format(new Date(c.date), 'M月d日(E)', { locale: ja })}
                     </div>
                     <div className="grid grid-cols-1 gap-1">
@@ -363,7 +363,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
                       })}
                       <button
                         onClick={() => setStatus(c.date, 'none')}
-                        className="text-left px-2 py-1.5 text-xs rounded text-diletto-gray hover:bg-diletto-red/5 mt-1 border-t border-diletto-gray/10 pt-2"
+                        className="text-left px-2 py-1.5 text-xs rounded text-brand-gray hover:bg-brand-red/5 mt-1 border-t border-brand-gray/10 pt-2"
                       >
                         ✕ 設定をクリア
                       </button>
@@ -379,14 +379,14 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
 
       {/* 全体メモ */}
       <div className="space-y-1">
-        <label className="text-xs font-bold text-diletto-gray-light">補足メモ（任意）</label>
+        <label className="text-xs font-bold text-brand-gray-light">補足メモ（任意）</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           disabled={readOnly}
           placeholder="特記事項があれば記入してください（例: 月末の通院予定など）"
-          className="w-full text-sm rounded-md px-3 py-2 bg-white border border-diletto-gray/15 outline-none focus:border-diletto-blue/40 disabled:bg-gray-50"
+          className="w-full text-sm rounded-md px-3 py-2 bg-white border border-brand-gray/15 outline-none focus:border-brand-blue/40 disabled:bg-gray-50"
         />
       </div>
 

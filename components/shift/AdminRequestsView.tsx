@@ -153,7 +153,7 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
   if (!facilityId) {
     return (
       <div className="p-6">
-        <p className="text-sm text-diletto-gray">事業所を上部から選択してください。</p>
+        <p className="text-sm text-brand-gray">事業所を上部から選択してください。</p>
       </div>
     );
   }
@@ -166,9 +166,9 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
       </div>
 
       {loading ? (
-        <div className="h-32 flex items-center justify-center text-sm text-diletto-gray">読み込み中...</div>
+        <div className="h-32 flex items-center justify-center text-sm text-brand-gray">読み込み中...</div>
       ) : employees.length === 0 ? (
-        <div className="rounded-md bg-white border border-diletto-gray/10 p-6 text-center text-sm text-diletto-gray">
+        <div className="rounded-md bg-white border border-brand-gray/10 p-6 text-center text-sm text-brand-gray">
           職員がいません
         </div>
       ) : (
@@ -181,12 +181,12 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
                 <button
                   type="button"
                   onClick={() => setDetailEmployeeId(e.id)}
-                  className="w-full text-left rounded-md border border-diletto-gray/10 bg-white p-3 active:bg-diletto-blue/5 hover:bg-diletto-blue/[0.02] transition-colors"
+                  className="w-full text-left rounded-md border border-brand-gray/10 bg-white p-3 active:bg-brand-blue/5 hover:bg-brand-blue/[0.02] transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 flex-wrap min-w-0">
                       <span className="font-bold text-sm md:text-base truncate">{e.name}</span>
-                      <span className="text-[11px] md:text-xs text-diletto-gray">
+                      <span className="text-[11px] md:text-xs text-brand-gray">
                         {e.employment_type === 'full_time' ? '常勤' : e.employment_type === 'part_time' ? 'パート' : '-'}
                       </span>
                     </div>
@@ -207,7 +207,7 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
                     ))}
                   </div>
                   {sum.submittedAt && (
-                    <div className="mt-2 text-[10px] md:text-xs text-diletto-gray-light tabular-nums text-right">
+                    <div className="mt-2 text-[10px] md:text-xs text-brand-gray-light tabular-nums text-right">
                       提出: {format(new Date(sum.submittedAt), 'M/d HH:mm')}
                     </div>
                   )}
@@ -227,12 +227,12 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
         {detailEmployee && detailSummary && (
           <div className="space-y-3">
             {detailSummary.reqs.length === 0 ? (
-              <p className="text-sm text-diletto-gray">未提出</p>
+              <p className="text-sm text-brand-gray">未提出</p>
             ) : (
               <>
                 <DetailCalendar reqs={detailSummary.reqs} year={year} monthNum={monthNum} />
                 {detailSummary.reqs.some((r) => r.notes) && (
-                  <div className="rounded-md bg-diletto-beige p-2 text-xs">
+                  <div className="rounded-md bg-brand-beige p-2 text-xs">
                     <div className="font-bold mb-0.5">補足メモ</div>
                     {detailSummary.reqs.filter((r) => r.notes).map((r) => (
                       <div key={r.id}>{r.notes}</div>
@@ -271,7 +271,7 @@ function DetailCalendar({ reqs, year, monthNum }: { reqs: ShiftRequestRow[]; yea
     <div>
       <div className="grid grid-cols-7 gap-0.5 text-[10px] font-bold text-center">
         {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
-          <div key={d} className={`py-1 ${i === 0 ? 'text-diletto-red' : i === 6 ? 'text-diletto-blue' : 'text-diletto-gray'}`}>{d}</div>
+          <div key={d} className={`py-1 ${i === 0 ? 'text-brand-red' : i === 6 ? 'text-brand-blue' : 'text-brand-gray'}`}>{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-0.5">
@@ -281,9 +281,9 @@ function DetailCalendar({ reqs, year, monthNum }: { reqs: ShiftRequestRow[]; yea
           const dow = getDay(new Date(c.date));
           const holiday = isJpHoliday(c.date);
           return (
-            <div key={c.date} className={`min-h-[44px] p-1 rounded border border-diletto-gray/10 ${t ? TYPE_COLOR[t] : 'bg-white'}`}>
+            <div key={c.date} className={`min-h-[44px] p-1 rounded border border-brand-gray/10 ${t ? TYPE_COLOR[t] : 'bg-white'}`}>
               <div className={`text-[11px] font-bold ${
-                holiday || dow === 0 ? 'text-diletto-red' : dow === 6 ? 'text-diletto-blue' : ''
+                holiday || dow === 0 ? 'text-brand-red' : dow === 6 ? 'text-brand-blue' : ''
               }`}>{c.day}</div>
               {t && <div className="text-[9px] font-bold mt-0.5">{TYPE_LABEL[t]}</div>}
             </div>

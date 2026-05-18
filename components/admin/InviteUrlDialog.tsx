@@ -47,23 +47,23 @@ export function InviteUrlDialog({
           <DialogTitle>📨 招待 URL（メール送信失敗）</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm">
-          <p className="text-diletto-gray">
+          <p className="text-brand-gray">
             {employeeName ? <strong>{employeeName} さん</strong> : '対象者'} 向けの招待メールが
             自動送信できませんでした（Resend 上限などが原因）。
           </p>
-          <p className="text-diletto-gray">
+          <p className="text-brand-gray">
             以下の URL を <strong>LINE / SMS / 別メール</strong> 等で
-            <strong className="text-diletto-red">1 時間以内</strong>に共有してください。
+            <strong className="text-brand-red">1 時間以内</strong>に共有してください。
             URL を開いてパスワードを設定すると初回ログイン完了です。
           </p>
           <textarea
             readOnly
             value={url}
             onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-            className="w-full p-3 font-mono text-xs bg-diletto-beige/30 border border-diletto-gray/20 rounded-md break-all resize-none"
+            className="w-full p-3 font-mono text-xs bg-brand-beige/30 border border-brand-gray/20 rounded-md break-all resize-none"
             rows={4}
           />
-          <p className="text-[10px] text-diletto-gray-light">
+          <p className="text-[10px] text-brand-gray-light">
             ※ 1 時間を超えたら再送信ボタンから新しい URL を発行できます。
           </p>
         </div>

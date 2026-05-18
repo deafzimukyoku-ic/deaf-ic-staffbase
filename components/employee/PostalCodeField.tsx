@@ -103,9 +103,9 @@ export function PostalCodeField({
           inputMode="numeric"
           maxLength={8}
         />
-        {looking && <span className="text-xs text-diletto-gray">検索中...</span>}
+        {looking && <span className="text-xs text-brand-gray">検索中...</span>}
       </div>
-      {error && <p className="text-xs text-diletto-red">{error}</p>}
+      {error && <p className="text-xs text-brand-red">{error}</p>}
     </div>
   );
 }

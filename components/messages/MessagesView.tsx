@@ -456,7 +456,7 @@ export default function MessagesView({ scope }: Props) {
   };
 
   if (!me) {
-    return <div className="p-6 text-sm text-diletto-gray">読み込み中...</div>;
+    return <div className="p-6 text-sm text-brand-gray">読み込み中...</div>;
   }
 
   const canCreateThread = scope === 'admin' || scope === 'manager';
@@ -489,9 +489,9 @@ export default function MessagesView({ scope }: Props) {
           </div>
           <div className="flex-1 overflow-y-auto">
             {loadingThreads ? (
-              <div className="p-3 text-xs text-diletto-gray">読み込み中...</div>
+              <div className="p-3 text-xs text-brand-gray">読み込み中...</div>
             ) : threads.length === 0 ? (
-              <div className="p-3 text-xs text-diletto-gray">メッセージはまだありません</div>
+              <div className="p-3 text-xs text-brand-gray">メッセージはまだありません</div>
             ) : (
               <ul className="flex flex-col">
                 {threads.map((t) => {
@@ -507,15 +507,15 @@ export default function MessagesView({ scope }: Props) {
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="font-bold text-sm truncate">{t.counterpartLabel}</span>
                           {t.unreadCount > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-diletto-red text-white text-[10px] font-bold">
+                            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-brand-red text-white text-[10px] font-bold">
                               {t.unreadCount > 99 ? '99+' : t.unreadCount}
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-diletto-gray-light truncate">
+                        <div className="text-xs text-brand-gray-light truncate">
                           {t.lastMessageBody ?? '（メッセージなし）'}
                         </div>
-                        <div className="text-[10px] text-diletto-gray-light tabular-nums mt-0.5">
+                        <div className="text-[10px] text-brand-gray-light tabular-nums mt-0.5">
                           {format(new Date(t.lastMessageAt), 'M/d HH:mm', { locale: ja })}
                         </div>
                       </button>
@@ -533,7 +533,7 @@ export default function MessagesView({ scope }: Props) {
           style={{ borderColor: 'var(--rule)', background: 'var(--white)' }}
         >
           {!activeThreadId ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-diletto-gray">
+            <div className="flex-1 flex items-center justify-center text-sm text-brand-gray">
               左のスレッドを選択してください
             </div>
           ) : (
@@ -556,9 +556,9 @@ export default function MessagesView({ scope }: Props) {
               {/* メッセージ履歴 */}
               <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3" style={{ background: 'var(--bg)' }}>
                 {loadingMessages ? (
-                  <div className="text-xs text-diletto-gray">読み込み中...</div>
+                  <div className="text-xs text-brand-gray">読み込み中...</div>
                 ) : messages.length === 0 ? (
-                  <div className="text-xs text-diletto-gray">メッセージはまだありません</div>
+                  <div className="text-xs text-brand-gray">メッセージはまだありません</div>
                 ) : (
                   messages.map((m) => {
                     const mine = m.sender_employee_id === me.id;
@@ -568,12 +568,12 @@ export default function MessagesView({ scope }: Props) {
                     const isEditing = editingMessageId === m.id;
                     return (
                       <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                        <div className="text-[10px] text-diletto-gray-light mb-0.5">
+                        <div className="text-[10px] text-brand-gray-light mb-0.5">
                           {senderName} · {format(new Date(m.created_at), 'M/d HH:mm', { locale: ja })}
                           {m.edited_at && <span className="ml-1">（編集済）</span>}
                         </div>
                         <div
-                          className={`max-w-[85%] rounded-lg px-3 py-2 ${mine ? 'bg-diletto-blue text-white' : 'bg-white border'}`}
+                          className={`max-w-[85%] rounded-lg px-3 py-2 ${mine ? 'bg-brand-blue text-white' : 'bg-white border'}`}
                           style={{ borderColor: mine ? undefined : 'var(--rule)' }}
                         >
                           {m.deleted_at ? (
@@ -586,7 +586,7 @@ export default function MessagesView({ scope }: Props) {
                                 value={editingBody}
                                 onChange={(e) => setEditingBody(e.target.value)}
                                 rows={2}
-                                className="text-sm rounded p-2 outline-none text-diletto-ink"
+                                className="text-sm rounded p-2 outline-none text-brand-ink"
                                 style={{ background: 'var(--white)', border: '1px solid var(--rule)' }}
                               />
                               <div className="flex gap-2">
@@ -612,7 +612,7 @@ export default function MessagesView({ scope }: Props) {
                                     key={a.id}
                                     type="button"
                                     onClick={() => openAttachment(a)}
-                                    className={`text-[11px] px-2 py-1 rounded inline-flex items-center gap-1 max-w-[280px] ${mine ? 'bg-white/20 hover:bg-white/30' : 'bg-diletto-blue/5 hover:bg-diletto-blue/10 text-diletto-ink'}`}
+                                    className={`text-[11px] px-2 py-1 rounded inline-flex items-center gap-1 max-w-[280px] ${mine ? 'bg-white/20 hover:bg-white/30' : 'bg-brand-blue/5 hover:bg-brand-blue/10 text-brand-ink'}`}
                                     title={title}
                                   >
                                     {icon} <span className="truncate">{a.file_name}</span>
@@ -624,9 +624,9 @@ export default function MessagesView({ scope }: Props) {
                         </div>
                         {mine && !m.deleted_at && !isEditing && (
                           <div className="flex gap-1 mt-1 text-[10px]">
-                            <button onClick={() => startEdit(m)} className="text-diletto-blue hover:underline">編集</button>
-                            <span className="text-diletto-gray-light">·</span>
-                            <button onClick={() => deleteMessage(m.id)} className="text-diletto-red hover:underline">削除</button>
+                            <button onClick={() => startEdit(m)} className="text-brand-blue hover:underline">編集</button>
+                            <span className="text-brand-gray-light">·</span>
+                            <button onClick={() => deleteMessage(m.id)} className="text-brand-red hover:underline">削除</button>
                           </div>
                         )}
                       </div>
@@ -641,21 +641,21 @@ export default function MessagesView({ scope }: Props) {
                 {(pendingAttachments.length > 0 || pendingLinks.length > 0) && (
                   <div className="flex flex-wrap gap-1.5">
                     {pendingAttachments.map((f, i) => (
-                      <span key={`f${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-beige inline-flex items-center gap-1">
+                      <span key={`f${i}`} className="text-[11px] px-2 py-1 rounded bg-brand-beige inline-flex items-center gap-1">
                         {f.type === 'application/pdf' ? '📄' : '🖼️'} {f.name} ({(f.size / 1024).toFixed(0)}KB)
                         <button
                           onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))}
-                          className="ml-1 text-diletto-red"
+                          className="ml-1 text-brand-red"
                           aria-label="削除"
                         >×</button>
                       </span>
                     ))}
                     {pendingLinks.map((l, i) => (
-                      <span key={`l${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-blue/[0.08] text-diletto-blue inline-flex items-center gap-1 max-w-[280px]">
+                      <span key={`l${i}`} className="text-[11px] px-2 py-1 rounded bg-brand-blue/[0.08] text-brand-blue inline-flex items-center gap-1 max-w-[280px]">
                         🔗 <span className="truncate">{l.label || l.url}</span>
                         <button
                           onClick={() => setPendingLinks((p) => p.filter((_, j) => j !== i))}
-                          className="ml-1 text-diletto-red"
+                          className="ml-1 text-brand-red"
                           aria-label="削除"
                         >×</button>
                       </span>
@@ -877,7 +877,7 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
       <div className="bg-white rounded-lg w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--rule)' }}>
           <h2 className="text-base font-bold">新規メッセージ</h2>
-          <button onClick={onCancel} className="text-diletto-gray hover:text-diletto-ink">✕</button>
+          <button onClick={onCancel} className="text-brand-gray hover:text-brand-ink">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
           {err && <div className="px-3 py-2 rounded text-xs" style={{ background: 'var(--red-pale)', color: 'var(--red)' }}>{err}</div>}
@@ -894,9 +894,9 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
             />
             <div className="max-h-48 overflow-y-auto rounded border" style={{ borderColor: 'var(--rule)' }}>
               {loading ? (
-                <div className="p-2 text-xs text-diletto-gray">読み込み中...</div>
+                <div className="p-2 text-xs text-brand-gray">読み込み中...</div>
               ) : filtered.length === 0 ? (
-                <div className="p-2 text-xs text-diletto-gray">該当する社員がいません</div>
+                <div className="p-2 text-xs text-brand-gray">該当する社員がいません</div>
               ) : (
                 <ul>
                   {filtered.map((c) => {
@@ -942,15 +942,15 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
             {(attachments.length > 0 || links.length > 0) && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {attachments.map((f, i) => (
-                  <span key={`f${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-beige inline-flex items-center gap-1">
+                  <span key={`f${i}`} className="text-[11px] px-2 py-1 rounded bg-brand-beige inline-flex items-center gap-1">
                     {f.type === 'application/pdf' ? '📄' : '🖼️'} {f.name}
-                    <button onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="ml-1 text-diletto-red">×</button>
+                    <button onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="ml-1 text-brand-red">×</button>
                   </span>
                 ))}
                 {links.map((l, i) => (
-                  <span key={`l${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-blue/[0.08] text-diletto-blue inline-flex items-center gap-1 max-w-[280px]">
+                  <span key={`l${i}`} className="text-[11px] px-2 py-1 rounded bg-brand-blue/[0.08] text-brand-blue inline-flex items-center gap-1 max-w-[280px]">
                     🔗 <span className="truncate">{l.label || l.url}</span>
-                    <button onClick={() => setLinks((p) => p.filter((_, j) => j !== i))} className="ml-1 text-diletto-red">×</button>
+                    <button onClick={() => setLinks((p) => p.filter((_, j) => j !== i))} className="ml-1 text-brand-red">×</button>
                   </span>
                 ))}
               </div>
@@ -997,7 +997,7 @@ function LinkAddInline({ onAdd }: { onAdd: (url: string, label: string) => void 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="self-start text-[11px] text-diletto-blue hover:underline inline-flex items-center gap-1"
+        className="self-start text-[11px] text-brand-blue hover:underline inline-flex items-center gap-1"
       >
         🔗 URL リンクを貼る (PDF / 動画 / Google Drive 等)
       </button>
@@ -1005,7 +1005,7 @@ function LinkAddInline({ onAdd }: { onAdd: (url: string, label: string) => void 
   }
 
   return (
-    <div className="border rounded-md p-2 space-y-1 bg-diletto-blue/[0.03]" style={{ borderColor: 'var(--rule)' }}>
+    <div className="border rounded-md p-2 space-y-1 bg-brand-blue/[0.03]" style={{ borderColor: 'var(--rule)' }}>
       <input
         type="url"
         placeholder="https://..."
@@ -1022,17 +1022,17 @@ function LinkAddInline({ onAdd }: { onAdd: (url: string, label: string) => void 
         className="w-full text-xs px-2 py-1 rounded border bg-white"
         style={{ borderColor: 'var(--rule)' }}
       />
-      {err && <p className="text-[11px] text-diletto-red">{err}</p>}
+      {err && <p className="text-[11px] text-brand-red">{err}</p>}
       <div className="flex gap-2 justify-end">
         <button
           type="button"
           onClick={() => { setOpen(false); setUrl(''); setLabel(''); setErr(''); }}
-          className="text-[11px] text-diletto-gray hover:underline"
+          className="text-[11px] text-brand-gray hover:underline"
         >キャンセル</button>
         <button
           type="button"
           onClick={handleAdd}
-          className="text-[11px] text-diletto-blue font-bold hover:underline"
+          className="text-[11px] text-brand-blue font-bold hover:underline"
         >+ 追加</button>
       </div>
     </div>

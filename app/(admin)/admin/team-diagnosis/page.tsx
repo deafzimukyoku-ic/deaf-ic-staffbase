@@ -68,7 +68,7 @@ export default function TeamDiagnosisPage() {
     setRunning(false);
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   return (
     <div>
@@ -108,7 +108,7 @@ export default function TeamDiagnosisPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Badge variant="outline">チーム相性</Badge>
-              <span className="text-xs text-diletto-gray-light">{new Date().toLocaleString('ja-JP')}</span>
+              <span className="text-xs text-brand-gray-light">{new Date().toLocaleString('ja-JP')}</span>
             </div>
           </CardHeader>
           <CardContent>

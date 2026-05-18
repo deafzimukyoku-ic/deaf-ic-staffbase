@@ -1005,8 +1005,8 @@ export default function TransportFull({ role }: Props) {
 
   if (!facilityId) {
     return (
-      <div className="rounded-md bg-white border border-diletto-gray/10 p-8 text-center">
-        <p className="text-sm text-diletto-gray">
+      <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
+        <p className="text-sm text-brand-gray">
           ヘッダーから事業所を選択してください。
         </p>
       </div>

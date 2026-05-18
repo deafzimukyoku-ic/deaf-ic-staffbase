@@ -70,7 +70,7 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: st
     <div>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between py-2 text-sm font-bold text-diletto-ink hover:text-diletto-blue transition-colors"
+        className="flex w-full items-center justify-between py-2 text-sm font-bold text-brand-ink hover:text-brand-blue transition-colors"
       >
         <span>{title}</span>
         <svg
@@ -168,10 +168,10 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
       {/* 達成率カード — 5列レスポンシブ */}
       <CollapsibleSection title="達成率">
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-          <RateCard label="書類提出率" pct={docRate} color="text-diletto-blue" ring="border-diletto-blue" onClick={() => openModal('docs_submitted')} />
-          <RateCard label="遵守事項確認率" pct={compRate} color="text-diletto-green" ring="border-diletto-green" onClick={() => openModal('compliance_done')} />
-          <RateCard label="研修完了率" pct={trainRate} color="text-diletto-gold" ring="border-diletto-gold" onClick={() => openModal('trainings_passed')} />
-          <RateCard label="お知らせ既読率" pct={annRate} color="text-diletto-ink" ring="border-diletto-ink" onClick={() => openModal('announcements_read')} />
+          <RateCard label="書類提出率" pct={docRate} color="text-brand-blue" ring="border-brand-blue" onClick={() => openModal('docs_submitted')} />
+          <RateCard label="遵守事項確認率" pct={compRate} color="text-brand-green" ring="border-brand-green" onClick={() => openModal('compliance_done')} />
+          <RateCard label="研修完了率" pct={trainRate} color="text-brand-gold" ring="border-brand-gold" onClick={() => openModal('trainings_passed')} />
+          <RateCard label="お知らせ既読率" pct={annRate} color="text-brand-ink" ring="border-brand-ink" onClick={() => openModal('announcements_read')} />
           <RateCard label="業務マニュアル既読率" pct={manualRate} color="text-purple-600" ring="border-purple-600" onClick={() => openModal('manuals_read')} />
         </div>
       </CollapsibleSection>
@@ -217,7 +217,7 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs text-diletto-gray-light">
+                  <tr className="border-b text-left text-xs text-brand-gray-light">
                     <th className="py-2 pr-4 whitespace-nowrap min-w-[7em]">社員名</th>
                     <th className="py-2 px-4 text-center whitespace-nowrap">書類</th>
                     <th className="py-2 px-4 text-center whitespace-nowrap">遵守事項</th>
@@ -230,7 +230,7 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
                   {active.map((r) => (
                     <tr key={r.employee_id} className="border-b last:border-0">
                       <td className="py-2 pr-4 font-medium whitespace-nowrap min-w-[7em]">
-                        <Link href={`/admin/employees/${r.employee_id}`} className="hover:text-diletto-blue transition-colors">
+                        <Link href={`/admin/employees/${r.employee_id}`} className="hover:text-brand-blue transition-colors">
                           {r.last_name} {r.first_name}
                         </Link>
                       </td>
@@ -254,7 +254,7 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
                 </tbody>
               </table>
               {active.length === 0 && (
-                <p className="text-center py-8 text-diletto-gray-light">社員がまだ登録されていません</p>
+                <p className="text-center py-8 text-brand-gray-light">社員がまだ登録されていません</p>
               )}
             </div>
           </CardContent>
@@ -271,9 +271,9 @@ function StatCard({ label, value, total, sub }: { label: string; value: number; 
       <CardContent className="py-4 text-center">
         <p className="text-2xl font-bold">
           {value}
-          {total !== undefined && <span className="text-diletto-gray-light font-normal text-xl"> / {total}</span>}
+          {total !== undefined && <span className="text-brand-gray-light font-normal text-xl"> / {total}</span>}
         </p>
-        <p className="text-xs text-diletto-gray-light">{label} {sub}</p>
+        <p className="text-xs text-brand-gray-light">{label} {sub}</p>
       </CardContent>
     </Card>
   );
@@ -284,13 +284,13 @@ function RateCard({ label, pct, color, ring, onClick }: { label: string; pct: nu
     <button
       type="button"
       onClick={onClick}
-      className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-diletto-blue rounded-lg"
+      className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue rounded-lg"
     >
       <Card className={`border-2 ${ring} transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer`}>
         <CardContent className="py-5 text-center">
           <p className={`text-3xl font-bold ${color}`}>{pct}%</p>
-          <p className="text-xs text-diletto-gray-light mt-1">{label}</p>
-          <p className="text-[10px] text-diletto-blue mt-2">未完了者を見る →</p>
+          <p className="text-xs text-brand-gray-light mt-1">{label}</p>
+          <p className="text-[10px] text-brand-blue mt-2">未完了者を見る →</p>
         </CardContent>
       </Card>
     </button>
@@ -360,21 +360,21 @@ function ReminderModal({
         </DialogHeader>
 
         {total === 0 ? (
-          <p className="py-8 text-center text-sm text-diletto-gray-light">対象項目が登録されていません</p>
+          <p className="py-8 text-center text-sm text-brand-gray-light">対象項目が登録されていません</p>
         ) : (
           <>
-            <div className="flex gap-1 p-1 bg-diletto-beige/40 rounded-md">
+            <div className="flex gap-1 p-1 bg-brand-beige/40 rounded-md">
               <button
                 type="button"
                 onClick={() => setViewMode('incomplete')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'incomplete' ? 'bg-white shadow-sm text-diletto-ink' : 'text-diletto-gray-light hover:text-diletto-ink'}`}
+                className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'incomplete' ? 'bg-white shadow-sm text-brand-ink' : 'text-brand-gray-light hover:text-brand-ink'}`}
               >
                 未完了 ({incomplete.length})
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('complete')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'complete' ? 'bg-white shadow-sm text-diletto-ink' : 'text-diletto-gray-light hover:text-diletto-ink'}`}
+                className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'complete' ? 'bg-white shadow-sm text-brand-ink' : 'text-brand-gray-light hover:text-brand-ink'}`}
               >
                 完了 ({completed.length})
               </button>
@@ -386,12 +386,12 @@ function ReminderModal({
                 placeholder="氏名・カナで検索"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-9 rounded-md border border-diletto-gray/20 bg-white px-2.5 text-sm focus:outline-none focus:border-diletto-blue"
+                className="h-9 rounded-md border border-brand-gray/20 bg-white px-2.5 text-sm focus:outline-none focus:border-brand-blue"
               />
               <select
                 value={facilityFilter}
                 onChange={(e) => setFacilityFilter(e.target.value)}
-                className="h-9 rounded-md border border-diletto-gray/20 bg-white px-2 text-sm"
+                className="h-9 rounded-md border border-brand-gray/20 bg-white px-2 text-sm"
                 title="施設で絞り込み"
               >
                 <option value="all">すべての施設</option>
@@ -403,50 +403,50 @@ function ReminderModal({
             </div>
 
             {viewMode === 'incomplete' && (
-              <div className="flex items-center gap-2 pb-2 border-b border-diletto-gray/10">
-                <label className="flex items-center gap-2 text-xs text-diletto-gray cursor-pointer">
+              <div className="flex items-center gap-2 pb-2 border-b border-brand-gray/10">
+                <label className="flex items-center gap-2 text-xs text-brand-gray cursor-pointer">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-diletto-blue"
+                    className="h-4 w-4 accent-brand-blue"
                     checked={visibleAllSelected}
                     onChange={(e) => toggleVisibleAll(e.target.checked)}
                   />
                   表示中の{visible.length}名を全選択
                 </label>
-                <span className="text-xs text-diletto-gray-light ml-auto">{selectedIds.size}名 選択中</span>
+                <span className="text-xs text-brand-gray-light ml-auto">{selectedIds.size}名 選択中</span>
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[55vh] divide-y divide-diletto-gray/10">
+            <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[55vh] divide-y divide-brand-gray/10">
               {visible.length === 0 ? (
-                <p className="py-8 text-center text-xs text-diletto-gray-light">
+                <p className="py-8 text-center text-xs text-brand-gray-light">
                   {viewMode === 'incomplete' ? '該当する社員がいません' : '完了した社員がいません'}
                 </p>
               ) : visible.map((r) => {
                 const lastIso = viewMode === 'complete' ? lastCompletedAt[openKey]?.[r.employee_id] : undefined;
                 const lastLabel = openKey === 'docs_submitted' ? '提出' : '確認';
                 return (
-                  <label key={r.employee_id} className={`flex items-center gap-3 py-2 px-1 rounded ${viewMode === 'incomplete' ? 'cursor-pointer hover:bg-diletto-beige/50' : ''}`}>
+                  <label key={r.employee_id} className={`flex items-center gap-3 py-2 px-1 rounded ${viewMode === 'incomplete' ? 'cursor-pointer hover:bg-brand-beige/50' : ''}`}>
                     {viewMode === 'incomplete' && (
                       <input
                         type="checkbox"
-                        className="h-4 w-4 accent-diletto-blue"
+                        className="h-4 w-4 accent-brand-blue"
                         checked={selectedIds.has(r.employee_id)}
                         onChange={() => onToggle(r.employee_id)}
                       />
                     )}
                     <div className="flex-1 min-w-0">
-                      <Link href={`/admin/employees/${r.employee_id}`} className="text-sm font-medium hover:text-diletto-blue transition-colors">
+                      <Link href={`/admin/employees/${r.employee_id}`} className="text-sm font-medium hover:text-brand-blue transition-colors">
                         {r.last_name} {r.first_name}
                       </Link>
-                      <div className="text-[10px] text-diletto-gray-light">
+                      <div className="text-[10px] text-brand-gray-light">
                         {r.facility_id && <>{facilityMap.get(r.facility_id) || '-'}</>}
                         {lastIso && <span className="ml-2">📅 最終{lastLabel}: {formatJpDate(lastIso)}</span>}
                       </div>
                     </div>
                     <Badge className={viewMode === 'incomplete'
-                      ? 'bg-diletto-gold/[0.08] text-diletto-gold text-[10px] shrink-0'
-                      : 'bg-diletto-green/10 text-diletto-green text-[10px] shrink-0'}>
+                      ? 'bg-brand-gold/[0.08] text-brand-gold text-[10px] shrink-0'
+                      : 'bg-brand-green/10 text-brand-green text-[10px] shrink-0'}>
                       {Number(r[openKey])} / {totalFor(r)}
                     </Badge>
                   </label>
@@ -470,12 +470,12 @@ function ReminderModal({
 }
 
 function ProgressBadge({ current, total }: { current: number; total: number }) {
-  if (total === 0) return <span className="text-diletto-gray-light">-</span>;
+  if (total === 0) return <span className="text-brand-gray-light">-</span>;
   const done = current >= total;
   return (
     <Badge className={done
-      ? 'bg-diletto-green/10 text-diletto-green'
-      : 'bg-diletto-gold/[0.08] text-diletto-gold'
+      ? 'bg-brand-green/10 text-brand-green'
+      : 'bg-brand-gold/[0.08] text-brand-gold'
     }>
       {current}/{total}
     </Badge>

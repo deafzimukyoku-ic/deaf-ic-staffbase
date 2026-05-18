@@ -81,7 +81,7 @@ export function DocumentUploader({ onUploaded, loading }: Props) {
         </div>
         {file && (
           <div className="flex items-center gap-3">
-            <span className="text-sm text-diletto-gray">{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+            <span className="text-sm text-brand-gray">{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
             <Button onClick={handleParse} disabled={parsing || loading} size="sm">
               {parsing ? '解析中...' : 'プレースホルダを検出'}
             </Button>

@@ -137,8 +137,8 @@ function SidebarNav({
       {items.map((item, idx) => {
         if (item.kind === 'section') {
           return (
-            <div key={`sec-${idx}`} className="pt-3 mt-2 border-t border-diletto-gray/15">
-              <p className="px-3 pt-1 pb-1 text-[10px] font-bold text-diletto-gray-light uppercase tracking-widest">
+            <div key={`sec-${idx}`} className="pt-3 mt-2 border-t border-brand-gray/15">
+              <p className="px-3 pt-1 pb-1 text-[10px] font-bold text-brand-gray-light uppercase tracking-widest">
                 {item.label}
               </p>
             </div>
@@ -154,8 +154,8 @@ function SidebarNav({
                 onClick={() => setOpen((prev) => ({ ...prev, [item.key]: !expanded }))}
                 className={`flex w-full items-center gap-3 rounded-md text-sm font-medium transition-all duration-300 px-3 py-2.5 ${
                   anyActive
-                    ? 'bg-diletto-beige text-diletto-ink'
-                    : 'text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink'
+                    ? 'bg-brand-beige text-brand-ink'
+                    : 'text-brand-gray hover:bg-brand-beige hover:text-brand-ink'
                 }`}
                 aria-expanded={expanded}
               >
@@ -164,7 +164,7 @@ function SidebarNav({
                 <span className={`text-xs transition-transform ${expanded ? 'rotate-90' : ''}`}>▶</span>
               </button>
               {expanded && (
-                <div className="ml-3 mt-1 space-y-1 border-l border-diletto-gray/10 pl-2">
+                <div className="ml-3 mt-1 space-y-1 border-l border-brand-gray/10 pl-2">
                   {item.children.map((c) => {
                     const active = isActive(pathname, c.href);
                     return (
@@ -174,8 +174,8 @@ function SidebarNav({
                         onClick={onNavigate}
                         className={`flex items-center gap-2 rounded-md text-sm transition-all px-3 py-2 ${
                           active
-                            ? 'bg-diletto-ink text-white shadow-sm font-medium'
-                            : 'text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink'
+                            ? 'bg-brand-ink text-white shadow-sm font-medium'
+                            : 'text-brand-gray hover:bg-brand-beige hover:text-brand-ink'
                         }`}
                       >
                         <span className="text-[8px] shrink-0 opacity-60">●</span>
@@ -196,8 +196,8 @@ function SidebarNav({
             onClick={onNavigate}
             className={`flex items-center gap-3 rounded-md text-sm font-medium transition-all duration-300 px-3 py-2.5 ${
               active
-                ? 'bg-diletto-ink text-white shadow-sm'
-                : 'text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink'
+                ? 'bg-brand-ink text-white shadow-sm'
+                : 'text-brand-gray hover:bg-brand-beige hover:text-brand-ink'
             }`}
           >
             <span className="text-base shrink-0">{item.icon}</span>
@@ -211,8 +211,8 @@ function SidebarNav({
 
 function ModeLabel({ mode }: { mode: Mode }) {
   return (
-    <div className="px-4 py-2 border-b border-diletto-gray/10 bg-diletto-beige/50">
-      <p className="text-[10px] font-bold text-diletto-gray-light uppercase tracking-widest">
+    <div className="px-4 py-2 border-b border-brand-gray/10 bg-brand-beige/50">
+      <p className="text-[10px] font-bold text-brand-gray-light uppercase tracking-widest">
         {mode === 'staff' ? '📋 部下管理モード' : '🚐 シフト・送迎モード'}
       </p>
     </div>
@@ -235,7 +235,7 @@ function SidebarContent({
   const homeHref = mode === 'staff' ? '/mgr/dashboard' : '/mgr/shifts/dashboard';
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="flex border-b border-diletto-gray/10 h-[60px] items-center px-4">
+      <div className="flex border-b border-brand-gray/10 h-[60px] items-center px-4">
         <Link href={homeHref} onClick={onNavigate}>
           <Logo size="md" />
         </Link>
@@ -251,12 +251,12 @@ function SidebarContent({
           shiftOnlyMode={shiftOnlyMode}
         />
       </div>
-      <div className="border-t border-diletto-gray/10 bg-diletto-beige p-3 space-y-1">
-        <p className="text-[10px] text-diletto-gray-light px-1 mb-1">切り替え</p>
+      <div className="border-t border-brand-gray/10 bg-brand-beige p-3 space-y-1">
+        <p className="text-[10px] text-brand-gray-light px-1 mb-1">切り替え</p>
         <Link
           href="/my/dashboard"
           onClick={onNavigate}
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-diletto-gray hover:bg-white hover:text-diletto-ink transition-colors"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-brand-gray hover:bg-white hover:text-brand-ink transition-colors"
         >
           <span>👤</span>
           <span>社員画面</span>
@@ -281,7 +281,7 @@ function ModeFab({
     <button
       type="button"
       onClick={onSwitch}
-      className="print-hide fixed bottom-6 right-6 z-50 flex items-center gap-2 h-14 rounded-full bg-diletto-ink text-white shadow-lg hover:bg-black transition-all hover:shadow-xl group overflow-hidden whitespace-nowrap pl-3 pr-3 max-w-14 hover:max-w-xs hover:pr-5 duration-300"
+      className="print-hide fixed bottom-6 right-6 z-50 flex items-center gap-2 h-14 rounded-full bg-brand-ink text-white shadow-lg hover:bg-black transition-all hover:shadow-xl group overflow-hidden whitespace-nowrap pl-3 pr-3 max-w-14 hover:max-w-xs hover:pr-5 duration-300"
       aria-label={label}
       title={label}
     >
@@ -306,7 +306,7 @@ function FacilityHeaderSelector({ facilities, value, onChange }: { facilities: F
     <select
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
-      className="h-8 rounded-md border border-diletto-gray/15 bg-white px-2 text-xs font-bold text-diletto-ink hover:border-diletto-blue focus:outline-none focus:border-diletto-blue"
+      className="h-8 rounded-md border border-brand-gray/15 bg-white px-2 text-xs font-bold text-brand-ink hover:border-brand-blue focus:outline-none focus:border-brand-blue"
       title="担当施設"
     >
       {facilities.length > 1 && value === null && <option value="">担当施設を選択</option>}
@@ -468,15 +468,15 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
     : '';
 
   return (
-    <div className="flex h-screen bg-diletto-beige">
-      <aside className="hidden lg:flex lg:flex-col border-r border-diletto-gray/10 w-64">
+    <div className="flex h-screen bg-brand-beige">
+      <aside className="hidden lg:flex lg:flex-col border-r border-brand-gray/10 w-64">
         <SidebarContent pathname={pathname} mode={mode} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-[60px] items-center gap-3 border-b border-diletto-gray/10 bg-white px-4 lg:hidden">
+        <header className="flex h-[60px] items-center gap-3 border-b border-brand-gray/10 bg-white px-4 lg:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger className="flex items-center justify-center h-9 w-9 shrink-0 rounded-md text-diletto-ink hover:bg-diletto-beige">
+            <SheetTrigger className="flex items-center justify-center h-9 w-9 shrink-0 rounded-md text-brand-ink hover:bg-brand-beige">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
               </svg>
@@ -491,37 +491,37 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
           <div className="ml-auto flex items-center gap-2 shrink-0">
             <FacilityHeaderSelector facilities={facilities} value={facilityId} onChange={setFacilityId} />
             <NotificationsBell />
-            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors whitespace-nowrap shrink-0">
+            <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors whitespace-nowrap shrink-0">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-brand-gray hover:text-brand-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>
         </header>
 
-        <header className="hidden lg:flex h-[60px] items-center justify-between border-b border-diletto-gray/10 bg-white px-6">
+        <header className="hidden lg:flex h-[60px] items-center justify-between border-b border-brand-gray/10 bg-white px-6">
           <div>
             {greetingText ? (
               <>
-                <p className="text-base font-bold text-diletto-ink">おかえりなさい、{greetingText}</p>
-                <p className="text-xs text-diletto-gray-light">
+                <p className="text-base font-bold text-brand-ink">おかえりなさい、{greetingText}</p>
+                <p className="text-xs text-brand-gray-light">
                   {mode === 'staff'
                     ? '担当施設の社員と研修を管理できます。'
                     : '担当施設のシフト・送迎を管理できます。'}
                 </p>
               </>
             ) : (
-              <p className="text-xs text-diletto-gray-light">読み込み中...</p>
+              <p className="text-xs text-brand-gray-light">読み込み中...</p>
             )}
           </div>
           <div className="flex items-center gap-3">
             <FacilityHeaderSelector facilities={facilities} value={facilityId} onChange={setFacilityId} />
             <NotificationsBell />
-            <Link href="/my/dashboard" className="text-xs text-diletto-blue hover:text-diletto-ink font-medium transition-colors">
+            <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-diletto-gray hover:text-diletto-ink" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="text-xs text-brand-gray hover:text-brand-ink" onClick={handleLogout}>
               ログアウト
             </Button>
           </div>

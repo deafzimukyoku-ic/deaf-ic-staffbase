@@ -89,7 +89,7 @@ export function PdfDocumentForm({
       </CardHeader>
       <CardContent className="space-y-4">
         {formFields.length === 0 ? (
-          <p className="text-sm text-diletto-gray-light">
+          <p className="text-sm text-brand-gray-light">
             この書類は入力項目がありません（社員プロフィールから自動差し込み）
           </p>
         ) : (
@@ -97,7 +97,7 @@ export function PdfDocumentForm({
             <div key={`${f.key}-${i}`} className="space-y-2">
               <Label>
                 {f.label || f.key}
-                {f.required && <span className="text-diletto-red ml-1">*</span>}
+                {f.required && <span className="text-brand-red ml-1">*</span>}
               </Label>
 
               {(() => {

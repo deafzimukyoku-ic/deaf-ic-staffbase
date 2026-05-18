@@ -33,7 +33,7 @@ export function ProfileSectionContacts({ data, onChange, employeeId, customField
       <Card>
         <CardHeader><CardTitle>緊急連絡先</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm font-medium text-diletto-ink">連絡先 1</p>
+          <p className="text-sm font-medium text-brand-ink">連絡先 1</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="氏名 *" value={data.emergency1_name || ''} onChange={(v) => update('emergency1_name', v || null)} />
             <Field label="続柄 *" value={data.emergency1_relationship || ''} onChange={(v) => update('emergency1_relationship', v || null)} placeholder="父、母、配偶者 等" />
@@ -55,8 +55,8 @@ export function ProfileSectionContacts({ data, onChange, employeeId, customField
             </div>
           </div>
 
-          <div className="border-t border-diletto-gray/10 pt-4">
-            <p className="text-sm font-medium text-diletto-ink mb-4">連絡先 2（任意）</p>
+          <div className="border-t border-brand-gray/10 pt-4">
+            <p className="text-sm font-medium text-brand-ink mb-4">連絡先 2（任意）</p>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="氏名" value={data.emergency2_name || ''} onChange={(v) => update('emergency2_name', v || null)} />

@@ -251,7 +251,7 @@ export function ContentsOverviewView({ scope }: Props) {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">投稿一覧 (4 機能横断)</h1>
-        <p className="text-sm text-diletto-gray mt-1">
+        <p className="text-sm text-brand-gray mt-1">
           {loading ? '読み込み中...' : `${filtered.length} / ${rows.length} 件`}
           {dupUrlCount > 0 && (
             <span className="ml-3 text-amber-700">⚠ 重複URL {dupUrlCount} 件 (赤バッジにカーソルで重複先表示)</span>
@@ -268,11 +268,11 @@ export function ContentsOverviewView({ scope }: Props) {
           />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
             <label className="space-y-1">
-              <span className="text-xs text-diletto-gray-light">機能</span>
+              <span className="text-xs text-brand-gray-light">機能</span>
               <select
                 value={featureFilter}
                 onChange={(e) => { setFeatureFilter(e.target.value as 'all' | FeatureKey); setCategoryFilter('all'); }}
-                className="w-full h-9 rounded-md border border-diletto-gray/20 bg-white px-2"
+                className="w-full h-9 rounded-md border border-brand-gray/20 bg-white px-2"
               >
                 <option value="all">すべての機能</option>
                 {(['announcement', 'compliance', 'training', 'manual'] as FeatureKey[]).map((k) => (
@@ -281,11 +281,11 @@ export function ContentsOverviewView({ scope }: Props) {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-diletto-gray-light">カテゴリ</span>
+              <span className="text-xs text-brand-gray-light">カテゴリ</span>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full h-9 rounded-md border border-diletto-gray/20 bg-white px-2"
+                className="w-full h-9 rounded-md border border-brand-gray/20 bg-white px-2"
               >
                 <option value="all">すべてのカテゴリ</option>
                 <option value="__none__">(未分類)</option>
@@ -295,11 +295,11 @@ export function ContentsOverviewView({ scope }: Props) {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-diletto-gray-light">公開状態</span>
+              <span className="text-xs text-brand-gray-light">公開状態</span>
               <select
                 value={publishFilter}
                 onChange={(e) => setPublishFilter(e.target.value as 'all' | 'published' | 'unpublished')}
-                className="w-full h-9 rounded-md border border-diletto-gray/20 bg-white px-2"
+                className="w-full h-9 rounded-md border border-brand-gray/20 bg-white px-2"
               >
                 <option value="all">すべて</option>
                 <option value="published">公開のみ</option>
@@ -312,7 +312,7 @@ export function ContentsOverviewView({ scope }: Props) {
 
       {/* 種別ごとアコーディオン (初期値: 全開) */}
       {!loading && filtered.length === 0 && (
-        <Card><CardContent className="py-8 text-center text-diletto-gray-light text-sm">該当する投稿がありません</CardContent></Card>
+        <Card><CardContent className="py-8 text-center text-brand-gray-light text-sm">該当する投稿がありません</CardContent></Card>
       )}
       <div className="space-y-3">
         {FEATURE_ORDER.map((featureKey) => {
@@ -326,7 +326,7 @@ export function ContentsOverviewView({ scope }: Props) {
                 <button
                   type="button"
                   onClick={() => toggleFeature(featureKey)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-diletto-gray/[0.04] transition-colors"
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-brand-gray/[0.04] transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">{FEATURE_ICON[featureKey]}</span>
@@ -335,7 +335,7 @@ export function ContentsOverviewView({ scope }: Props) {
                       {featureRows.length} 件
                     </Badge>
                   </div>
-                  <span className="text-diletto-gray-light text-sm select-none">
+                  <span className="text-brand-gray-light text-sm select-none">
                     {isOpen ? '▼' : '▶'}
                   </span>
                 </button>
@@ -346,7 +346,7 @@ export function ContentsOverviewView({ scope }: Props) {
                     <div className="hidden md:block overflow-x-auto border-t">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b text-left text-xs text-diletto-gray-light bg-diletto-gray/[0.03]">
+                          <tr className="border-b text-left text-xs text-brand-gray-light bg-brand-gray/[0.03]">
                             <th className="py-2 px-2 whitespace-nowrap">カテゴリ</th>
                             <th className="py-2 px-2 whitespace-nowrap">タイトル</th>
                             <th className="py-2 px-2 whitespace-nowrap">内容</th>
@@ -357,10 +357,10 @@ export function ContentsOverviewView({ scope }: Props) {
                         </thead>
                         <tbody>
                           {featureRows.map((r) => (
-                            <tr key={`${r.feature}::${r.id}`} className="border-b last:border-0 hover:bg-diletto-gray/[0.03]">
+                            <tr key={`${r.feature}::${r.id}`} className="border-b last:border-0 hover:bg-brand-gray/[0.03]">
                               <td className="py-2 px-2 align-top whitespace-nowrap text-xs">{r.categoryName}</td>
                               <td className="py-2 px-2 align-top">
-                                <Link href={r.editLink} className="text-diletto-blue hover:underline break-words">
+                                <Link href={r.editLink} className="text-brand-blue hover:underline break-words">
                                   {r.title}
                                 </Link>
                               </td>
@@ -368,19 +368,19 @@ export function ContentsOverviewView({ scope }: Props) {
                                 {r.textContent ? (
                                   <button
                                     type="button"
-                                    className="text-left text-xs text-diletto-gray-light hover:text-diletto-ink line-clamp-2 underline decoration-dotted"
+                                    className="text-left text-xs text-brand-gray-light hover:text-brand-ink line-clamp-2 underline decoration-dotted"
                                     onClick={() => setContentPreview({ title: r.title, text: r.textContent })}
                                     title="クリックで全文表示"
                                   >
                                     {r.textContent.slice(0, 80)}{r.textContent.length > 80 ? '…' : ''}
                                   </button>
                                 ) : (
-                                  <span className="text-xs text-diletto-gray-light">(本文なし)</span>
+                                  <span className="text-xs text-brand-gray-light">(本文なし)</span>
                                 )}
                               </td>
                               <td className="py-2 px-2 align-top max-w-[240px]">
                                 {r.urls.length === 0 ? (
-                                  <span className="text-xs text-diletto-gray-light">—</span>
+                                  <span className="text-xs text-brand-gray-light">—</span>
                                 ) : (
                                   <div className="space-y-1">
                                     {r.urls.map((u) => {
@@ -396,7 +396,7 @@ export function ContentsOverviewView({ scope }: Props) {
                                             href={u}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-[11px] text-diletto-blue hover:underline truncate max-w-[200px]"
+                                            className="text-[11px] text-brand-blue hover:underline truncate max-w-[200px]"
                                             title={u}
                                           >
                                             {u}
@@ -418,9 +418,9 @@ export function ContentsOverviewView({ scope }: Props) {
                               <td className="py-2 px-2 align-top text-center">
                                 {r.isPublished
                                   ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">公開</Badge>
-                                  : <Badge variant="outline" className="text-[10px] text-diletto-gray-light">非公開</Badge>}
+                                  : <Badge variant="outline" className="text-[10px] text-brand-gray-light">非公開</Badge>}
                               </td>
-                              <td className="py-2 px-2 align-top whitespace-nowrap text-xs text-diletto-gray">
+                              <td className="py-2 px-2 align-top whitespace-nowrap text-xs text-brand-gray">
                                 {r.creatorName}
                               </td>
                             </tr>
@@ -432,23 +432,23 @@ export function ContentsOverviewView({ scope }: Props) {
                     {/* モバイル: カードレイアウト (md 未満) */}
                     <div className="md:hidden border-t divide-y">
                       {featureRows.map((r) => (
-                        <div key={`m::${r.feature}::${r.id}`} className="p-3 space-y-2 hover:bg-diletto-gray/[0.03]">
+                        <div key={`m::${r.feature}::${r.id}`} className="p-3 space-y-2 hover:bg-brand-gray/[0.03]">
                           {/* 1 行目: カテゴリ + 公開バッジ */}
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] text-diletto-gray-light truncate">{r.categoryName}</span>
+                            <span className="text-[11px] text-brand-gray-light truncate">{r.categoryName}</span>
                             {r.isPublished
                               ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] shrink-0">公開</Badge>
-                              : <Badge variant="outline" className="text-[10px] text-diletto-gray-light shrink-0">非公開</Badge>}
+                              : <Badge variant="outline" className="text-[10px] text-brand-gray-light shrink-0">非公開</Badge>}
                           </div>
                           {/* 2 行目: タイトル */}
-                          <Link href={r.editLink} className="block text-sm font-medium text-diletto-blue hover:underline break-words leading-snug">
+                          <Link href={r.editLink} className="block text-sm font-medium text-brand-blue hover:underline break-words leading-snug">
                             {r.title}
                           </Link>
                           {/* 内容 */}
                           {r.textContent && (
                             <button
                               type="button"
-                              className="block text-left text-[11px] text-diletto-gray-light hover:text-diletto-ink line-clamp-2 underline decoration-dotted"
+                              className="block text-left text-[11px] text-brand-gray-light hover:text-brand-ink line-clamp-2 underline decoration-dotted"
                               onClick={() => setContentPreview({ title: r.title, text: r.textContent })}
                             >
                               {r.textContent.slice(0, 80)}{r.textContent.length > 80 ? '…' : ''}
@@ -470,7 +470,7 @@ export function ContentsOverviewView({ scope }: Props) {
                                       href={u}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-[11px] text-diletto-blue hover:underline break-all"
+                                      className="text-[11px] text-brand-blue hover:underline break-all"
                                       title={u}
                                     >
                                       {u}
@@ -489,7 +489,7 @@ export function ContentsOverviewView({ scope }: Props) {
                             </div>
                           )}
                           {/* 投稿者 */}
-                          <p className="text-[10px] text-diletto-gray-light">投稿者: {r.creatorName}</p>
+                          <p className="text-[10px] text-brand-gray-light">投稿者: {r.creatorName}</p>
                         </div>
                       ))}
                     </div>

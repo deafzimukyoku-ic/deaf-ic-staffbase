@@ -135,7 +135,7 @@ export function PlaceholderMappingEditor({ mapping, onChange }: Props) {
           <CardContent className="space-y-3">
             {/* マッピング先種別 */}
             <div className="space-y-1">
-              <Label className="text-xs text-diletto-gray-light">マッピング先</Label>
+              <Label className="text-xs text-brand-gray-light">マッピング先</Label>
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                 value={m.source_type}
@@ -150,7 +150,7 @@ export function PlaceholderMappingEditor({ mapping, onChange }: Props) {
             {/* source_field */}
             {m.source_type === 'employee' && (
               <div className="space-y-1">
-                <Label className="text-xs text-diletto-gray-light">社員プロフィール項目</Label>
+                <Label className="text-xs text-brand-gray-light">社員プロフィール項目</Label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                   value={m.source_field}
@@ -164,7 +164,7 @@ export function PlaceholderMappingEditor({ mapping, onChange }: Props) {
 
             {m.source_type === 'tenant' && (
               <div className="space-y-1">
-                <Label className="text-xs text-diletto-gray-light">会社情報項目</Label>
+                <Label className="text-xs text-brand-gray-light">会社情報項目</Label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                   value={m.source_field}
@@ -178,7 +178,7 @@ export function PlaceholderMappingEditor({ mapping, onChange }: Props) {
 
             {m.source_type === 'fixed' && (
               <div className="space-y-1">
-                <Label className="text-xs text-diletto-gray-light">自動設定項目</Label>
+                <Label className="text-xs text-brand-gray-light">自動設定項目</Label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                   value={m.source_field}
@@ -194,7 +194,7 @@ export function PlaceholderMappingEditor({ mapping, onChange }: Props) {
             {m.source_type === 'form_data' && (
               <>
                 <div className="space-y-1">
-                  <Label className="text-xs text-diletto-gray-light">フィールド名（内部キー）</Label>
+                  <Label className="text-xs text-brand-gray-light">フィールド名（内部キー）</Label>
                   <Input
                     value={m.source_field}
                     onChange={(e) => updateItem(i, { source_field: e.target.value })}
@@ -203,14 +203,14 @@ export function PlaceholderMappingEditor({ mapping, onChange }: Props) {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-diletto-gray-light">ラベル（社員画面表示）</Label>
+                    <Label className="text-xs text-brand-gray-light">ラベル（社員画面表示）</Label>
                     <Input
                       value={m.label || ''}
                       onChange={(e) => updateItem(i, { label: e.target.value })}
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-diletto-gray-light">入力タイプ</Label>
+                    <Label className="text-xs text-brand-gray-light">入力タイプ</Label>
                     <select
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                       value={m.input_type || 'text'}
@@ -222,7 +222,7 @@ export function PlaceholderMappingEditor({ mapping, onChange }: Props) {
                 </div>
                 {m.input_type === 'select' && (
                   <div className="space-y-1">
-                    <Label className="text-xs text-diletto-gray-light">選択肢（カンマ区切り）</Label>
+                    <Label className="text-xs text-brand-gray-light">選択肢（カンマ区切り）</Label>
                     <Input
                       value={(m.options || []).join(', ')}
                       onChange={(e) => updateItem(i, { options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}

@@ -53,23 +53,23 @@ export function FacilityAreaEditor({ label, areas, onChange }: Props) {
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-diletto-gray/10 p-4 bg-gray-50/50">
-      <Label className="text-sm font-bold text-diletto-ink">{label}</Label>
+    <div className="space-y-3 rounded-md border border-brand-gray/10 p-4 bg-gray-50/50">
+      <Label className="text-sm font-bold text-brand-ink">{label}</Label>
 
       {areas.length === 0 && (
-        <p className="text-xs text-diletto-gray-light py-2">まだエリアがありません。下のフォームから追加してください。</p>
+        <p className="text-xs text-brand-gray-light py-2">まだエリアがありません。下のフォームから追加してください。</p>
       )}
 
       {areas.length > 0 && (
         <div className="space-y-1">
           {areas.map((a, i) => (
-            <div key={a.id} className="flex items-center gap-2 rounded-md border border-diletto-gray/10 bg-white px-2 py-2">
+            <div key={a.id} className="flex items-center gap-2 rounded-md border border-brand-gray/10 bg-white px-2 py-2">
               <div className="inline-flex flex-col gap-0.5 shrink-0">
                 <button type="button" disabled={i === 0} onClick={() => moveArea(a.id, -1)}
-                  className="w-5 h-4 flex items-center justify-center rounded bg-white border border-diletto-gray/15 text-diletto-gray hover:bg-diletto-beige disabled:opacity-30"
+                  className="w-5 h-4 flex items-center justify-center rounded bg-white border border-brand-gray/15 text-brand-gray hover:bg-brand-beige disabled:opacity-30"
                   aria-label="上へ">▲</button>
                 <button type="button" disabled={i === areas.length - 1} onClick={() => moveArea(a.id, 1)}
-                  className="w-5 h-4 flex items-center justify-center rounded bg-white border border-diletto-gray/15 text-diletto-gray hover:bg-diletto-beige disabled:opacity-30"
+                  className="w-5 h-4 flex items-center justify-center rounded bg-white border border-brand-gray/15 text-brand-gray hover:bg-brand-beige disabled:opacity-30"
                   aria-label="下へ">▼</button>
               </div>
               <Input
@@ -93,25 +93,25 @@ export function FacilityAreaEditor({ label, areas, onChange }: Props) {
                 aria-label="標準時刻"
               />
               <button type="button" onClick={() => removeArea(a.id)}
-                className="text-xs text-diletto-red hover:underline shrink-0 px-1">削除</button>
+                className="text-xs text-brand-red hover:underline shrink-0 px-1">削除</button>
             </div>
           ))}
         </div>
       )}
 
-      <div className="flex gap-2 items-end pt-2 border-t border-diletto-gray/10">
+      <div className="flex gap-2 items-end pt-2 border-t border-brand-gray/10">
         <div className="w-20">
-          <Label className="text-[10px] text-diletto-gray-light">絵文字</Label>
+          <Label className="text-[10px] text-brand-gray-light">絵文字</Label>
           <Input value={newEmoji} onChange={(e) => setNewEmoji(e.target.value)} placeholder="🏠" maxLength={2} className="h-9 text-center" />
         </div>
         <div className="flex-1">
-          <Label className="text-[10px] text-diletto-gray-light">エリア名</Label>
+          <Label className="text-[10px] text-brand-gray-light">エリア名</Label>
           <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="例: 藤江エリア" className="h-9"
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addArea(); } }}
           />
         </div>
         <div className="w-28">
-          <Label className="text-[10px] text-diletto-gray-light">標準時刻</Label>
+          <Label className="text-[10px] text-brand-gray-light">標準時刻</Label>
           <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="h-9" />
         </div>
         <Button type="button" size="sm" onClick={addArea} disabled={!newName.trim()} className="h-9">+ 追加</Button>

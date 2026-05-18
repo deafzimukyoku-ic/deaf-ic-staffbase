@@ -281,7 +281,7 @@ export default function NewEmployeePage() {
                   <select
                     id="facility_id"
                     title="所属施設を選択"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/20"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
                     value={form.facility_id}
                     onChange={(e) => update('facility_id', e.target.value)}
                   >
@@ -297,7 +297,7 @@ export default function NewEmployeePage() {
                   <select
                     id="position_id"
                     title="役職を選択"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/20"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
                     value={form.position_id}
                     onChange={(e) => update('position_id', e.target.value)}
                   >
@@ -313,7 +313,7 @@ export default function NewEmployeePage() {
                   <select
                     id="role"
                     title="アプリ権限を選択"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-diletto-blue/20"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/20"
                     value={form.role}
                     onChange={(e) => update('role', e.target.value as 'admin' | 'manager' | 'employee')}
                   >
@@ -344,8 +344,8 @@ export default function NewEmployeePage() {
                               onClick={() => toggleManagerFacility(f.id)}
                               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                                 checked
-                                  ? 'bg-diletto-blue text-white border-diletto-blue'
-                                  : 'bg-white text-diletto-gray border-diletto-gray/20 hover:bg-diletto-beige'
+                                  ? 'bg-brand-blue text-white border-brand-blue'
+                                  : 'bg-white text-brand-gray border-brand-gray/20 hover:bg-brand-beige'
                               }`}
                             >
                               {f.name} {checked ? '✓' : ''}
@@ -369,7 +369,7 @@ export default function NewEmployeePage() {
                     type="checkbox"
                     checked={form.has_car_commute}
                     onChange={(e) => update('has_car_commute', e.target.checked)}
-                    className="rounded h-4 w-4 accent-diletto-blue"
+                    className="rounded h-4 w-4 accent-brand-blue"
                   />
                   <span className="text-sm">自家用車通勤あり</span>
                 </label>
@@ -378,7 +378,7 @@ export default function NewEmployeePage() {
                     type="checkbox"
                     checked={form.is_shuttle_driver}
                     onChange={(e) => update('is_shuttle_driver', e.target.checked)}
-                    className="rounded h-4 w-4 accent-diletto-blue"
+                    className="rounded h-4 w-4 accent-brand-blue"
                   />
                   <span className="text-sm">送迎ドライバー</span>
                 </label>
@@ -394,7 +394,7 @@ export default function NewEmployeePage() {
               >
                 キャンセル
               </Button>
-              <Button type="submit" disabled={loading} className="flex-1 bg-diletto-ink hover:bg-black text-white font-bold">
+              <Button type="submit" disabled={loading} className="flex-1 bg-brand-ink hover:bg-black text-white font-bold">
                 {loading ? '招待中...' : '招待メールを送信'}
               </Button>
             </div>

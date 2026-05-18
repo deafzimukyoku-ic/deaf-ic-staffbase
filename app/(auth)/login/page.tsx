@@ -101,7 +101,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-diletto-beige">
+    <div className="flex min-h-screen flex-col bg-brand-beige">
       {/* ── スプリットレイアウト ── */}
       <div className="auth-split-layout" style={{
         display: 'grid',
@@ -207,7 +207,7 @@ export default function LoginPage() {
 
           <div style={{ marginTop: 24, textAlign: 'center', fontSize: '0.85rem', color: '#888' }}>
             <p>
-              <Link href="/reset-password" className="text-diletto-blue hover:underline">
+              <Link href="/reset-password" className="text-brand-blue hover:underline">
                 パスワードを忘れた方
               </Link>
             </p>

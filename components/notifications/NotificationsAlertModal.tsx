@@ -40,7 +40,7 @@ export function NotificationsAlertModal() {
       <DialogContent className="!max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            🔔 新しい完了通知が <span className="text-diletto-red">{unreadCount}</span> 件あります
+            🔔 新しい完了通知が <span className="text-brand-red">{unreadCount}</span> 件あります
           </DialogTitle>
         </DialogHeader>
 
@@ -51,7 +51,7 @@ export function NotificationsAlertModal() {
             ))}
           </ul>
           {unread.length > 20 && (
-            <p className="text-center text-xs text-diletto-gray-light mt-3">
+            <p className="text-center text-xs text-brand-gray-light mt-3">
               ...残り {unread.length - 20} 件は右上の通知ベルから確認できます
             </p>
           )}
@@ -70,7 +70,7 @@ export function NotificationsAlertModal() {
               await markAllAsRead();
               setOpen(false);
             }}
-            className="flex-1 bg-diletto-blue hover:bg-diletto-blue/90 text-white font-bold"
+            className="flex-1 bg-brand-blue hover:bg-brand-blue/90 text-white font-bold"
           >
             ✓ 全部既読にする
           </Button>
@@ -92,18 +92,18 @@ function NotificationCard({ notification }: { notification: NotificationRow }) {
   });
 
   return (
-    <li className="border border-diletto-gray/15 rounded-lg p-3 bg-diletto-blue/[0.03]">
+    <li className="border border-brand-gray/15 rounded-lg p-3 bg-brand-blue/[0.03]">
       <div className="flex items-start gap-3">
         <span className="text-2xl shrink-0">{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-[11px] font-bold text-diletto-blue uppercase tracking-wider">{meta.label}</span>
-            <span className="text-[11px] text-diletto-gray-light ml-auto">{when}</span>
+            <span className="text-[11px] font-bold text-brand-blue uppercase tracking-wider">{meta.label}</span>
+            <span className="text-[11px] text-brand-gray-light ml-auto">{when}</span>
           </div>
           <p className="text-sm leading-relaxed mt-1">
             <span className="font-bold">{notification.actor_name || '社員'}</span>
             {notification.actor_facility_name && (
-              <span className="text-diletto-gray-light text-xs"> ({notification.actor_facility_name})</span>
+              <span className="text-brand-gray-light text-xs"> ({notification.actor_facility_name})</span>
             )}
             <span> が </span>
             <span className="font-bold">「{notification.event_target_title || '（無題）'}」</span>

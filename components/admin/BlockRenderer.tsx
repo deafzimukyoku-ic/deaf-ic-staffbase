@@ -56,7 +56,7 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
       {list.map((block, i) => {
         if (block.type === 'text') {
           return (
-            <p key={i} className="text-sm text-diletto-ink/90 whitespace-pre-wrap leading-relaxed">
+            <p key={i} className="text-sm text-brand-ink/90 whitespace-pre-wrap leading-relaxed">
               {block.value}
             </p>
           );
@@ -71,11 +71,11 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
                 <img
                   src={block.url}
                   alt={block.caption || ''}
-                  className="max-w-full max-h-[65vh] mx-auto rounded-md border border-diletto-gray/10 object-contain cursor-zoom-in"
+                  className="max-w-full max-h-[65vh] mx-auto rounded-md border border-brand-gray/10 object-contain cursor-zoom-in"
                 />
               </a>
               {block.caption && (
-                <figcaption className="text-xs text-diletto-gray-light text-center">
+                <figcaption className="text-xs text-brand-gray-light text-center">
                   {block.caption}
                 </figcaption>
               )}
@@ -94,7 +94,7 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
           if (ytId) {
             return (
               <div key={i}
-                className="mx-auto rounded-md overflow-hidden border border-diletto-gray/10 bg-black block"
+                className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block"
                 style={{
                   aspectRatio: '16 / 9',
                   width: 'min(100%, calc(65vh * 16 / 9))',
@@ -115,7 +115,7 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
           if (driveEmbed) {
             return (
               <div key={i}
-                className="mx-auto rounded-md overflow-hidden border border-diletto-gray/10 bg-black block"
+                className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block"
                 style={{
                   aspectRatio: '16 / 9',
                   width: 'min(100%, calc(65vh * 16 / 9))',
@@ -149,7 +149,7 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
           // 4. 何も判定不可 → 通常リンク
           return (
             <a key={i} href={url} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-diletto-blue underline">
+              className="inline-flex items-center gap-1 text-sm text-brand-blue underline">
               🎬 動画を開く
             </a>
           );
@@ -161,7 +161,7 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
           // 縦長 PDF (A4 等) は内部で Google Drive プレビューが自動スクロール表示する。
           return embed ? (
             <div key={i}
-              className="mx-auto rounded-md overflow-hidden border border-diletto-gray/10 bg-white block"
+              className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-white block"
               style={{
                 aspectRatio: '16 / 9',
                 width: 'min(100%, calc(65vh * 16 / 9))',

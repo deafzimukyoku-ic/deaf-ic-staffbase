@@ -67,8 +67,8 @@ export default function AboutPage() {
     setSaving(false);
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
-  if (!employee) return <p className="text-diletto-red">プロフィールが見つかりません</p>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
+  if (!employee) return <p className="text-brand-red">プロフィールが見つかりません</p>;
 
   function updateSection<T>(sectionData: T) {
     setEmployee((prev) => prev ? { ...prev, ...sectionData } : null);
@@ -179,11 +179,11 @@ export default function AboutPage() {
         const isLast = idx === TABS.length - 1;
 
         return (
-          <div className="mt-8 flex items-center justify-between border-t border-diletto-gray/10 pt-6">
+          <div className="mt-8 flex items-center justify-between border-t border-brand-gray/10 pt-6">
             {prev ? (
               <button
                 onClick={() => { setActiveTab(prev.value); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                className="group flex items-center gap-2 text-sm text-diletto-gray hover:text-diletto-ink transition-colors"
+                className="group flex items-center gap-2 text-sm text-brand-gray hover:text-brand-ink transition-colors"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:-translate-x-1">
                   <polyline points="15 18 9 12 15 6" />
@@ -197,7 +197,7 @@ export default function AboutPage() {
                 <button
                   key={tab.value}
                   onClick={() => { setActiveTab(tab.value); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className={`rounded-full transition-all duration-300 ${i === idx ? 'w-6 h-2 bg-diletto-blue' : 'w-2 h-2 bg-diletto-gray/20 hover:bg-diletto-gray/40'}`}
+                  className={`rounded-full transition-all duration-300 ${i === idx ? 'w-6 h-2 bg-brand-blue' : 'w-2 h-2 bg-brand-gray/20 hover:bg-brand-gray/40'}`}
                   title={tab.label}
                 />
               ))}
@@ -210,7 +210,7 @@ export default function AboutPage() {
             ) : next ? (
               <button
                 onClick={() => { setActiveTab(next.value); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                className="group flex items-center gap-2 text-sm font-medium text-diletto-blue hover:text-diletto-ink transition-colors"
+                className="group flex items-center gap-2 text-sm font-medium text-brand-blue hover:text-brand-ink transition-colors"
               >
                 <span>{next.icon} {next.label}</span>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1">

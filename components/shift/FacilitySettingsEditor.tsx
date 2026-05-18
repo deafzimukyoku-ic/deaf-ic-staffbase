@@ -138,8 +138,8 @@ export function FacilitySettingsEditor({ scope }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-        <span className="ml-3 text-sm text-diletto-gray">読み込み中...</span>
+        <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+        <span className="ml-3 text-sm text-brand-gray">読み込み中...</span>
       </div>
     );
   }
@@ -150,19 +150,19 @@ export function FacilitySettingsEditor({ scope }: Props) {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <span className="text-3xl">🗺️</span>
-        <h1 className="text-2xl font-bold text-diletto-ink">事業所設定</h1>
+        <h1 className="text-2xl font-bold text-brand-ink">事業所設定</h1>
       </div>
 
       {/* facility 選択 */}
       {scope === 'admin' && facilities.length > 1 && (
-        <Card className="border-diletto-gray/10 shadow-sm rounded-md">
+        <Card className="border-brand-gray/10 shadow-sm rounded-md">
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
-              <Label className="text-[10px] font-bold text-diletto-gray-light uppercase">設定対象の事業所</Label>
+              <Label className="text-[10px] font-bold text-brand-gray-light uppercase">設定対象の事業所</Label>
               <select
                 value={selectedFacilityId}
                 onChange={(e) => setSelectedFacilityId(e.target.value)}
-                className="h-10 rounded-md border border-diletto-gray/15 bg-white px-3 text-sm min-w-[200px]"
+                className="h-10 rounded-md border border-brand-gray/15 bg-white px-3 text-sm min-w-[200px]"
                 aria-label="事業所"
               >
                 {facilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
@@ -173,15 +173,15 @@ export function FacilitySettingsEditor({ scope }: Props) {
       )}
 
       {!selectedFacility ? (
-        <Card><CardContent className="py-12 text-center text-diletto-gray-light">事業所が登録されていません</CardContent></Card>
+        <Card><CardContent className="py-12 text-center text-brand-gray-light">事業所が登録されていません</CardContent></Card>
       ) : (
         <>
-          <Card className="border-diletto-gray/10 shadow-sm rounded-md">
+          <Card className="border-brand-gray/10 shadow-sm rounded-md">
             <CardContent className="py-4">
-              <p className="text-xs text-diletto-gray-light mb-1">現在の事業所</p>
-              <p className="font-bold text-diletto-ink">{selectedFacility.name}</p>
+              <p className="text-xs text-brand-gray-light mb-1">現在の事業所</p>
+              <p className="font-bold text-brand-ink">{selectedFacility.name}</p>
               {selectedFacility.address && (
-                <p className="text-xs text-diletto-gray mt-0.5">{selectedFacility.address}</p>
+                <p className="text-xs text-brand-gray mt-0.5">{selectedFacility.address}</p>
               )}
             </CardContent>
           </Card>
@@ -205,7 +205,7 @@ export function FacilitySettingsEditor({ scope }: Props) {
           />
 
           {/* 数値系設定 */}
-          <Card className="border-diletto-gray/10 shadow-sm rounded-md">
+          <Card className="border-brand-gray/10 shadow-sm rounded-md">
             <CardContent className="py-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -219,13 +219,13 @@ export function FacilitySettingsEditor({ scope }: Props) {
                     onChange={(e) => setForm({ ...form, min_qualified_staff: Math.max(0, parseInt(e.target.value || '0', 10)) })}
                     className="h-10"
                   />
-                  <p className="text-[10px] text-diletto-gray-light">資格リストで「カウント対象」の資格を持つ職員がこの人数以上出勤するようシフトを組みます</p>
+                  <p className="text-[10px] text-brand-gray-light">資格リストで「カウント対象」の資格を持つ職員がこの人数以上出勤するようシフトを組みます</p>
                 </div>
 
                 <div className="space-y-2">
                   <Label className="text-sm font-bold">休み希望の提出締切日</Label>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-diletto-gray">毎月</span>
+                    <span className="text-xs text-brand-gray">毎月</span>
                     <Input
                       type="number"
                       min={1}
@@ -234,9 +234,9 @@ export function FacilitySettingsEditor({ scope }: Props) {
                       onChange={(e) => setForm({ ...form, request_deadline_day: Math.min(31, Math.max(1, parseInt(e.target.value || '20', 10))) })}
                       className="h-10 w-24"
                     />
-                    <span className="text-xs text-diletto-gray">日</span>
+                    <span className="text-xs text-brand-gray">日</span>
                   </div>
-                  <p className="text-[10px] text-diletto-gray-light">翌月分の休み希望をこの日までに職員が提出する運用</p>
+                  <p className="text-[10px] text-brand-gray-light">翌月分の休み希望をこの日までに職員が提出する運用</p>
                 </div>
 
                 <div className="space-y-2">
@@ -247,7 +247,7 @@ export function FacilitySettingsEditor({ scope }: Props) {
                     onChange={(e) => setForm({ ...form, transport_min_end_time: e.target.value })}
                     className="h-10"
                   />
-                  <p className="text-[10px] text-diletto-gray-light">この時刻以降に退勤する職員のみ送り担当の候補にします</p>
+                  <p className="text-[10px] text-brand-gray-light">この時刻以降に退勤する職員のみ送り担当の候補にします</p>
                 </div>
 
                 <div className="space-y-2">
@@ -259,13 +259,13 @@ export function FacilitySettingsEditor({ scope }: Props) {
                     onChange={(e) => setForm({ ...form, transport_pickup_cooldown_minutes: Math.max(0, parseInt(e.target.value || '0', 10)) })}
                     className="h-10"
                   />
-                  <p className="text-[10px] text-diletto-gray-light">同じ職員が迎えを連続で担当しない間隔。30分以下なら同便扱い</p>
+                  <p className="text-[10px] text-brand-gray-light">同じ職員が迎えを連続で担当しない間隔。30分以下なら同便扱い</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-2 sticky bottom-6 bg-diletto-beige/80 backdrop-blur rounded-md p-2">
+          <div className="flex justify-end gap-2 sticky bottom-6 bg-brand-beige/80 backdrop-blur rounded-md p-2">
             <Button onClick={handleSave} disabled={saving} size="lg">
               {saving ? '保存中...' : '💾 設定を保存'}
             </Button>

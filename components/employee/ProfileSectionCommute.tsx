@@ -117,48 +117,48 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
         <CardHeader><CardTitle>通勤・車両情報</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <label className="flex items-center gap-3 rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige transition-colors">
+            <label className="flex items-center gap-3 rounded-md border border-brand-gray/15 p-3 cursor-pointer hover:bg-brand-beige transition-colors">
               <input
                 type="checkbox"
                 checked={data.has_car_commute}
                 onChange={(e) => update('has_car_commute', e.target.checked)}
-                className="h-4 w-4 rounded accent-diletto-blue"
+                className="h-4 w-4 rounded accent-brand-blue"
               />
               <div>
                 <span className="text-sm font-medium">マイカー通勤</span>
-                <p className="text-xs text-diletto-gray">自家用車で通勤する場合</p>
+                <p className="text-xs text-brand-gray">自家用車で通勤する場合</p>
               </div>
             </label>
-            <label className="flex items-center gap-3 rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige transition-colors">
+            <label className="flex items-center gap-3 rounded-md border border-brand-gray/15 p-3 cursor-pointer hover:bg-brand-beige transition-colors">
               <input
                 type="checkbox"
                 checked={data.commute_method === 'public_transport'}
                 onChange={(e) => update('commute_method', e.target.checked ? 'public_transport' : null)}
-                className="h-4 w-4 rounded accent-diletto-blue"
+                className="h-4 w-4 rounded accent-brand-blue"
               />
               <div>
                 <span className="text-sm font-medium">公共交通機関</span>
-                <p className="text-xs text-diletto-gray">電車・バスで通勤する場合</p>
+                <p className="text-xs text-brand-gray">電車・バスで通勤する場合</p>
               </div>
             </label>
-            <label className="flex items-center gap-3 rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige transition-colors">
+            <label className="flex items-center gap-3 rounded-md border border-brand-gray/15 p-3 cursor-pointer hover:bg-brand-beige transition-colors">
               <input
                 type="checkbox"
                 checked={data.is_shuttle_driver}
                 onChange={(e) => update('is_shuttle_driver', e.target.checked)}
-                className="h-4 w-4 rounded accent-diletto-blue"
+                className="h-4 w-4 rounded accent-brand-blue"
               />
               <div>
                 <span className="text-sm font-medium">送迎運転者</span>
-                <p className="text-xs text-diletto-gray">送迎車両の運転を担当する場合</p>
+                <p className="text-xs text-brand-gray">送迎車両の運転を担当する場合</p>
               </div>
             </label>
           </div>
 
           {/* 通勤経路画像（誰でもアップロード可能。Google マップで自宅と施設の経路をスクショして添付してもらう） */}
-          <div className="border-t border-diletto-gray/10 pt-4 space-y-2">
-            <p className="text-sm font-medium text-diletto-blue">通勤経路の画像</p>
-            <p className="text-xs text-diletto-gray">
+          <div className="border-t border-brand-gray/10 pt-4 space-y-2">
+            <p className="text-sm font-medium text-brand-blue">通勤経路の画像</p>
+            <p className="text-xs text-brand-gray">
               📍 Google マップで「自宅 → 施設」の経路を検索し、ルートが見える状態でスクリーンショットを撮ってアップロードしてください。
             </p>
             <ImageUploadField
@@ -173,8 +173,8 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
 
           {/* 公共交通機関の区間情報 */}
           {data.commute_method === 'public_transport' && (
-            <div className="border-t border-diletto-gray/10 pt-4 space-y-4">
-              <p className="text-sm font-medium text-diletto-blue">通勤経路</p>
+            <div className="border-t border-brand-gray/10 pt-4 space-y-4">
+              <p className="text-sm font-medium text-brand-blue">通勤経路</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>通勤時間（分）</Label>
@@ -193,7 +193,7 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
                   </span>
                 </span>
               </div>
-              <p className="text-xs font-medium text-diletto-ink mt-2">区間 1</p>
+              <p className="text-xs font-medium text-brand-ink mt-2">区間 1</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field label="乗車区間" value={data.route_section1_route || ''} onChange={(v) => update('route_section1_route', v || null)} placeholder="名古屋 → 栄" />
                 <Field label="利用機関" value={data.route_section1_transport || ''} onChange={(v) => update('route_section1_transport', v || null)} placeholder="地下鉄東山線" />
@@ -203,7 +203,7 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
                 </div>
               </div>
 
-              <p className="text-xs font-medium text-diletto-ink mt-2">区間 2（任意）</p>
+              <p className="text-xs font-medium text-brand-ink mt-2">区間 2（任意）</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field label="乗車区間" value={data.route_section2_route || ''} onChange={(v) => update('route_section2_route', v || null)} />
                 <Field label="利用機関" value={data.route_section2_transport || ''} onChange={(v) => update('route_section2_transport', v || null)} />
@@ -232,8 +232,8 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
 
           {/* 免許情報（マイカー通勤 OR 送迎運転者 ならどちらでも表示） */}
           {showDrivingFields && (
-            <div className="border-t border-diletto-gray/10 pt-4 space-y-4">
-              <p className="text-sm font-medium text-diletto-blue">免許情報</p>
+            <div className="border-t border-brand-gray/10 pt-4 space-y-4">
+              <p className="text-sm font-medium text-brand-blue">免許情報</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>免許種別</Label>
@@ -288,21 +288,21 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
                   onClear={() => update('license_image_back_path', null)}
                 />
               </div>
-              <p className="text-[11px] text-diletto-gray-light">
+              <p className="text-[11px] text-brand-gray-light">
                 ※ 表面・裏面ともに必須。記載事項変更欄を含めて全部撮影してください。
               </p>
             </div>
           )}
 
           {data.has_car_commute && (
-            <div className="border-t border-diletto-gray/10 pt-4 space-y-4">
-              <p className="text-sm font-medium text-diletto-blue">車両情報</p>
+            <div className="border-t border-brand-gray/10 pt-4 space-y-4">
+              <p className="text-sm font-medium text-brand-blue">車両情報</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="車種" value={data.car_model || ''} onChange={(v) => update('car_model', v || null)} placeholder="トヨタ プリウス" />
                 <Field label="ナンバープレート" value={data.car_plate_number || ''} onChange={(v) => update('car_plate_number', v || null)} placeholder="名古屋 300 あ 1234" />
               </div>
 
-              <p className="text-sm font-medium text-diletto-blue pt-2">任意保険</p>
+              <p className="text-sm font-medium text-brand-blue pt-2">任意保険</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="契約保険会社" value={data.insurance_company || ''} onChange={(v) => update('insurance_company', v || null)} />
                 <Field label="保険証券番号" value={data.insurance_policy_number || ''} onChange={(v) => update('insurance_policy_number', v || null)} />
@@ -326,8 +326,8 @@ export function ProfileSectionCommute({ data, onChange, employeeId, customFieldD
           )}
 
           {showDrivingFields && (
-            <div className="border-t border-diletto-gray/10 pt-4 space-y-4">
-              <p className="text-sm font-medium text-diletto-blue">運転者情報</p>
+            <div className="border-t border-brand-gray/10 pt-4 space-y-4">
+              <p className="text-sm font-medium text-brand-blue">運転者情報</p>
               <div className="space-y-2">
                 <Label>運転経歴</Label>
                 <Textarea value={data.driving_experience || ''} onChange={(e) => update('driving_experience', e.target.value || null)} placeholder="期間と内容" rows={3} />
@@ -380,7 +380,7 @@ function ImageUploadField({ label, path, fieldKey, uploading, onUpload, onClear 
             <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
               変更
             </Button>
-            <Button type="button" size="sm" variant="ghost" className="text-diletto-red" onClick={onClear}>
+            <Button type="button" size="sm" variant="ghost" className="text-brand-red" onClick={onClear}>
               削除
             </Button>
           </div>
@@ -390,7 +390,7 @@ function ImageUploadField({ label, path, fieldKey, uploading, onUpload, onClear 
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-diletto-gray/20 hover:border-diletto-blue/40 transition-colors text-sm text-diletto-gray cursor-pointer"
+          className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-brand-gray/20 hover:border-brand-blue/40 transition-colors text-sm text-brand-gray cursor-pointer"
         >
           {uploading ? 'アップロード中...' : 'クリックして画像を選択'}
         </button>

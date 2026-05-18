@@ -614,11 +614,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+    return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
   }
 
   if (!employee) {
-    return <p className="text-diletto-red">社員が見つかりません</p>;
+    return <p className="text-brand-red">社員が見つかりません</p>;
   }
 
   return (
@@ -631,12 +631,12 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               {employee.last_name} {employee.first_name}
             </h1>
             {employee.status === 'active' ? (
-              <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">在籍</Badge>
+              <Badge className="bg-brand-green/10 text-brand-green border-brand-green/20">在籍</Badge>
             ) : (
-              <Badge className="bg-diletto-red/[0.06] text-diletto-red border-diletto-red/15">退職</Badge>
+              <Badge className="bg-brand-red/[0.06] text-brand-red border-brand-red/15">退職</Badge>
             )}
           </div>
-          <p className="text-sm text-diletto-gray mt-1">
+          <p className="text-sm text-brand-gray mt-1">
             {employee.employee_number} / {employee.email}
           </p>
         </div>
@@ -647,7 +647,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           {employee.status === 'active' ? (
             <Button
               variant="outline"
-              className="text-diletto-red border-diletto-red/30"
+              className="text-brand-red border-brand-red/30"
               onClick={() => setRetireOpen(true)}
             >
               退職処理
@@ -655,7 +655,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           ) : (
             <Button
               variant="outline"
-              className="text-diletto-green border-diletto-green/30"
+              className="text-brand-green border-brand-green/30"
               onClick={() => setReactivateOpen(true)}
             >
               在職に戻す
@@ -667,7 +667,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* モバイル幅では 6 タブが収まらないため横スクロール可にする */}
         <div className="overflow-x-auto -mx-1 px-1">
-          <TabsList className="h-10 bg-diletto-beige/30 p-1">
+          <TabsList className="h-10 bg-brand-beige/30 p-1">
             <TabsTrigger value="dashboard" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">ダッシュボード</TabsTrigger>
             <TabsTrigger value="basic" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">基本情報</TabsTrigger>
             <TabsTrigger value="about" className="px-4 py-1.5 text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">自己紹介・働き方</TabsTrigger>
@@ -715,7 +715,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         <TabsContent value="basic" className="mt-6 space-y-6">
           {/* 編集モード切替バー（管理者専用）。表示中は ✏ 編集、編集中は 保存 / キャンセル */}
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-xs text-diletto-gray-light">
+            <p className="text-xs text-brand-gray-light">
               {basicEditing ? '編集中: 各項目を直接書き換えて「保存」を押してください' : '管理者は ✏ から基本情報を編集できます'}
             </p>
             {basicEditing ? (
@@ -743,8 +743,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     return <InfoRow label="基本勤務時間" value={display} />;
                   }
                   return (
-                    <div className="flex items-center gap-4 py-1.5 border-b border-diletto-gray/5">
-                      <span className="text-diletto-gray-light w-24 shrink-0 text-xs">基本勤務時間</span>
+                    <div className="flex items-center gap-4 py-1.5 border-b border-brand-gray/5">
+                      <span className="text-brand-gray-light w-24 shrink-0 text-xs">基本勤務時間</span>
                       <div className="flex-1 min-w-0 flex items-center gap-2">
                         <input
                           type="time"
@@ -753,7 +753,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                           onChange={(e) => updBasic('default_start_time', e.target.value)}
                           className="h-8 flex-1 min-w-0 rounded-md border border-input bg-white px-2 text-sm"
                         />
-                        <span className="text-xs text-diletto-gray-light">〜</span>
+                        <span className="text-xs text-brand-gray-light">〜</span>
                         <input
                           type="time"
                           aria-label="基本勤務終了時刻"
@@ -789,14 +789,14 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                     退職者 (status='retired') は変更不可。 */}
                 <div className="flex items-start justify-between gap-2 py-1.5">
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-diletto-gray-light font-bold uppercase mb-0.5">メール</div>
+                    <div className="text-[10px] text-brand-gray-light font-bold uppercase mb-0.5">メール</div>
                     {emailEditing ? (
                       <div className="space-y-2">
                         <input
                           type="email"
                           value={emailDraft}
                           onChange={(e) => setEmailDraft(e.target.value)}
-                          className="w-full h-9 rounded-lg border border-diletto-gray/20 bg-white px-2 text-sm focus:ring-2 focus:ring-diletto-blue/20 outline-none"
+                          className="w-full h-9 rounded-lg border border-brand-gray/20 bg-white px-2 text-sm focus:ring-2 focus:ring-brand-blue/20 outline-none"
                           placeholder="new@example.com"
                           autoFocus
                           disabled={emailSaving}
@@ -809,12 +809,12 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                             キャンセル
                           </Button>
                         </div>
-                        <p className="text-[10px] text-diletto-gray-light leading-tight">
+                        <p className="text-[10px] text-brand-gray-light leading-tight">
                           ※ 変更するとログイン用の認証情報も同時に書き換わり、新メールでのみログイン可能になります
                         </p>
                       </div>
                     ) : (
-                      <p className="text-sm font-medium text-diletto-ink truncate">{employee.email || '-'}</p>
+                      <p className="text-sm font-medium text-brand-ink truncate">{employee.email || '-'}</p>
                     )}
                   </div>
                   {!emailEditing && (
@@ -823,7 +823,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                       onClick={() => { setEmailDraft(employee.email); setEmailEditing(true); }}
                       disabled={employee.status === 'retired'}
                       title={employee.status === 'retired' ? '退職者のメールアドレスは変更できません' : 'メールアドレスを変更'}
-                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-diletto-blue/5 text-diletto-blue hover:bg-diletto-blue hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-diletto-blue/5 disabled:hover:text-diletto-blue"
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-blue/5 text-brand-blue hover:bg-brand-blue hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-brand-blue/5 disabled:hover:text-brand-blue"
                     >
                       変更
                     </button>
@@ -864,15 +864,15 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <CardHeader><CardTitle className="text-base font-bold">緊急連絡先</CardTitle></CardHeader>
               <CardContent className="space-y-4 text-sm">
                 <div>
-                  <p className="text-[10px] font-bold text-diletto-gray-light uppercase mb-1">連絡先 1</p>
+                  <p className="text-[10px] font-bold text-brand-gray-light uppercase mb-1">連絡先 1</p>
                   <EditableRow label="氏名" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_name : employee.emergency1_name} onChange={(v) => updBasic('emergency1_name', String(v))} />
                   <EditableRow label="続柄" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_relationship : employee.emergency1_relationship} onChange={(v) => updBasic('emergency1_relationship', String(v))} />
                   <EditableRow label="電話番号" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_phone : employee.emergency1_phone} onChange={(v) => updBasic('emergency1_phone', String(v))} />
                   <EditableRow label="携帯" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.emergency1_mobile : employee.emergency1_mobile} onChange={(v) => updBasic('emergency1_mobile', String(v))} />
                 </div>
                 {(basicEditing || employee.emergency2_name) && (
-                  <div className="pt-2 border-t border-diletto-gray/5">
-                    <p className="text-[10px] font-bold text-diletto-gray-light uppercase mb-1">連絡先 2</p>
+                  <div className="pt-2 border-t border-brand-gray/5">
+                    <p className="text-[10px] font-bold text-brand-gray-light uppercase mb-1">連絡先 2</p>
                     <EditableRow label="氏名" editing={basicEditing} value={basicEditing ? basicDraft.emergency2_name : employee.emergency2_name} onChange={(v) => updBasic('emergency2_name', String(v))} />
                     <EditableRow label="続柄" editing={basicEditing} value={basicEditing ? basicDraft.emergency2_relationship : employee.emergency2_relationship} onChange={(v) => updBasic('emergency2_relationship', String(v))} />
                     <EditableRow label="電話番号" type="tel" editing={basicEditing} value={basicEditing ? basicDraft.emergency2_phone : employee.emergency2_phone} onChange={(v) => updBasic('emergency2_phone', String(v))} />
@@ -897,7 +897,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 <EditableRow label="自家用車通勤" type="checkbox" editing={basicEditing} value={basicEditing ? basicDraft.has_car_commute : employee.has_car_commute} onChange={(v) => updBasic('has_car_commute', !!v)} />
                 <EditableRow label="送迎ドライバー" type="checkbox" editing={basicEditing} value={basicEditing ? basicDraft.is_shuttle_driver : employee.is_shuttle_driver} onChange={(v) => updBasic('is_shuttle_driver', !!v)} />
                 {(basicEditing ? basicDraft.has_car_commute : employee.has_car_commute) && (
-                  <div className="pt-2 mt-2 border-t border-diletto-gray/5 space-y-1.5">
+                  <div className="pt-2 mt-2 border-t border-brand-gray/5 space-y-1.5">
                     <EditableRow label="車種" editing={basicEditing} value={basicEditing ? basicDraft.car_model : employee.car_model} onChange={(v) => updBasic('car_model', String(v))} />
                     <EditableRow label="ナンバー" editing={basicEditing} value={basicEditing ? basicDraft.car_plate_number : employee.car_plate_number} onChange={(v) => updBasic('car_plate_number', String(v))} />
                     <EditableRow label="保険会社" editing={basicEditing} value={basicEditing ? basicDraft.insurance_company : employee.insurance_company} onChange={(v) => updBasic('insurance_company', String(v))} />
@@ -913,26 +913,26 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
         <TabsContent value="about" className="mt-6 space-y-6">
           <Card>
-            <CardHeader className="border-b border-diletto-gray/5">
+            <CardHeader className="border-b border-brand-gray/5">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <span>📝</span> 自己紹介・プロフィール
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-8">
               <div>
-                <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">自己紹介</Label>
-                <div className="p-4 rounded-xl bg-diletto-gray/5 border border-diletto-gray/5 text-sm whitespace-pre-wrap leading-relaxed shadow-inner">
-                  {employee.self_introduction || <span className="text-diletto-gray-light italic">未入力</span>}
+                <Label className="text-xs text-brand-gray-light font-bold mb-2 block">自己紹介</Label>
+                <div className="p-4 rounded-xl bg-brand-gray/5 border border-brand-gray/5 text-sm whitespace-pre-wrap leading-relaxed shadow-inner">
+                  {employee.self_introduction || <span className="text-brand-gray-light italic">未入力</span>}
                 </div>
               </div>
 
               <div className="grid gap-8 sm:grid-cols-2">
                 <div>
-                  <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">現在の業務内容</Label>
+                  <Label className="text-xs text-brand-gray-light font-bold mb-2 block">現在の業務内容</Label>
                   <p className="text-sm font-medium pl-1">{employee.current_duties || '未設定'}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">過去の経験・職歴</Label>
+                  <Label className="text-xs text-brand-gray-light font-bold mb-2 block">過去の経験・職歴</Label>
                   <p className="text-sm font-medium pl-1">{employee.past_duties || '未設定'}</p>
                 </div>
               </div>
@@ -942,7 +942,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <div className="grid gap-8 sm:grid-cols-3">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <Label className="text-xs text-diletto-gray-light font-bold block">保有資格</Label>
+                    <Label className="text-xs text-brand-gray-light font-bold block">保有資格</Label>
                     {!qualEditing ? (
                       <Button
                         type="button"
@@ -989,11 +989,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   )}
                 </div>
                 <div>
-                  <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">最終学歴・前職</Label>
+                  <Label className="text-xs text-brand-gray-light font-bold mb-2 block">最終学歴・前職</Label>
                   <p className="text-sm font-medium pl-1">{employee.previous_employer || '-'}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-diletto-gray-light font-bold mb-2 block">雇用区分・区分</Label>
+                  <Label className="text-xs text-brand-gray-light font-bold mb-2 block">雇用区分・区分</Label>
                   <p className="text-sm font-medium pl-1">{employee.job_type || '-'}</p>
                 </div>
               </div>
@@ -1001,7 +1001,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           </Card>
 
           <Card>
-            <CardHeader className="border-b border-diletto-gray/5">
+            <CardHeader className="border-b border-brand-gray/5">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <span>🤝</span> 働き方・コミュニケーション傾向
               </CardTitle>
@@ -1009,7 +1009,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <CardContent className="p-6 space-y-8">
               <div className="grid gap-8 sm:grid-cols-2">
                 <div className="space-y-4">
-                  <Label className="text-xs text-diletto-ink font-bold border-l-2 border-diletto-blue pl-2 mb-2 block">働き方の傾向</Label>
+                  <Label className="text-xs text-brand-ink font-bold border-l-2 border-brand-blue pl-2 mb-2 block">働き方の傾向</Label>
                   <div className="space-y-1.5">
                     <InfoRow label="チーム重視" value={WORK_STYLE_LABELS[employee.work_style_solo_vs_team || ''] || '-'} />
                     <InfoRow label="自律性" value={WORK_STYLE_LABELS[employee.work_style_clear_vs_autonomy || ''] || '-'} />
@@ -1018,7 +1018,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <Label className="text-xs text-diletto-ink font-bold border-l-2 border-diletto-green pl-2 mb-2 block">コミュニケーション</Label>
+                  <Label className="text-xs text-brand-ink font-bold border-l-2 border-brand-green pl-2 mb-2 block">コミュニケーション</Label>
                   <div className="space-y-1.5">
                     <InfoRow label="結論・背景" value={COMM_LABELS[employee.comm_conclusion_vs_context || ''] || '-'} />
                     <InfoRow label="相談タイミング" value={COMM_LABELS[employee.comm_consult_timing || ''] || '-'} />
@@ -1032,23 +1032,23 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
               <div className="grid gap-8 sm:grid-cols-2">
                 <div>
-                  <Label className="text-xs text-diletto-ink font-bold mb-3 block">強み</Label>
+                  <Label className="text-xs text-brand-ink font-bold mb-3 block">強み</Label>
                   <div className="flex flex-wrap gap-2">
                     {[employee.strength_1, employee.strength_2, employee.strength_3].filter(Boolean).length > 0 ? (
                       [employee.strength_1, employee.strength_2, employee.strength_3].filter(Boolean).map((s, i) => (
-                        <Badge key={i} variant="outline" className="bg-diletto-blue/5 text-diletto-blue border-diletto-blue/20 rounded-lg px-3 py-1 font-bold">{s}</Badge>
+                        <Badge key={i} variant="outline" className="bg-brand-blue/5 text-brand-blue border-brand-blue/20 rounded-lg px-3 py-1 font-bold">{s}</Badge>
                       ))
-                    ) : (<span className="text-sm text-diletto-gray-light">-</span>)}
+                    ) : (<span className="text-sm text-brand-gray-light">-</span>)}
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-diletto-ink font-bold mb-3 block">弱み・課題</Label>
+                  <Label className="text-xs text-brand-ink font-bold mb-3 block">弱み・課題</Label>
                   <div className="flex flex-wrap gap-2">
                     {[employee.weakness_1, employee.weakness_2, employee.weakness_3].filter(Boolean).length > 0 ? (
                       [employee.weakness_1, employee.weakness_2, employee.weakness_3].filter(Boolean).map((w, i) => (
-                        <Badge key={i} variant="outline" className="bg-diletto-red/5 text-diletto-red border-diletto-red/20 rounded-lg px-3 py-1 font-bold">{w}</Badge>
+                        <Badge key={i} variant="outline" className="bg-brand-red/5 text-brand-red border-brand-red/20 rounded-lg px-3 py-1 font-bold">{w}</Badge>
                       ))
-                    ) : (<span className="text-sm text-diletto-gray-light">-</span>)}
+                    ) : (<span className="text-sm text-brand-gray-light">-</span>)}
                   </div>
                 </div>
               </div>
@@ -1062,17 +1062,17 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <CardHeader><CardTitle className="text-base font-bold">所属設定</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 {/* 施設 */}
-                <div className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${facilityEditing ? 'border-diletto-blue ring-4 ring-diletto-blue/5 shadow-md' : 'border-diletto-gray/10 bg-white/50 hover:bg-white hover:shadow-sm'}`}>
+                <div className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${facilityEditing ? 'border-brand-blue ring-4 ring-brand-blue/5 shadow-md' : 'border-brand-gray/10 bg-white/50 hover:bg-white hover:shadow-sm'}`}>
                   <div className="p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-diletto-gray uppercase tracking-wider">所属施設</span>
+                      <span className="text-xs font-bold text-brand-gray uppercase tracking-wider">所属施設</span>
                       {!facilityEditing && (
-                        <button type="button" onClick={() => setFacilityEditing(true)} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-diletto-blue/5 text-diletto-blue hover:bg-diletto-blue hover:text-white transition-all">変更</button>
+                        <button type="button" onClick={() => setFacilityEditing(true)} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-blue/5 text-brand-blue hover:bg-brand-blue hover:text-white transition-all">変更</button>
                       )}
                     </div>
                     {facilityEditing ? (
                       <div className="space-y-2">
-                        <select title="所属施設を選択" value={facilityDraftId} onChange={(e) => setFacilityDraftId(e.target.value)} className="w-full h-9 rounded-lg border border-diletto-gray/20 bg-white px-2 text-xs focus:ring-2 focus:ring-diletto-blue/20 outline-none" autoFocus>
+                        <select title="所属施設を選択" value={facilityDraftId} onChange={(e) => setFacilityDraftId(e.target.value)} className="w-full h-9 rounded-lg border border-brand-gray/20 bg-white px-2 text-xs focus:ring-2 focus:ring-brand-blue/20 outline-none" autoFocus>
                           <option value="">（未所属）</option>
                           {allFacilities.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
                         </select>
@@ -1082,35 +1082,35 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                         </div>
                       </div>
                     ) : (
-                      <p className={`text-sm pl-1 ${facilityName ? 'font-bold text-diletto-ink' : 'text-diletto-gray-light italic'}`}>{facilityName || '未所属'}</p>
+                      <p className={`text-sm pl-1 ${facilityName ? 'font-bold text-brand-ink' : 'text-brand-gray-light italic'}`}>{facilityName || '未所属'}</p>
                     )}
                   </div>
                 </div>
 
                 {/* 兼任先（migration 130 / 複数事業所所属）
                     主所属とは別に、シフト・お知らせ・遵守事項などが届く事業所を追加できる */}
-                <div className="relative overflow-hidden rounded-xl border border-diletto-gray/10 bg-white/50 hover:bg-white hover:shadow-sm transition-all duration-300">
+                <div className="relative overflow-hidden rounded-xl border border-brand-gray/10 bg-white/50 hover:bg-white hover:shadow-sm transition-all duration-300">
                   <div className="p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-diletto-gray uppercase tracking-wider">兼任先</span>
-                      <span className="text-[10px] text-diletto-gray-light">主所属とは別に所属する事業所</span>
+                      <span className="text-xs font-bold text-brand-gray uppercase tracking-wider">兼任先</span>
+                      <span className="text-[10px] text-brand-gray-light">主所属とは別に所属する事業所</span>
                     </div>
                     {additionalFacilities.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {additionalFacilities.map((fId) => (
-                          <Badge key={fId} variant="secondary" className="bg-diletto-blue/5 text-diletto-blue border-none rounded-md px-2 py-0.5 flex items-center gap-1">
+                          <Badge key={fId} variant="secondary" className="bg-brand-blue/5 text-brand-blue border-none rounded-md px-2 py-0.5 flex items-center gap-1">
                             {allFacilitiesMaster.find(f => f.id === fId)?.name || '不明'}
-                            <button onClick={() => removeAdditionalFacility(fId)} className="hover:text-diletto-red" aria-label="兼任先から削除">×</button>
+                            <button onClick={() => removeAdditionalFacility(fId)} className="hover:text-brand-red" aria-label="兼任先から削除">×</button>
                           </Badge>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-diletto-gray-light italic pl-1 mt-1">兼任先なし</p>
+                      <p className="text-xs text-brand-gray-light italic pl-1 mt-1">兼任先なし</p>
                     )}
                     <div className="mt-2 flex gap-1">
                       <select
                         title="兼任先を追加"
-                        className="flex-1 h-8 rounded-lg border border-diletto-gray/20 text-xs px-2"
+                        className="flex-1 h-8 rounded-lg border border-brand-gray/20 text-xs px-2"
                         value={newAdditionalFacility}
                         onChange={(e) => setNewAdditionalFacility(e.target.value)}
                       >
@@ -1125,17 +1125,17 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 </div>
 
                 {/* 役職 */}
-                <div className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${posEditing ? 'border-diletto-blue ring-4 ring-diletto-blue/5 shadow-md' : 'border-diletto-gray/10 bg-white/50 hover:bg-white hover:shadow-sm'}`}>
+                <div className={`relative overflow-hidden rounded-xl border transition-all duration-300 ${posEditing ? 'border-brand-blue ring-4 ring-brand-blue/5 shadow-md' : 'border-brand-gray/10 bg-white/50 hover:bg-white hover:shadow-sm'}`}>
                   <div className="p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-diletto-gray uppercase tracking-wider">役職</span>
+                      <span className="text-xs font-bold text-brand-gray uppercase tracking-wider">役職</span>
                       {!posEditing && (
-                        <button type="button" onClick={() => setPosEditing(true)} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-diletto-ink/5 text-diletto-ink hover:bg-diletto-ink hover:text-white transition-all">変更</button>
+                        <button type="button" onClick={() => setPosEditing(true)} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-ink/5 text-brand-ink hover:bg-brand-ink hover:text-white transition-all">変更</button>
                       )}
                     </div>
                     {posEditing ? (
                       <div className="space-y-2">
-                        <select title="役職を選択" value={posDraftId} onChange={(e) => setPosDraftId(e.target.value)} className="w-full h-9 rounded-lg border border-diletto-gray/20 bg-white px-2 text-xs focus:ring-2 focus:ring-diletto-blue/20 outline-none">
+                        <select title="役職を選択" value={posDraftId} onChange={(e) => setPosDraftId(e.target.value)} className="w-full h-9 rounded-lg border border-brand-gray/20 bg-white px-2 text-xs focus:ring-2 focus:ring-brand-blue/20 outline-none">
                           <option value="">（役職なし）</option>
                           {allPositions.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
                         </select>
@@ -1145,7 +1145,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                         </div>
                       </div>
                     ) : (
-                      <p className={`text-sm pl-1 ${employee.position_id ? 'font-bold text-diletto-ink' : 'text-diletto-gray-light italic'}`}>
+                      <p className={`text-sm pl-1 ${employee.position_id ? 'font-bold text-brand-ink' : 'text-brand-gray-light italic'}`}>
                         {allPositions.find(p => p.id === employee.position_id)?.name || '役職なし'}
                       </p>
                     )}
@@ -1158,10 +1158,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <CardHeader><CardTitle className="text-base font-bold">システム権限・ステータス</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-[10px] text-diletto-gray-light font-bold uppercase">権限ロール</Label>
+                  <Label className="text-[10px] text-brand-gray-light font-bold uppercase">権限ロール</Label>
                   <select
                     title="システムロールを選択"
-                    className="flex h-10 w-full rounded-xl border border-diletto-gray/20 bg-white px-3 py-1 text-sm focus:ring-2 focus:ring-diletto-blue/20 outline-none"
+                    className="flex h-10 w-full rounded-xl border border-brand-gray/20 bg-white px-3 py-1 text-sm focus:ring-2 focus:ring-brand-blue/20 outline-none"
                     value={roleValue}
                     onChange={(e) => handleRoleChange(e.target.value)}
                     disabled={roleSaving}
@@ -1173,26 +1173,26 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 </div>
 
                 {roleValue === 'manager' && (
-                  <div className="pt-4 border-t border-diletto-gray/5">
-                    <Label className="text-[10px] text-diletto-gray-light font-bold uppercase">管理担当施設</Label>
+                  <div className="pt-4 border-t border-brand-gray/5">
+                    <Label className="text-[10px] text-brand-gray-light font-bold uppercase">管理担当施設</Label>
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {/* 本人の所属施設を自動管理枠で表示 (グレー) */}
                       {employee.facility_id && (
-                        <Badge variant="secondary" className="bg-diletto-gray/5 text-diletto-gray-light border-none rounded-md px-2 py-0.5 flex items-center gap-1 opacity-70">
+                        <Badge variant="secondary" className="bg-brand-gray/5 text-brand-gray-light border-none rounded-md px-2 py-0.5 flex items-center gap-1 opacity-70">
                           {allFacilitiesMaster.find(f => f.id === employee.facility_id)?.name || '不明'}
                           <span className="text-[9px] font-normal leading-none">(所属)</span>
                         </Badge>
                       )}
                       {/* 追加設定された担当施設 */}
                       {mgrFacilities.map((fId) => (
-                        <Badge key={fId} variant="secondary" className="bg-diletto-blue/5 text-diletto-blue border-none rounded-md px-2 py-0.5 flex items-center gap-1">
+                        <Badge key={fId} variant="secondary" className="bg-brand-blue/5 text-brand-blue border-none rounded-md px-2 py-0.5 flex items-center gap-1">
                           {allFacilitiesMaster.find(f => f.id === fId)?.name || '不明'}
-                          <button onClick={() => removeFacility(fId)} className="hover:text-diletto-red">×</button>
+                          <button onClick={() => removeFacility(fId)} className="hover:text-brand-red">×</button>
                         </Badge>
                       ))}
                     </div>
                     <div className="mt-3 flex gap-1">
-                      <select title="担当施設を追加" className="flex-1 h-8 rounded-lg border border-diletto-gray/20 text-xs px-2" value={newFacility} onChange={(e) => setNewFacility(e.target.value)}>
+                      <select title="担当施設を追加" className="flex-1 h-8 rounded-lg border border-brand-gray/20 text-xs px-2" value={newFacility} onChange={(e) => setNewFacility(e.target.value)}>
                         <option value="">追加する施設...</option>
                         {allFacilitiesMaster.filter((f) => !mgrFacilities.includes(f.id) && f.id !== employee.facility_id).map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
                       </select>
@@ -1220,7 +1220,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           </div>
           {docItems.length === 0 ? (
             <Card>
-              <CardContent className="py-12 text-center text-diletto-gray-light">
+              <CardContent className="py-12 text-center text-brand-gray-light">
                 この社員に対象の書類テンプレートがありません
               </CardContent>
             </Card>
@@ -1243,10 +1243,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                   : submission.status === 'draft' ? '下書き'
                     : submission.status === 'submitted' ? '提出済'
                       : submission.status === 'approved' ? '承認済' : submission.status;
-                const statusClass = !submission ? 'bg-diletto-gray/5 text-diletto-gray-light border-diletto-gray/10'
-                  : submission.status === 'draft' ? 'bg-diletto-gold/[0.08] text-diletto-gold border-diletto-gold/20'
-                    : submission.status === 'submitted' ? 'bg-diletto-green/10 text-diletto-green border-diletto-green/20'
-                      : 'bg-diletto-blue/[0.07] text-diletto-blue border-diletto-blue/20';
+                const statusClass = !submission ? 'bg-brand-gray/5 text-brand-gray-light border-brand-gray/10'
+                  : submission.status === 'draft' ? 'bg-brand-gold/[0.08] text-brand-gold border-brand-gold/20'
+                    : submission.status === 'submitted' ? 'bg-brand-green/10 text-brand-green border-brand-green/20'
+                      : 'bg-brand-blue/[0.07] text-brand-blue border-brand-blue/20';
                 const canDownload = submission && (submission.status === 'submitted' || submission.status === 'approved') && !!template.pdf_storage_path;
                 return (
                   <Card key={template.id}>
@@ -1254,7 +1254,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                       <div>
                         <p className="font-medium text-sm">{template.name}</p>
                         {submission?.submitted_at && (
-                          <p className="text-xs text-diletto-gray-light mt-1">
+                          <p className="text-xs text-brand-gray-light mt-1">
                             提出日: {new Date(submission.submitted_at).toLocaleDateString('ja-JP')}
                           </p>
                         )}
@@ -1305,7 +1305,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <DialogTitle>退職処理</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-diletto-gray">
+            <p className="text-sm text-brand-gray">
               {employee.last_name} {employee.first_name} さんを退職扱いにします。
             </p>
             <div className="space-y-2">
@@ -1330,7 +1330,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <Button
               onClick={handleRetire}
               disabled={retireLoading}
-              className="bg-diletto-red hover:bg-[#7a2828] text-white"
+              className="bg-brand-red hover:bg-[#7a2828] text-white"
             >
               {retireLoading ? '処理中...' : '退職処理を実行'}
             </Button>
@@ -1345,10 +1345,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <DialogTitle>在職に戻す</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-diletto-gray">
+            <p className="text-sm text-brand-gray">
               {employee.last_name} {employee.first_name} さんを在職に戻します。
             </p>
-            <p className="text-xs text-diletto-gray-light leading-relaxed">
+            <p className="text-xs text-brand-gray-light leading-relaxed">
               退職日・退職理由はクリアされ、ログインも再び可能になります。
               {employee.retirement_date && (
                 <>
@@ -1362,7 +1362,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <Button
               onClick={handleReactivate}
               disabled={reactivateLoading}
-              className="bg-diletto-green hover:bg-diletto-green/85 text-white"
+              className="bg-brand-green hover:bg-brand-green/85 text-white"
             >
               {reactivateLoading ? '処理中...' : '在職に戻す'}
             </Button>
@@ -1375,8 +1375,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline gap-4 py-1.5 border-b border-diletto-gray/5 last:border-b-0">
-      <span className="text-diletto-gray-light w-24 shrink-0 text-xs">{label}</span>
+    <div className="flex items-baseline gap-4 py-1.5 border-b border-brand-gray/5 last:border-b-0">
+      <span className="text-brand-gray-light w-24 shrink-0 text-xs">{label}</span>
       <span className="text-[#111] text-sm">{value}</span>
     </div>
   );
@@ -1402,8 +1402,8 @@ function EditableRow({
     return <InfoRow label={label} value={display} />;
   }
   return (
-    <div className="flex items-center gap-4 py-1.5 border-b border-diletto-gray/5 last:border-b-0">
-      <span className="text-diletto-gray-light w-24 shrink-0 text-xs">{label}</span>
+    <div className="flex items-center gap-4 py-1.5 border-b border-brand-gray/5 last:border-b-0">
+      <span className="text-brand-gray-light w-24 shrink-0 text-xs">{label}</span>
       <div className="flex-1 min-w-0">
         {options ? (
           <select
@@ -1421,7 +1421,7 @@ function EditableRow({
               type="checkbox"
               checked={!!value}
               onChange={(e) => onChange(e.target.checked)}
-              className="h-4 w-4 accent-diletto-blue"
+              className="h-4 w-4 accent-brand-blue"
             />
             <span>{value ? 'あり' : 'なし'}</span>
           </label>
@@ -1441,14 +1441,14 @@ function EditableRow({
 
 function NavCard({ title, icon, description, onClick }: { title: string; icon: string; description: string; onClick: () => void }) {
   return (
-    <Card onClick={onClick} className="cursor-pointer hover:border-diletto-blue/50 hover:shadow-md transition-all group overflow-hidden border-diletto-gray/10">
+    <Card onClick={onClick} className="cursor-pointer hover:border-brand-blue/50 hover:shadow-md transition-all group overflow-hidden border-brand-gray/10">
       <CardContent className="p-5 flex items-center gap-4">
-        <div className="h-12 w-12 rounded-2xl bg-diletto-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+        <div className="h-12 w-12 rounded-2xl bg-brand-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-diletto-ink text-sm">{title}</h3>
-          <p className="text-[10px] text-diletto-gray truncate">{description}</p>
+          <h3 className="font-bold text-brand-ink text-sm">{title}</h3>
+          <p className="text-[10px] text-brand-gray truncate">{description}</p>
         </div>
       </CardContent>
     </Card>

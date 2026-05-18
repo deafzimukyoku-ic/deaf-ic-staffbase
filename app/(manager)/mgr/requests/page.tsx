@@ -19,8 +19,8 @@ export default async function ManagerRequestsPage() {
 
   if (!me?.facility_id) {
     return (
-      <div className="rounded-md bg-white border border-diletto-gray/10 p-8 text-center">
-        <p className="text-sm text-diletto-gray">所属事業所が未設定です。</p>
+      <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
+        <p className="text-sm text-brand-gray">所属事業所が未設定です。</p>
       </div>
     );
   }

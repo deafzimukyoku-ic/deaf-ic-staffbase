@@ -322,7 +322,7 @@ export default function EmployeeDashboardPage() {
     load();
   }, []);
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   /* 進捗バーの分母から情報カード (total=0 の シフト / 個別連絡) は除外する */
   const progressTodos = todos.filter((t) => t.total > 0);
@@ -334,7 +334,7 @@ export default function EmployeeDashboardPage() {
       <h1 className="text-2xl font-bold mb-1">こんにちは、{name}さん</h1>
 
       {updates.length > 0 && (
-        <div className="mb-5 mt-3 rounded-md border border-diletto-blue/20 bg-diletto-blue/[0.03] px-3 py-2">
+        <div className="mb-5 mt-3 rounded-md border border-brand-blue/20 bg-brand-blue/[0.03] px-3 py-2">
           <button
             type="button"
             onClick={() => setUpdatesExpanded((v) => !v)}
@@ -342,21 +342,21 @@ export default function EmployeeDashboardPage() {
             aria-expanded={updatesExpanded}
           >
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-diletto-blue opacity-60"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-diletto-blue"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-blue opacity-60"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-blue"></span>
             </span>
-            <span className="text-[11px] font-semibold text-diletto-ink">最近の更新</span>
-            <span className="text-[10px] text-diletto-gray-light">{updates.length}件</span>
-            <span className={`ml-auto text-[10px] text-diletto-gray-light transition-transform ${updatesExpanded ? 'rotate-180' : ''}`}>▼</span>
+            <span className="text-[11px] font-semibold text-brand-ink">最近の更新</span>
+            <span className="text-[10px] text-brand-gray-light">{updates.length}件</span>
+            <span className={`ml-auto text-[10px] text-brand-gray-light transition-transform ${updatesExpanded ? 'rotate-180' : ''}`}>▼</span>
           </button>
           <ul className="space-y-0.5">
             {(updatesExpanded ? updates : updates.slice(0, UPDATES_PREVIEW)).map((u) => (
               <li key={`${u.kind}-${u.id}`}>
-                <Link href={u.href} className="flex items-center gap-2 py-1 text-xs hover:text-diletto-blue transition-colors">
+                <Link href={u.href} className="flex items-center gap-2 py-1 text-xs hover:text-brand-blue transition-colors">
                   <span className="text-sm shrink-0">{u.icon}</span>
-                  <span className="shrink-0 text-[10px] font-semibold text-diletto-blue">{u.label}</span>
-                  <span className="truncate text-diletto-ink">{u.title}</span>
-                  <span className="ml-auto shrink-0 text-[10px] text-diletto-gray-light">{daysAgoLabel(u.createdAt)}</span>
+                  <span className="shrink-0 text-[10px] font-semibold text-brand-blue">{u.label}</span>
+                  <span className="truncate text-brand-ink">{u.title}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-brand-gray-light">{daysAgoLabel(u.createdAt)}</span>
                 </Link>
               </li>
             ))}
@@ -365,7 +365,7 @@ export default function EmployeeDashboardPage() {
             <button
               type="button"
               onClick={() => setUpdatesExpanded((v) => !v)}
-              className="w-full mt-1.5 py-1 text-[10px] font-semibold text-diletto-blue hover:bg-diletto-blue/[0.05] rounded transition-colors"
+              className="w-full mt-1.5 py-1 text-[10px] font-semibold text-brand-blue hover:bg-brand-blue/[0.05] rounded transition-colors"
             >
               {updatesExpanded ? `▲ 折りたたむ` : `▼ 残り ${updates.length - UPDATES_PREVIEW}件を表示`}
             </button>
@@ -375,21 +375,21 @@ export default function EmployeeDashboardPage() {
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-diletto-gray">全体の進捗 — {completed}/{progressTodos.length} 完了</p>
+          <p className="text-sm text-brand-gray">全体の進捗 — {completed}/{progressTodos.length} 完了</p>
           <p className={`text-sm font-semibold ${
-            pct < 30 ? 'text-diletto-red'
-              : pct < 70 ? 'text-diletto-gold'
-              : pct < 100 ? 'text-diletto-blue'
-              : 'text-diletto-green'
+            pct < 30 ? 'text-brand-red'
+              : pct < 70 ? 'text-brand-gold'
+              : pct < 100 ? 'text-brand-blue'
+              : 'text-brand-green'
           }`}>{pct}%</p>
         </div>
-        <div className="h-3 w-full rounded-full bg-diletto-beige overflow-hidden">
+        <div className="h-3 w-full rounded-full bg-brand-beige overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-700 ${
-              pct < 30 ? 'bg-diletto-red'
-                : pct < 70 ? 'bg-diletto-gold'
-                : pct < 100 ? 'bg-diletto-blue'
-                : 'bg-diletto-green'
+              pct < 30 ? 'bg-brand-red'
+                : pct < 70 ? 'bg-brand-gold'
+                : pct < 100 ? 'bg-brand-blue'
+                : 'bg-brand-green'
             }`}
             style={{ width: `${pct}%` }}
           />
@@ -426,9 +426,9 @@ export default function EmployeeDashboardPage() {
 
           return (
             <Link key={t.href} href={t.href}>
-              <Card className={`relative transition-all hover:border-diletto-blue h-full ${showDoneStyling && t.done ? 'opacity-60' : ''} ${hasUnread ? 'border-diletto-red/50 bg-diletto-red/[0.02]' : ''}`}>
+              <Card className={`relative transition-all hover:border-brand-blue h-full ${showDoneStyling && t.done ? 'opacity-60' : ''} ${hasUnread ? 'border-brand-red/50 bg-brand-red/[0.02]' : ''}`}>
                 {hasUnread && (
-                  <span className="absolute top-1.5 right-1.5 z-10 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-diletto-red text-white text-[10px] font-bold leading-none shadow-sm">
+                  <span className="absolute top-1.5 right-1.5 z-10 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-brand-red text-white text-[10px] font-bold leading-none shadow-sm">
                     <span className="relative">{badgeCount > 99 ? '99+' : badgeCount}</span>
                   </span>
                 )}
@@ -436,30 +436,30 @@ export default function EmployeeDashboardPage() {
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xl">{t.icon}</span>
                     {showProgress && (
-                      <span className="text-[10px] font-medium text-diletto-gray">{t.current}/{t.total}</span>
+                      <span className="text-[10px] font-medium text-brand-gray">{t.current}/{t.total}</span>
                     )}
                     {isShiftCard && (
-                      <span className="text-[10px] font-medium text-diletto-gray">
+                      <span className="text-[10px] font-medium text-brand-gray">
                         {(t.shiftPlannedDays ?? 0) > 0 ? `${t.shiftPlannedDays}日` : '未公開'}
                       </span>
                     )}
                   </div>
                   <div className="mb-2">
-                    <span className={`text-xs sm:text-sm font-medium ${showDoneStyling && t.done ? 'line-through text-diletto-gray-light' : ''}`}>
+                    <span className={`text-xs sm:text-sm font-medium ${showDoneStyling && t.done ? 'line-through text-brand-gray-light' : ''}`}>
                       {t.label}
                     </span>
                     {showDoneStyling && t.done && <Badge variant="success" className="text-[10px] ml-1">完了</Badge>}
                     {isMessageCard && messageUnread === 0 && (
-                      <span className="ml-1 text-[10px] text-diletto-gray-light">未読なし</span>
+                      <span className="ml-1 text-[10px] text-brand-gray-light">未読なし</span>
                     )}
                     {isShiftCard && (t.shiftPlannedDays ?? 0) > 0 && (
-                      <span className="ml-1 text-[10px] text-diletto-gray-light">今月の予定</span>
+                      <span className="ml-1 text-[10px] text-brand-gray-light">今月の予定</span>
                     )}
                   </div>
                   {showProgress && (
-                    <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                    <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${t.done ? 'bg-diletto-green' : itemPct > 0 ? 'bg-diletto-blue' : 'bg-diletto-gray-light/30'}`}
+                        className={`h-full rounded-full transition-all duration-500 ${t.done ? 'bg-brand-green' : itemPct > 0 ? 'bg-brand-blue' : 'bg-brand-gray-light/30'}`}
                         style={{ width: `${itemPct}%` }}
                       />
                     </div>

@@ -255,7 +255,7 @@ export default function MyDocumentsPage() {
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   return (
     <div>
@@ -288,7 +288,7 @@ export default function MyDocumentsPage() {
       )}
 
       {items.length === 0 ? (
-        <p className="text-diletto-gray-light">提出対象の書類がありません</p>
+        <p className="text-brand-gray-light">提出対象の書類がありません</p>
       ) : (
         <div className="space-y-4">
           {items.map(({ template, submission }) => {
@@ -320,14 +320,14 @@ export default function MyDocumentsPage() {
                       <span className="text-lg shrink-0">📄</span>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm break-words">{template.name}</p>
-                        <p className="text-xs text-diletto-gray">
+                        <p className="text-xs text-brand-gray">
                           {template.template_type === 'pdf' ? 'PDF' : 'DOCX'}
                           {isConfirmed && submission?.submitted_at && (
                             <> · 確認日: {new Date(submission.submitted_at).toLocaleDateString('ja-JP')}</>
                           )}
                         </p>
                         {needsResubmit && (
-                          <p className="text-xs text-diletto-red mt-1 font-semibold">
+                          <p className="text-xs text-brand-red mt-1 font-semibold">
                             ⚠ 提出後に基本情報が更新されました。最新内容で再提出してください。
                           </p>
                         )}
@@ -337,14 +337,14 @@ export default function MyDocumentsPage() {
                     <div className="flex items-center flex-wrap gap-2 shrink-0">
                       {/* 提出済バッジ（変化なし時は淡く、再提出が必要なら警告色） */}
                       {isConfirmed && !needsResubmit && (
-                        <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">確認済</Badge>
+                        <Badge className="bg-brand-green/10 text-brand-green border-brand-green/20">確認済</Badge>
                       )}
                       {/* 提出 / 再提出ボタン: いつでも押せる仕様。
                           状態によってラベル・色を変える */}
                       <Button
                         size="sm"
                         variant={needsResubmit ? 'default' : isConfirmed ? 'outline' : 'default'}
-                        className={needsResubmit ? 'bg-diletto-red hover:bg-diletto-red/90' : ''}
+                        className={needsResubmit ? 'bg-brand-red hover:bg-brand-red/90' : ''}
                         onClick={() => handleConfirm(template.id)}
                         disabled={actionId === template.id}
                       >
@@ -381,11 +381,11 @@ export default function MyDocumentsPage() {
 
                   {/* PDFプレビュー */}
                   {isPreviewOpen && (
-                    <div className="mt-4 border-t border-diletto-gray/10 pt-4">
+                    <div className="mt-4 border-t border-brand-gray/10 pt-4">
                       {previewLoading ? (
                         <div className="flex items-center justify-center py-12">
-                          <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-                          <span className="ml-3 text-sm text-diletto-gray">PDF生成中...</span>
+                          <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+                          <span className="ml-3 text-sm text-brand-gray">PDF生成中...</span>
                         </div>
                       ) : previewUrl ? (
                         <iframe

@@ -78,7 +78,7 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: st
     <div>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between py-2 text-sm font-bold text-diletto-ink hover:text-diletto-blue transition-colors"
+        className="flex w-full items-center justify-between py-2 text-sm font-bold text-brand-ink hover:text-brand-blue transition-colors"
       >
         <span>{title}</span>
         <svg
@@ -270,30 +270,30 @@ export default function ManagerDashboardPage() {
     setOpenKey(null);
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /></div>;
 
   return (
     <div className="space-y-5 pb-8">
       <NotificationsAlertModal />
       <div>
-        <h1 className="text-2xl font-bold text-diletto-ink">ダッシュボード</h1>
-        <p className="text-xs text-diletto-gray-light mt-1 italic">Managerial Overview</p>
+        <h1 className="text-2xl font-bold text-brand-ink">ダッシュボード</h1>
+        <p className="text-xs text-brand-gray-light mt-1 italic">Managerial Overview</p>
       </div>
 
       {facilities.length === 0 ? (
-        <Card className="border-dashed border-2 border-diletto-gray/20 rounded-xl">
+        <Card className="border-dashed border-2 border-brand-gray/20 rounded-xl">
           <CardContent className="py-20 text-center">
-            <p className="text-diletto-gray font-bold">担当施設が設定されていません</p>
+            <p className="text-brand-gray font-bold">担当施設が設定されていません</p>
           </CardContent>
         </Card>
       ) : (
         <>
           <CollapsibleSection title="達成率">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-              <RateCard label="書類提出率" pct={docRate} color="text-diletto-blue" ring="border-diletto-blue" onClick={() => setOpenKey('docs_submitted')} />
-              <RateCard label="遵守事項確認率" pct={compRate} color="text-diletto-green" ring="border-diletto-green" onClick={() => setOpenKey('compliance_done')} />
-              <RateCard label="研修完了率" pct={trainRate} color="text-diletto-gold" ring="border-diletto-gold" onClick={() => setOpenKey('trainings_passed')} />
-              <RateCard label="お知らせ既読率" pct={annRate} color="text-diletto-ink" ring="border-diletto-ink" onClick={() => setOpenKey('announcements_read')} />
+              <RateCard label="書類提出率" pct={docRate} color="text-brand-blue" ring="border-brand-blue" onClick={() => setOpenKey('docs_submitted')} />
+              <RateCard label="遵守事項確認率" pct={compRate} color="text-brand-green" ring="border-brand-green" onClick={() => setOpenKey('compliance_done')} />
+              <RateCard label="研修完了率" pct={trainRate} color="text-brand-gold" ring="border-brand-gold" onClick={() => setOpenKey('trainings_passed')} />
+              <RateCard label="お知らせ既読率" pct={annRate} color="text-brand-ink" ring="border-brand-ink" onClick={() => setOpenKey('announcements_read')} />
               <RateCard label="業務マニュアル既読率" pct={manualRate} color="text-purple-600" ring="border-purple-600" onClick={() => setOpenKey('manuals_read')} />
             </div>
           </CollapsibleSection>
@@ -309,14 +309,14 @@ export default function ManagerDashboardPage() {
           </CollapsibleSection>
 
           <CollapsibleSection title="社員進捗一覧">
-            <Card className="rounded-xl border-diletto-gray/5 bg-white shadow-sm overflow-hidden">
+            <Card className="rounded-xl border-brand-gray/5 bg-white shadow-sm overflow-hidden">
               <CardContent className="pt-4">
                 <div className="overflow-x-auto">
                   {/* モバイル: whitespace-nowrap で名前縦折れ防止 + min-w で社員名最低幅確保。
                       列が増えても overflow-x-auto で横スクロール対応（admin/ProgressDashboard と同パターン） */}
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b text-left text-xs text-diletto-gray-light uppercase font-bold tracking-wider">
+                      <tr className="border-b text-left text-xs text-brand-gray-light uppercase font-bold tracking-wider">
                         <th className="py-3 pr-4 whitespace-nowrap min-w-[7em]">社員名</th>
                         <th className="py-3 px-4 text-center whitespace-nowrap">書類</th>
                         <th className="py-3 px-4 text-center whitespace-nowrap">遵守事項</th>
@@ -325,11 +325,11 @@ export default function ManagerDashboardPage() {
                         <th className="py-3 px-4 text-center whitespace-nowrap">業務マニュアル</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-diletto-gray/5">
+                    <tbody className="divide-y divide-brand-gray/5">
                       {filteredActive.map((r) => (
-                        <tr key={r.employee_id} className="hover:bg-diletto-beige/20 transition-colors">
+                        <tr key={r.employee_id} className="hover:bg-brand-beige/20 transition-colors">
                           <td className="py-3 pr-4 font-bold whitespace-nowrap min-w-[7em]">
-                            <Link href={`/mgr/subordinates?id=${r.employee_id}`} className="hover:text-diletto-blue transition-colors">
+                            <Link href={`/mgr/subordinates?id=${r.employee_id}`} className="hover:text-brand-blue transition-colors">
                               {r.last_name} {r.first_name}
                             </Link>
                           </td>
@@ -342,7 +342,7 @@ export default function ManagerDashboardPage() {
                       ))}
                     </tbody>
                   </table>
-                  {filteredActive.length === 0 && <p className="text-center py-10 text-diletto-gray-light font-medium italic">社員がまだ登録されていません</p>}
+                  {filteredActive.length === 0 && <p className="text-center py-10 text-brand-gray-light font-medium italic">社員がまだ登録されていません</p>}
                 </div>
               </CardContent>
             </Card>
@@ -382,9 +382,9 @@ function StatCard({ label, value, total, sub }: { label: string; value: number; 
       <CardContent className="py-4 text-center">
         <p className="text-2xl font-bold">
           {value}
-          {total !== undefined && <span className="text-diletto-gray-light font-normal text-xl"> / {total}</span>}
+          {total !== undefined && <span className="text-brand-gray-light font-normal text-xl"> / {total}</span>}
         </p>
-        <p className="text-xs text-diletto-gray-light">{label} {sub}</p>
+        <p className="text-xs text-brand-gray-light">{label} {sub}</p>
       </CardContent>
     </Card>
   );
@@ -395,13 +395,13 @@ function RateCard({ label, pct, color, ring, onClick }: { label: string; pct: nu
     <button
       type="button"
       onClick={onClick}
-      className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-diletto-blue rounded-lg"
+      className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue rounded-lg"
     >
       <Card className={`border-2 ${ring} transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer`}>
         <CardContent className="py-5 text-center">
           <p className={`text-3xl font-bold ${color}`}>{pct}%</p>
-          <p className="text-xs text-diletto-gray-light mt-1">{label}</p>
-          <p className="text-[10px] text-diletto-blue mt-2">未完了者を見る →</p>
+          <p className="text-xs text-brand-gray-light mt-1">{label}</p>
+          <p className="text-[10px] text-brand-blue mt-2">未完了者を見る →</p>
         </CardContent>
       </Card>
     </button>
@@ -409,10 +409,10 @@ function RateCard({ label, pct, color, ring, onClick }: { label: string; pct: nu
 }
 
 function ProgressBadge({ current, total }: { current: number; total: number }) {
-  if (total === 0) return <span className="text-diletto-gray-light">-</span>;
+  if (total === 0) return <span className="text-brand-gray-light">-</span>;
   const done = current >= total;
   return (
-    <Badge className={done ? 'bg-diletto-green/10 text-diletto-green border-none' : 'bg-diletto-gold/[0.08] text-diletto-gold border-none'}>
+    <Badge className={done ? 'bg-brand-green/10 text-brand-green border-none' : 'bg-brand-gold/[0.08] text-brand-gold border-none'}>
       {current}/{total}
     </Badge>
   );
@@ -439,29 +439,29 @@ function ReminderModal({ openKey, rows, facilities, total, lastCompletedAt, sele
         </DialogHeader>
 
         <div className="flex flex-col gap-4 overflow-hidden pt-4">
-          <div className="flex gap-1 p-1 bg-diletto-beige/40 rounded-md">
+          <div className="flex gap-1 p-1 bg-brand-beige/40 rounded-md">
             <button
               type="button"
               onClick={() => setViewMode('incomplete')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'incomplete' ? 'bg-white shadow-sm text-diletto-ink' : 'text-diletto-gray-light hover:text-diletto-ink'}`}
+              className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'incomplete' ? 'bg-white shadow-sm text-brand-ink' : 'text-brand-gray-light hover:text-brand-ink'}`}
             >
               未完了 ({incomplete.length})
             </button>
             <button
               type="button"
               onClick={() => setViewMode('complete')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'complete' ? 'bg-white shadow-sm text-diletto-ink' : 'text-diletto-gray-light hover:text-diletto-ink'}`}
+              className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${viewMode === 'complete' ? 'bg-white shadow-sm text-brand-ink' : 'text-brand-gray-light hover:text-brand-ink'}`}
             >
               完了 ({completed.length})
             </button>
           </div>
 
-          <input type="text" placeholder="名前で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 rounded-md border border-diletto-gray/20 bg-white px-2.5 text-sm outline-none" />
+          <input type="text" placeholder="名前で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 rounded-md border border-brand-gray/20 bg-white px-2.5 text-sm outline-none" />
 
           {viewMode === 'incomplete' && (
-            <div className="flex items-center justify-between text-xs text-diletto-gray border-b border-diletto-gray/10 pb-2">
+            <div className="flex items-center justify-between text-xs text-brand-gray border-b border-brand-gray/10 pb-2">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded accent-diletto-blue" checked={visible.length > 0 && visible.every((r: any) => selectedIds.has(r.employee_id))} onChange={(e) => {
+                <input type="checkbox" className="w-4 h-4 rounded accent-brand-blue" checked={visible.length > 0 && visible.every((r: any) => selectedIds.has(r.employee_id))} onChange={(e) => {
                   const next = new Set(selectedIds);
                   if (e.target.checked) visible.forEach((r: any) => next.add(r.employee_id));
                   else visible.forEach((r: any) => next.delete(r.employee_id));
@@ -473,9 +473,9 @@ function ReminderModal({ openKey, rows, facilities, total, lastCompletedAt, sele
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[55vh] divide-y divide-diletto-gray/10">
+          <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[55vh] divide-y divide-brand-gray/10">
             {visible.length === 0 ? (
-              <p className="py-8 text-center text-xs text-diletto-gray-light">
+              <p className="py-8 text-center text-xs text-brand-gray-light">
                 {viewMode === 'incomplete' ? '該当する社員がいません' : '完了した社員がいません'}
               </p>
             ) : visible.map((r: any) => {
@@ -483,20 +483,20 @@ function ReminderModal({ openKey, rows, facilities, total, lastCompletedAt, sele
               const lastLabel = openKey === 'docs_submitted' ? '提出' : '確認';
               const fmt = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
               return (
-                <label key={r.employee_id} className={`flex items-center gap-3 py-2 px-1 rounded ${viewMode === 'incomplete' ? 'cursor-pointer hover:bg-diletto-beige/50' : ''}`}>
+                <label key={r.employee_id} className={`flex items-center gap-3 py-2 px-1 rounded ${viewMode === 'incomplete' ? 'cursor-pointer hover:bg-brand-beige/50' : ''}`}>
                   {viewMode === 'incomplete' && (
-                    <input type="checkbox" className="w-4 h-4 rounded accent-diletto-blue" checked={selectedIds.has(r.employee_id)} onChange={() => onToggle(r.employee_id)} />
+                    <input type="checkbox" className="w-4 h-4 rounded accent-brand-blue" checked={selectedIds.has(r.employee_id)} onChange={() => onToggle(r.employee_id)} />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{r.last_name} {r.first_name}</p>
-                    <p className="text-[10px] text-diletto-gray-light">
+                    <p className="text-[10px] text-brand-gray-light">
                       {facilities.find((f: any) => f.id === r.facility_id)?.name || '-'}
                       {lastIso && <span className="ml-2">📅 最終{lastLabel}: {fmt(lastIso)}</span>}
                     </p>
                   </div>
                   <Badge className={viewMode === 'incomplete'
-                    ? 'bg-diletto-gold/[0.08] text-diletto-gold text-[10px] border-none'
-                    : 'bg-diletto-green/10 text-diletto-green text-[10px] border-none'}>
+                    ? 'bg-brand-gold/[0.08] text-brand-gold text-[10px] border-none'
+                    : 'bg-brand-green/10 text-brand-green text-[10px] border-none'}>
                     {r[openKey]} / {total}
                   </Badge>
                 </label>
@@ -508,7 +508,7 @@ function ReminderModal({ openKey, rows, facilities, total, lastCompletedAt, sele
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={sending}>閉じる</Button>
           {viewMode === 'incomplete' && incomplete.length > 0 && (
-            <Button onClick={onSend} disabled={sending || selectedIds.size === 0} className="bg-diletto-ink hover:bg-black text-white px-6 shadow-sm">
+            <Button onClick={onSend} disabled={sending || selectedIds.size === 0} className="bg-brand-ink hover:bg-black text-white px-6 shadow-sm">
               {sending ? '送信中...' : 'リマインドを送信'}
             </Button>
           )}

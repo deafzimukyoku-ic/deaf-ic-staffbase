@@ -474,34 +474,34 @@ export default function PdfEditor({
       onDrop={handleDrop}
     >
       {/* ズームバー */}
-      <div className="flex items-center gap-1.5 px-4 h-[36px] border-b border-diletto-gray/10 bg-white shrink-0">
+      <div className="flex items-center gap-1.5 px-4 h-[36px] border-b border-brand-gray/10 bg-white shrink-0">
         <button
           onClick={() => setZoomIndex((p) => Math.max(p - 1, 0))}
           disabled={zoomIndex === 0}
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-diletto-gray/20 bg-white text-xs font-medium text-diletto-gray hover:bg-diletto-bg hover:text-diletto-ink disabled:opacity-30 transition-all"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-brand-gray/20 bg-white text-xs font-medium text-brand-gray hover:bg-brand-bg hover:text-brand-ink disabled:opacity-30 transition-all"
         >
           −
         </button>
         <button
           onClick={() => setZoomIndex(DEFAULT_ZOOM_INDEX)}
-          className="flex h-7 items-center justify-center rounded-md border border-diletto-gray/20 bg-white px-2.5 text-[11px] font-medium text-diletto-gray hover:bg-diletto-bg hover:text-diletto-ink transition-all min-w-[48px]"
+          className="flex h-7 items-center justify-center rounded-md border border-brand-gray/20 bg-white px-2.5 text-[11px] font-medium text-brand-gray hover:bg-brand-bg hover:text-brand-ink transition-all min-w-[48px]"
         >
           {zoomPercent}%
         </button>
         <button
           onClick={() => setZoomIndex((p) => Math.min(p + 1, ZOOM_STEPS.length - 1))}
           disabled={zoomIndex === ZOOM_STEPS.length - 1}
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-diletto-gray/20 bg-white text-xs font-medium text-diletto-gray hover:bg-diletto-bg hover:text-diletto-ink disabled:opacity-30 transition-all"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-brand-gray/20 bg-white text-xs font-medium text-brand-gray hover:bg-brand-bg hover:text-brand-ink disabled:opacity-30 transition-all"
         >
           +
         </button>
       </div>
 
       {/* Canvas本体 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto bg-diletto-bg">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto bg-brand-bg">
         {loading && (
           <div className="flex items-center justify-center h-64">
-            <p className="text-sm text-diletto-gray-light">PDFを読み込み中...</p>
+            <p className="text-sm text-brand-gray-light">PDFを読み込み中...</p>
           </div>
         )}
         {/* w-max + min-w-full: 拡大時は中身の幅まで広がり横スクロールが効く／縮小時は親幅で中央寄せ */}

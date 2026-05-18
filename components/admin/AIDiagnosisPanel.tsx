@@ -28,10 +28,10 @@ const typeLabels: Record<string, string> = {
 };
 
 const typeColors: Record<string, string> = {
-  personality: 'bg-diletto-blue/10 text-diletto-blue border-diletto-blue/20',
-  strengths: 'bg-diletto-green/10 text-diletto-green border-diletto-green/20',
-  culture_fit: 'bg-diletto-gold/[0.1] text-diletto-gold border-diletto-gold/20',
-  team_compat: 'bg-diletto-gray/10 text-diletto-gray border-diletto-gray/20',
+  personality: 'bg-brand-blue/10 text-brand-blue border-brand-blue/20',
+  strengths: 'bg-brand-green/10 text-brand-green border-brand-green/20',
+  culture_fit: 'bg-brand-gold/[0.1] text-brand-gold border-brand-gold/20',
+  team_compat: 'bg-brand-gray/10 text-brand-gray border-brand-gray/20',
 };
 
 function formatDateTime(iso: string): string {
@@ -99,25 +99,25 @@ function PersonalityView({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-4 text-sm">
       {data.summary ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">概要</p>
-          <p className="text-diletto-gray leading-relaxed">{String(data.summary)}</p>
+          <p className="font-medium text-brand-ink mb-1">概要</p>
+          <p className="text-brand-gray leading-relaxed">{String(data.summary)}</p>
         </div>
       ) : null}
 
       {bigFive && (
         <div>
-          <p className="font-medium text-diletto-ink mb-2">Big Five 傾向</p>
+          <p className="font-medium text-brand-ink mb-2">Big Five 傾向</p>
           <div className="grid gap-2">
             {Object.entries(bigFive).map(([key, val]) => (
               val && (
-                <div key={key} className="flex items-start gap-2 rounded-md border border-diletto-gray/10 p-2">
+                <div key={key} className="flex items-start gap-2 rounded-md border border-brand-gray/10 p-2">
                   <Badge variant="outline" className="shrink-0 text-xs mt-0.5">
                     {bigFiveLabels[key] || key}
                   </Badge>
                   <div className="min-w-0">
                     <span className="font-medium text-xs">{levelLabels[val.level] || val.level}</span>
                     {val.evidence && (
-                      <p className="text-xs text-diletto-gray mt-0.5">{val.evidence}</p>
+                      <p className="text-xs text-brand-gray mt-0.5">{val.evidence}</p>
                     )}
                   </div>
                 </div>
@@ -129,11 +129,11 @@ function PersonalityView({ data }: { data: Record<string, unknown> }) {
 
       {strengths && strengths.length > 0 && (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">強み</p>
+          <p className="font-medium text-brand-ink mb-1">強み</p>
           <ul className="space-y-1">
             {strengths.map((s, i) => (
-              <li key={i} className="text-diletto-gray">
-                <span className="font-medium text-diletto-ink">{s.point}</span>
+              <li key={i} className="text-brand-gray">
+                <span className="font-medium text-brand-ink">{s.point}</span>
                 {s.evidence && <span className="text-xs ml-1">({s.evidence})</span>}
               </li>
             ))}
@@ -143,11 +143,11 @@ function PersonalityView({ data }: { data: Record<string, unknown> }) {
 
       {watchPoints && watchPoints.length > 0 && (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">配慮ポイント</p>
+          <p className="font-medium text-brand-ink mb-1">配慮ポイント</p>
           <ul className="space-y-1">
             {watchPoints.map((w, i) => (
-              <li key={i} className="text-diletto-gray">
-                <span className="font-medium text-diletto-ink">{w.point}</span>
+              <li key={i} className="text-brand-gray">
+                <span className="font-medium text-brand-ink">{w.point}</span>
                 {w.evidence && <span className="text-xs ml-1">({w.evidence})</span>}
               </li>
             ))}
@@ -157,15 +157,15 @@ function PersonalityView({ data }: { data: Record<string, unknown> }) {
 
       {data.communication_tips ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">コミュニケーションのヒント</p>
-          <p className="text-diletto-gray">{String(data.communication_tips)}</p>
+          <p className="font-medium text-brand-ink mb-1">コミュニケーションのヒント</p>
+          <p className="text-brand-gray">{String(data.communication_tips)}</p>
         </div>
       ) : null}
 
       {data.management_implications ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">マネジメント上の示唆</p>
-          <p className="text-diletto-gray">{String(data.management_implications)}</p>
+          <p className="font-medium text-brand-ink mb-1">マネジメント上の示唆</p>
+          <p className="text-brand-gray">{String(data.management_implications)}</p>
         </div>
       ) : null}
 
@@ -183,20 +183,20 @@ function StrengthsView({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-4 text-sm">
       {data.overall_assessment ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">総合評価</p>
-          <p className="text-diletto-gray leading-relaxed">{String(data.overall_assessment)}</p>
+          <p className="font-medium text-brand-ink mb-1">総合評価</p>
+          <p className="text-brand-gray leading-relaxed">{String(data.overall_assessment)}</p>
         </div>
       ) : null}
 
       {strengths && strengths.length > 0 && (
         <div>
-          <p className="font-medium text-diletto-ink mb-2">強み</p>
+          <p className="font-medium text-brand-ink mb-2">強み</p>
           <div className="space-y-2">
             {strengths.map((s, i) => (
-              <div key={i} className="rounded-md border border-diletto-green/20 bg-diletto-green/[0.03] p-2">
-                <p className="font-medium text-diletto-ink">{s.point}</p>
-                {s.description && <p className="text-xs text-diletto-gray mt-0.5">{s.description}</p>}
-                {s.evidence && <p className="text-xs text-diletto-gray-light mt-0.5">根拠: {s.evidence}</p>}
+              <div key={i} className="rounded-md border border-brand-green/20 bg-brand-green/[0.03] p-2">
+                <p className="font-medium text-brand-ink">{s.point}</p>
+                {s.description && <p className="text-xs text-brand-gray mt-0.5">{s.description}</p>}
+                {s.evidence && <p className="text-xs text-brand-gray-light mt-0.5">根拠: {s.evidence}</p>}
               </div>
             ))}
           </div>
@@ -205,13 +205,13 @@ function StrengthsView({ data }: { data: Record<string, unknown> }) {
 
       {growthAreas && growthAreas.length > 0 && (
         <div>
-          <p className="font-medium text-diletto-ink mb-2">成長課題</p>
+          <p className="font-medium text-brand-ink mb-2">成長課題</p>
           <div className="space-y-2">
             {growthAreas.map((g, i) => (
-              <div key={i} className="rounded-md border border-diletto-gold/20 bg-diletto-gold/[0.03] p-2">
-                <p className="font-medium text-diletto-ink">{g.point}</p>
-                {g.description && <p className="text-xs text-diletto-gray mt-0.5">{g.description}</p>}
-                {g.evidence && <p className="text-xs text-diletto-gray-light mt-0.5">根拠: {g.evidence}</p>}
+              <div key={i} className="rounded-md border border-brand-gold/20 bg-brand-gold/[0.03] p-2">
+                <p className="font-medium text-brand-ink">{g.point}</p>
+                {g.description && <p className="text-xs text-brand-gray mt-0.5">{g.description}</p>}
+                {g.evidence && <p className="text-xs text-brand-gray-light mt-0.5">根拠: {g.evidence}</p>}
               </div>
             ))}
           </div>
@@ -220,15 +220,15 @@ function StrengthsView({ data }: { data: Record<string, unknown> }) {
 
       {data.recommended_roles ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">推奨される業務・役割</p>
-          <p className="text-diletto-gray">{String(data.recommended_roles)}</p>
+          <p className="font-medium text-brand-ink mb-1">推奨される業務・役割</p>
+          <p className="text-brand-gray">{String(data.recommended_roles)}</p>
         </div>
       ) : null}
 
       {data.development_tips ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">育成のポイント</p>
-          <p className="text-diletto-gray">{String(data.development_tips)}</p>
+          <p className="font-medium text-brand-ink mb-1">育成のポイント</p>
+          <p className="text-brand-gray">{String(data.development_tips)}</p>
         </div>
       ) : null}
 
@@ -246,27 +246,27 @@ function CultureFitView({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-4 text-sm">
       {data.fit_summary ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">フィット概要</p>
-          <p className="text-diletto-gray leading-relaxed">{String(data.fit_summary)}</p>
+          <p className="font-medium text-brand-ink mb-1">フィット概要</p>
+          <p className="text-brand-gray leading-relaxed">{String(data.fit_summary)}</p>
         </div>
       ) : null}
 
       {data.fit_level ? (
         <div className="flex items-center gap-2">
-          <span className="text-xs text-diletto-gray">フィット度:</span>
+          <span className="text-xs text-brand-gray">フィット度:</span>
           <Badge variant="outline">{fitLevelLabels[data.fit_level as string] || String(data.fit_level)}</Badge>
         </div>
       ) : null}
 
       {alignments && alignments.length > 0 && (
         <div>
-          <p className="font-medium text-diletto-ink mb-2">合致点</p>
+          <p className="font-medium text-brand-ink mb-2">合致点</p>
           <div className="space-y-2">
             {alignments.map((a, i) => (
-              <div key={i} className="rounded-md border border-diletto-green/20 bg-diletto-green/[0.03] p-2">
-                <p className="text-xs text-diletto-gray-light mb-0.5">{a.company_value}</p>
-                <p className="font-medium text-diletto-ink">{a.point}</p>
-                {a.evidence && <p className="text-xs text-diletto-gray mt-0.5">根拠: {a.evidence}</p>}
+              <div key={i} className="rounded-md border border-brand-green/20 bg-brand-green/[0.03] p-2">
+                <p className="text-xs text-brand-gray-light mb-0.5">{a.company_value}</p>
+                <p className="font-medium text-brand-ink">{a.point}</p>
+                {a.evidence && <p className="text-xs text-brand-gray mt-0.5">根拠: {a.evidence}</p>}
               </div>
             ))}
           </div>
@@ -275,13 +275,13 @@ function CultureFitView({ data }: { data: Record<string, unknown> }) {
 
       {gaps && gaps.length > 0 && (
         <div>
-          <p className="font-medium text-diletto-ink mb-2">ギャップ</p>
+          <p className="font-medium text-brand-ink mb-2">ギャップ</p>
           <div className="space-y-2">
             {gaps.map((g, i) => (
-              <div key={i} className="rounded-md border border-diletto-gold/20 bg-diletto-gold/[0.03] p-2">
-                <p className="text-xs text-diletto-gray-light mb-0.5">{g.company_value}</p>
-                <p className="font-medium text-diletto-ink">{g.point}</p>
-                {g.evidence && <p className="text-xs text-diletto-gray mt-0.5">根拠: {g.evidence}</p>}
+              <div key={i} className="rounded-md border border-brand-gold/20 bg-brand-gold/[0.03] p-2">
+                <p className="text-xs text-brand-gray-light mb-0.5">{g.company_value}</p>
+                <p className="font-medium text-brand-ink">{g.point}</p>
+                {g.evidence && <p className="text-xs text-brand-gray mt-0.5">根拠: {g.evidence}</p>}
               </div>
             ))}
           </div>
@@ -290,22 +290,22 @@ function CultureFitView({ data }: { data: Record<string, unknown> }) {
 
       {data.expected_contributions ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">期待される貢献</p>
-          <p className="text-diletto-gray">{String(data.expected_contributions)}</p>
+          <p className="font-medium text-brand-ink mb-1">期待される貢献</p>
+          <p className="text-brand-gray">{String(data.expected_contributions)}</p>
         </div>
       ) : null}
 
       {data.support_needed ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">サポートが望ましい点</p>
-          <p className="text-diletto-gray">{String(data.support_needed)}</p>
+          <p className="font-medium text-brand-ink mb-1">サポートが望ましい点</p>
+          <p className="text-brand-gray">{String(data.support_needed)}</p>
         </div>
       ) : null}
 
       {data.placement_suggestions ? (
         <div>
-          <p className="font-medium text-diletto-ink mb-1">配属・マネジメントへの提案</p>
-          <p className="text-diletto-gray">{String(data.placement_suggestions)}</p>
+          <p className="font-medium text-brand-ink mb-1">配属・マネジメントへの提案</p>
+          <p className="text-brand-gray">{String(data.placement_suggestions)}</p>
         </div>
       ) : null}
 
@@ -317,14 +317,14 @@ function CultureFitView({ data }: { data: Record<string, unknown> }) {
 // --- 共通フッター ---
 function DiagnosisFooter({ confidence, caveat }: { confidence?: string; caveat?: string }) {
   return (
-    <div className="border-t border-diletto-gray/10 pt-2 mt-2 space-y-1">
+    <div className="border-t border-brand-gray/10 pt-2 mt-2 space-y-1">
       {confidence && (
-        <p className="text-xs text-diletto-gray-light">
+        <p className="text-xs text-brand-gray-light">
           信頼度: {confidenceLabels[confidence] || confidence}
         </p>
       )}
       {caveat && (
-        <p className="text-xs text-diletto-gray-light italic">{caveat}</p>
+        <p className="text-xs text-brand-gray-light italic">{caveat}</p>
       )}
     </div>
   );
@@ -434,7 +434,7 @@ export function AIDiagnosisPanel({ employeeId, tenantId }: Props) {
           <CardTitle className="text-base">AI診断</CardTitle>
           <CardDescription>
             今月の使用回数: {usageCount} / {MAX_AI_DIAGNOSIS_PER_MONTH}
-            {atLimit && <span className="text-diletto-red ml-2">（上限に達しました）</span>}
+            {atLimit && <span className="text-brand-red ml-2">（上限に達しました）</span>}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -469,17 +469,17 @@ export function AIDiagnosisPanel({ employeeId, tenantId }: Props) {
               })}
             >
               <div className="flex flex-col gap-1">
-                <span className={`inline-flex items-center self-start rounded-md border px-3 py-1 text-sm font-semibold ${typeColors[r.diagnosis_type] || 'bg-diletto-gray/10 text-diletto-gray border-diletto-gray/20'}`}>
+                <span className={`inline-flex items-center self-start rounded-md border px-3 py-1 text-sm font-semibold ${typeColors[r.diagnosis_type] || 'bg-brand-gray/10 text-brand-gray border-brand-gray/20'}`}>
                   {typeLabels[r.diagnosis_type]}
                 </span>
-                <span className="text-sm text-diletto-ink">
+                <span className="text-sm text-brand-ink">
                   {formatDateTime(r.created_at)}
                 </span>
               </div>
               <svg
                 width="18" height="18" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                className={`text-diletto-gray shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                className={`text-brand-gray shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
               >
                 <polyline points="6 9 12 15 18 9" />
               </svg>

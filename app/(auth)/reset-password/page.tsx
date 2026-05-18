@@ -36,7 +36,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-diletto-beige px-4">
+    <div className="flex min-h-screen items-center justify-center bg-brand-beige px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -80,7 +80,7 @@ export default function ResetPasswordPage() {
                 {loading ? '送信中...' : 'リセットメールを送信'}
               </Button>
               <div className="text-center text-sm text-muted-foreground">
-                <Link href="/login" className="text-diletto-blue hover:underline">
+                <Link href="/login" className="text-brand-blue hover:underline">
                   ログインに戻る
                 </Link>
               </div>

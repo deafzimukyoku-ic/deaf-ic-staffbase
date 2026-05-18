@@ -203,9 +203,9 @@ export function CategoryManager({ type, onChanged }: Props) {
       )}
 
       {/* 新規作成フォーム */}
-      <div className="rounded-lg border border-diletto-gray/15 bg-white p-4 space-y-3">
+      <div className="rounded-lg border border-brand-gray/15 bg-white p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className="text-sm font-semibold text-diletto-ink">新しいカテゴリを追加</p>
+          <p className="text-sm font-semibold text-brand-ink">新しいカテゴリを追加</p>
           <Button
             type="button"
             variant="outline"
@@ -219,7 +219,7 @@ export function CategoryManager({ type, onChanged }: Props) {
         {/* ラベル + 入力欄の高さを揃えるため、ヒント文はフォーム外に出す */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-[100px] space-y-1">
-            <label className="text-[11px] text-diletto-gray-light block h-[14px]">アイコン</label>
+            <label className="text-[11px] text-brand-gray-light block h-[14px]">アイコン</label>
             <Input
               value={newIcon}
               onChange={(e) => setNewIcon(e.target.value)}
@@ -229,7 +229,7 @@ export function CategoryManager({ type, onChanged }: Props) {
             />
           </div>
           <div className="flex-1 min-w-[180px] space-y-1">
-            <label className="text-[11px] text-diletto-gray-light block h-[14px]">カテゴリ名</label>
+            <label className="text-[11px] text-brand-gray-light block h-[14px]">カテゴリ名</label>
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -239,7 +239,7 @@ export function CategoryManager({ type, onChanged }: Props) {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[11px] text-diletto-gray-light block h-[14px]">色</label>
+            <label className="text-[11px] text-brand-gray-light block h-[14px]">色</label>
             <div className="h-10 flex items-center">
               <ColorPicker value={newColor} onChange={setNewColor} />
             </div>
@@ -248,11 +248,11 @@ export function CategoryManager({ type, onChanged }: Props) {
             {creating ? '追加中...' : '追加'}
           </Button>
         </div>
-        <p className="text-[10px] text-diletto-gray-light">
+        <p className="text-[10px] text-brand-gray-light">
           💡 絵文字入力: Win <kbd className="bg-gray-100 px-1 rounded">⊞ + .</kbd> / Mac <kbd className="bg-gray-100 px-1 rounded">⌘⌃Space</kbd>
         </p>
         <div className="flex flex-wrap gap-1.5 pt-1">
-          <span className="text-[11px] text-diletto-gray-light mr-1 self-center">絵文字候補:</span>
+          <span className="text-[11px] text-brand-gray-light mr-1 self-center">絵文字候補:</span>
           {CATEGORY_ICON_SUGGESTIONS.map(e => (
             <button
               key={e}
@@ -268,18 +268,18 @@ export function CategoryManager({ type, onChanged }: Props) {
       </div>
 
       {/* 一覧（D&D並び替え） */}
-      <div className="rounded-lg border border-diletto-gray/15 bg-white">
-        <div className="border-b border-diletto-gray/10 px-4 py-2 text-xs text-diletto-gray-light">
+      <div className="rounded-lg border border-brand-gray/15 bg-white">
+        <div className="border-b border-brand-gray/10 px-4 py-2 text-xs text-brand-gray-light">
           ドラッグ&amp;ドロップで並び替えできます
         </div>
         {loading ? (
-          <p className="p-4 text-sm text-diletto-gray-light">読み込み中...</p>
+          <p className="p-4 text-sm text-brand-gray-light">読み込み中...</p>
         ) : items.length === 0 ? (
-          <p className="p-4 text-sm text-diletto-gray-light">カテゴリがありません。上から追加してください。</p>
+          <p className="p-4 text-sm text-brand-gray-light">カテゴリがありません。上から追加してください。</p>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
-              <ul className="divide-y divide-diletto-gray/10">
+              <ul className="divide-y divide-brand-gray/10">
                 {items.map(cat => (
                   <SortableRow
                     key={cat.id}
@@ -297,10 +297,10 @@ export function CategoryManager({ type, onChanged }: Props) {
                 ))}
               </ul>
               {uncategorizedCount > 0 && (
-                <div className="border-t border-diletto-gray/10 px-4 py-2.5 bg-diletto-beige/30 text-xs text-diletto-gray flex items-center gap-2">
-                  <span className="text-diletto-gray-light">📁</span>
+                <div className="border-t border-brand-gray/10 px-4 py-2.5 bg-brand-beige/30 text-xs text-brand-gray flex items-center gap-2">
+                  <span className="text-brand-gray-light">📁</span>
                   <span>カテゴリ未設定</span>
-                  <span className="ml-auto font-bold text-diletto-ink tabular-nums">{uncategorizedCount} 項目</span>
+                  <span className="ml-auto font-bold text-brand-ink tabular-nums">{uncategorizedCount} 項目</span>
                 </div>
               )}
             </SortableContext>
@@ -328,7 +328,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
           type="button"
           onClick={() => onChange(c.hex)}
           title={c.label}
-          className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${value === c.hex ? 'border-diletto-ink scale-110' : 'border-white'
+          className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${value === c.hex ? 'border-brand-ink scale-110' : 'border-white'
             }`}
           style={{ backgroundColor: c.hex }}
           aria-label={c.label}
@@ -371,7 +371,7 @@ function SortableRow({ category, itemCount, editing, onStartEdit, onCancelEdit, 
 
   if (editing) {
     return (
-      <li ref={setNodeRef} style={style} className="flex flex-wrap items-center gap-2 p-3 bg-diletto-beige/40">
+      <li ref={setNodeRef} style={style} className="flex flex-wrap items-center gap-2 p-3 bg-brand-beige/40">
         <Input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} className="w-16 text-center text-lg" />
         <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} className="flex-1 min-w-[160px]" />
         <ColorPicker value={color} onChange={setColor} />
@@ -386,12 +386,12 @@ function SortableRow({ category, itemCount, editing, onStartEdit, onCancelEdit, 
   }
 
   return (
-    <li ref={setNodeRef} style={style} className="flex items-center gap-3 p-3 hover:bg-diletto-beige/30">
+    <li ref={setNodeRef} style={style} className="flex items-center gap-3 p-3 hover:bg-brand-beige/30">
       <button
         type="button"
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing px-1 text-diletto-gray-light hover:text-diletto-ink"
+        className="cursor-grab active:cursor-grabbing px-1 text-brand-gray-light hover:text-brand-ink"
         title="ドラッグで並び替え"
         aria-label="並び替え"
       >
@@ -402,8 +402,8 @@ function SortableRow({ category, itemCount, editing, onStartEdit, onCancelEdit, 
         className="inline-block h-3 w-3 rounded-full shrink-0"
         style={{ backgroundColor: category.color }}
       />
-      <span className="text-sm font-medium text-diletto-ink flex-1">{category.name}</span>
-      <span className="text-xs text-diletto-gray-light tabular-nums shrink-0 mr-2">
+      <span className="text-sm font-medium text-brand-ink flex-1">{category.name}</span>
+      <span className="text-xs text-brand-gray-light tabular-nums shrink-0 mr-2">
         {itemCount} 項目
       </span>
       <div className="flex gap-1">

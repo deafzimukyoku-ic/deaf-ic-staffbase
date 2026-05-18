@@ -31,10 +31,10 @@ interface TrainingWithSub {
 /* 結果ラベル/色 はモジュールレベルに置く (TrainingsGrid を module level に出すため) */
 const RESULT_LABEL: Record<string, string> = { pending: '判定待ち', passed: '合格', failed: '不合格', resubmit: '再提出してください' };
 const RESULT_COLOR: Record<string, string> = {
-  pending: 'bg-diletto-gold/[0.08] text-diletto-gold',
-  passed: 'bg-diletto-green/10 text-diletto-green',
-  failed: 'bg-diletto-red/[0.06] text-diletto-red',
-  resubmit: 'bg-diletto-blue/[0.07] text-diletto-blue',
+  pending: 'bg-brand-gold/[0.08] text-brand-gold',
+  passed: 'bg-brand-green/10 text-brand-green',
+  failed: 'bg-brand-red/[0.06] text-brand-red',
+  resubmit: 'bg-brand-blue/[0.07] text-brand-blue',
 };
 
 /* TrainingsGrid: 受講モーダルを含むカテゴリ別グリッド。
@@ -61,7 +61,7 @@ function TrainingsGrid({
   const open = openId ? items.find((i) => i.training.id === openId) : null;
 
   if (items.length === 0) {
-    return <p className="text-center py-20 text-diletto-gray-light">このカテゴリの研修はありません</p>;
+    return <p className="text-center py-20 text-brand-gray-light">このカテゴリの研修はありません</p>;
   }
 
   return (
@@ -113,11 +113,11 @@ function TrainingsGrid({
 
                 <div className="space-y-4 pt-2">
                   {(training as any).body && (
-                    <p className="text-sm text-diletto-ink/80 leading-relaxed">{(training as any).body}</p>
+                    <p className="text-sm text-brand-ink/80 leading-relaxed">{(training as any).body}</p>
                   )}
 
                   {((training as any).content_blocks?.length || 0) > 0 ? (
-                    <div className="bg-white/80 rounded-md p-5 border border-diletto-gray/10">
+                    <div className="bg-white/80 rounded-md p-5 border border-brand-gray/10">
                       <BlockRenderer blocks={(training as any).content_blocks} />
                     </div>
                   ) : (
@@ -131,9 +131,9 @@ function TrainingsGrid({
                   )}
 
                   {submission && submission.admin_comment && (
-                    <div className="bg-white/60 backdrop-blur-sm border border-diletto-blue/20 p-4 rounded-md text-sm flex gap-3">
-                      <span className="text-diletto-blue font-bold">💡 判定コメント:</span>
-                      <span className="text-diletto-ink">{submission.admin_comment}</span>
+                    <div className="bg-white/60 backdrop-blur-sm border border-brand-blue/20 p-4 rounded-md text-sm flex gap-3">
+                      <span className="text-brand-blue font-bold">💡 判定コメント:</span>
+                      <span className="text-brand-ink">{submission.admin_comment}</span>
                     </div>
                   )}
 
@@ -143,7 +143,7 @@ function TrainingsGrid({
                         <div className="space-y-2">
                           <div className="flex justify-between items-end">
                             <Label className="text-sm font-bold">受講の感想</Label>
-                            <span className={`text-[10px] font-medium ${(summaryTexts[training.id] || '').length < TRAINING_SUMMARY_MIN_CHARS ? 'text-diletto-red' : 'text-diletto-green'}`}>
+                            <span className={`text-[10px] font-medium ${(summaryTexts[training.id] || '').length < TRAINING_SUMMARY_MIN_CHARS ? 'text-brand-red' : 'text-brand-green'}`}>
                               {(summaryTexts[training.id] || '').length} / {TRAINING_SUMMARY_MIN_CHARS} 文字以上
                             </span>
                           </div>
@@ -151,14 +151,14 @@ function TrainingsGrid({
                             value={summaryTexts[training.id] || ''}
                             onChange={(e) => setSummaryTexts((prev) => ({ ...prev, [training.id]: e.target.value }))}
                             rows={5}
-                            className="bg-white border-diletto-gray/10 rounded-md focus:ring-diletto-blue/20"
+                            className="bg-white border-brand-gray/10 rounded-md focus:ring-brand-blue/20"
                             placeholder="研修を終えて、学んだことや気づいたことを記入してください。"
                           />
                         </div>
                         <Button
                           onClick={() => onSubmit(training.id)}
                           disabled={submittingId === training.id || (summaryTexts[training.id] || '').length < TRAINING_SUMMARY_MIN_CHARS}
-                          className="w-full h-12 bg-diletto-ink hover:bg-black text-white rounded-md shadow-md transition-all active:scale-[0.98]"
+                          className="w-full h-12 bg-brand-ink hover:bg-black text-white rounded-md shadow-md transition-all active:scale-[0.98]"
                         >
                           {submittingId === training.id ? '提出中...' : '研修完了を報告する'}
                         </Button>
@@ -179,8 +179,8 @@ function TrainingsGrid({
                         })
                       : null;
                     return (
-                      <div className="pt-3 border-t border-diletto-gray/10">
-                        <p className="text-xs text-diletto-gray-light text-right">
+                      <div className="pt-3 border-t border-brand-gray/10">
+                        <p className="text-xs text-brand-gray-light text-right">
                           これまで {s.count} 回 提出済み{lastViewedLabel ? `（最終 ${lastViewedLabel}）` : ''}
                         </p>
                       </div>
@@ -335,7 +335,7 @@ export default function MyTrainingsPage() {
     setSubmittingId(null);
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   const totalCount = items.length;
   const passedCount = items.filter((i) => i.submission?.result === 'passed').length;
@@ -357,11 +357,11 @@ export default function MyTrainingsPage() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-2xl font-bold text-diletto-ink">研修</h1>
-            <p className="text-sm text-diletto-gray mt-1">受講するカテゴリを選択してください</p>
+            <h1 className="text-2xl font-bold text-brand-ink">研修</h1>
+            <p className="text-sm text-brand-gray mt-1">受講するカテゴリを選択してください</p>
           </div>
           {unfinishedCount > 0 && (
-            <Badge className="bg-diletto-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
+            <Badge className="bg-brand-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
@@ -374,12 +374,12 @@ export default function MyTrainingsPage() {
         {/* 進捗バー (my/dashboard を踏襲) */}
         <div className="mb-8 mt-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-diletto-gray">全体の合格状況 — {passedCount}/{totalCount} 合格</p>
-            <p className="text-sm font-semibold text-diletto-ink">{progressPercent}%</p>
+            <p className="text-sm text-brand-gray">全体の合格状況 — {passedCount}/{totalCount} 合格</p>
+            <p className="text-sm font-semibold text-brand-ink">{progressPercent}%</p>
           </div>
-          <div className="h-3 w-full rounded-full bg-diletto-beige overflow-hidden">
+          <div className="h-3 w-full rounded-full bg-brand-beige overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-diletto-green' : 'bg-diletto-gold'}`}
+              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-brand-green' : 'bg-brand-gold'}`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -396,7 +396,7 @@ export default function MyTrainingsPage() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
               >
                 <div
                   className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity"
@@ -407,25 +407,25 @@ export default function MyTrainingsPage() {
                     {cat.icon || '📚'}
                   </span>
                   {cat.unfinished > 0 && (
-                    <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                    <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                       {cat.unfinished}
                     </span>
                   )}
                 </div>
 
                 <div className="relative">
-                  <span className="text-sm font-bold text-diletto-ink block truncate mb-1">
+                  <span className="text-sm font-bold text-brand-ink block truncate mb-1">
                     {cat.name}
                   </span>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-diletto-gray">
+                    <span className="text-[10px] text-brand-gray">
                       {catDone}/{catTotal} 合格
                     </span>
                     {catPct === 100 && <Badge variant="success" className="text-[9px] py-0 h-4">完了</Badge>}
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                  <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-diletto-green' : 'bg-diletto-gold'}`}
+                      className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-brand-green' : 'bg-brand-gold'}`}
                       style={{ width: `${catPct}%` }}
                     />
                   </div>
@@ -437,22 +437,22 @@ export default function MyTrainingsPage() {
           {uncategorizedItems.length > 0 && (
             <button
               onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📁', color: '#94a3b8' } as any)}
-              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
             >
               <div className="flex justify-between items-start mb-auto relative">
                 <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📁</span>
                 {uncategorizedUnfinished > 0 && (
-                  <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                  <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                     {uncategorizedUnfinished}
                   </span>
                 )}
               </div>
               <div className="relative">
-                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                <span className="text-[10px] text-diletto-gray block mb-2">{uncategorizedItems.length} 項目</span>
-                <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                <span className="text-[10px] text-brand-gray block mb-2">{uncategorizedItems.length} 項目</span>
+                <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
                   <div
-                    className={`h-full rounded-full bg-diletto-gray-light/30`}
+                    className={`h-full rounded-full bg-brand-gray-light/30`}
                     style={{ width: `${Math.round(((uncategorizedItems.length - uncategorizedUnfinished) / uncategorizedItems.length) * 100)}%` }}
                   />
                 </div>
@@ -475,7 +475,7 @@ export default function MyTrainingsPage() {
           variant="ghost"
           size="sm"
           onClick={() => setSelectedCategory(null)}
-          className="text-diletto-gray-light hover:text-diletto-ink"
+          className="text-brand-gray-light hover:text-brand-ink"
         >
           ← カテゴリ一覧へ
         </Button>

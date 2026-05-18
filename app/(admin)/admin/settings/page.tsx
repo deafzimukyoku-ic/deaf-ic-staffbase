@@ -314,7 +314,7 @@ export default function SettingsPage() {
 
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   return (
     <div>
@@ -325,14 +325,14 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="dashboard" value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* モバイルでは横スクロール、lg 以上では均等分割 */}
-        <TabsList className="mb-6 w-full max-w-full h-12 bg-diletto-beige/40 border border-diletto-gray/10 rounded-xl p-1 overflow-x-auto no-scrollbar justify-start lg:justify-stretch gap-0.5">
-          <TabsTrigger value="dashboard" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">🏠 ダッシュボード</TabsTrigger>
-          <TabsTrigger value="basic" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">基本情報</TabsTrigger>
-          <TabsTrigger value="organization" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">組織設定</TabsTrigger>
-          <TabsTrigger value="fields" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">項目設定</TabsTrigger>
-          <TabsTrigger value="visibility" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">表示設定</TabsTrigger>
-          <TabsTrigger value="values" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">価値観</TabsTrigger>
-          <TabsTrigger value="documents" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-diletto-gray-light hover:text-diletto-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-diletto-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">書類テンプレ</TabsTrigger>
+        <TabsList className="mb-6 w-full max-w-full h-12 bg-brand-beige/40 border border-brand-gray/10 rounded-xl p-1 overflow-x-auto no-scrollbar justify-start lg:justify-stretch gap-0.5">
+          <TabsTrigger value="dashboard" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">🏠 ダッシュボード</TabsTrigger>
+          <TabsTrigger value="basic" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">基本情報</TabsTrigger>
+          <TabsTrigger value="organization" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">組織設定</TabsTrigger>
+          <TabsTrigger value="fields" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">項目設定</TabsTrigger>
+          <TabsTrigger value="visibility" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">表示設定</TabsTrigger>
+          <TabsTrigger value="values" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">価値観</TabsTrigger>
+          <TabsTrigger value="documents" className="flex-none lg:flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold text-brand-gray-light hover:text-brand-ink hover:bg-white/40 data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm data-[state=active]:font-bold transition-all">書類テンプレ</TabsTrigger>
         </TabsList>
 
         {/* ダッシュボードタブ */}
@@ -399,7 +399,7 @@ export default function SettingsPage() {
                   <Button size="sm" variant={b.is_default ? 'default' : 'outline'} onClick={() => setBanks(banks.map((x, j) => ({ ...x, is_default: j === i })))}>
                     {b.is_default ? 'デフォルト' : '設定'}
                   </Button>
-                  <Button size="sm" variant="ghost" className="text-diletto-red" onClick={() => setBanks(banks.filter((_, j) => j !== i))}>削除</Button>
+                  <Button size="sm" variant="ghost" className="text-brand-red" onClick={() => setBanks(banks.filter((_, j) => j !== i))}>削除</Button>
                 </div>
               ))}
               {banks.length < MAX_PAYROLL_BANKS_PER_TENANT && (
@@ -414,7 +414,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">施設（事業所）</CardTitle>
-              <p className="text-[11px] text-diletto-gray-light mt-1">
+              <p className="text-[11px] text-brand-gray-light mt-1">
                 左端 ⋮⋮ をドラッグで並び替え。並び順は全画面のセレクタ・一覧に反映されます。<br />
                 「シフト管理」OFF の施設はシフトモードのセレクタ・ナビから非表示。「送迎」OFF は送迎関連のみ非表示。
               </p>
@@ -444,14 +444,14 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">業務日報の活動内容／連絡事項</CardTitle>
-              <p className="text-xs text-diletto-gray mt-1">
+              <p className="text-xs text-brand-gray mt-1">
                 各施設の業務日報下部に印字するテンプレートを設定できます。改行はそのまま反映されます。
                 例:「AM<br/>□朝礼<br/><br/>【連絡事項】<br/>朝礼に記載」
               </p>
             </CardHeader>
             <CardContent className="space-y-3">
               {facilities.length === 0 ? (
-                <p className="text-xs text-diletto-gray-light">先に施設を登録してください。</p>
+                <p className="text-xs text-brand-gray-light">先に施設を登録してください。</p>
               ) : (
                 facilities.map((f, i) => (
                   <div key={f.id || `dr_new_${i}`} className="space-y-1">
@@ -475,8 +475,8 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">役職</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-[10px] text-diletto-gray-light mb-2">
-                ※ 役職は表示用ラベルです。システム権限は <a className="text-diletto-blue underline" href="/admin/access-matrix">権限マトリクス</a> から個別に設定してください。
+              <p className="text-[10px] text-brand-gray-light mb-2">
+                ※ 役職は表示用ラベルです。システム権限は <a className="text-brand-blue underline" href="/admin/access-matrix">権限マトリクス</a> から個別に設定してください。
                 左端 ⋮⋮ をドラッグで並び替え。
               </p>
               <PositionSortableList positions={positions} onChange={setPositions} />
@@ -490,11 +490,11 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">カスタム入力項目</CardTitle>
-              <p className="text-xs text-diletto-gray mt-1">社員の基本情報ページに追加する入力項目を管理できます</p>
+              <p className="text-xs text-brand-gray mt-1">社員の基本情報ページに追加する入力項目を管理できます</p>
             </CardHeader>
             <CardContent className="space-y-4">
               {customFields.map((cf, i) => (
-                <div key={cf.id || `new-cf-${i}`} className="rounded-md border border-diletto-gray/15 p-3 space-y-3">
+                <div key={cf.id || `new-cf-${i}`} className="rounded-md border border-brand-gray/15 p-3 space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
                     <div className="space-y-1">
                       <Label className="text-xs">項目名</Label>
@@ -536,7 +536,7 @@ export default function SettingsPage() {
                         ))}
                       </select>
                     </div>
-                    <Button size="sm" variant="ghost" className="text-diletto-red h-9" onClick={() => setCustomFields(customFields.filter((_, j) => j !== i))}>削除</Button>
+                    <Button size="sm" variant="ghost" className="text-brand-red h-9" onClick={() => setCustomFields(customFields.filter((_, j) => j !== i))}>削除</Button>
                   </div>
                   {cf.field_type === 'select' && (
                     <div className="space-y-1">
@@ -554,10 +554,10 @@ export default function SettingsPage() {
                   )}
                   {/* 対象者条件: この項目を入力する社員を絞り込む（プロフィール画面の表示制御のみ）。
                      書類の配布対象は書類テンプレ側で個別設定する（migration 122 document_template_audience）。 */}
-                  <div className="space-y-1 pt-2 border-t border-diletto-gray/10">
+                  <div className="space-y-1 pt-2 border-t border-brand-gray/10">
                     <Label className="text-xs flex items-center gap-1.5">
                       <span>👥 この項目を入力するのは</span>
-                      <span className="text-diletto-gray-light text-[10px] font-normal">（プロフィール画面で表示する対象者を絞ります）</span>
+                      <span className="text-brand-gray-light text-[10px] font-normal">（プロフィール画面で表示する対象者を絞ります）</span>
                     </Label>
                     <select
                       title="対象者条件"
@@ -593,21 +593,21 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">プロフィールセクション表示設定</CardTitle>
-              <p className="text-xs text-diletto-gray mt-1">社員プロフィール画面で表示するセクションを選択できます</p>
+              <p className="text-xs text-brand-gray mt-1">社員プロフィール画面で表示するセクションを選択できます</p>
             </CardHeader>
             <CardContent className="space-y-3">
               {PROFILE_SECTION_KEYS.map((key) => (
-                <label key={key} className="flex items-center justify-between rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige transition-colors">
+                <label key={key} className="flex items-center justify-between rounded-md border border-brand-gray/15 p-3 cursor-pointer hover:bg-brand-beige transition-colors">
                   <span className="text-sm font-medium">{PROFILE_SECTION_LABELS[key]}</span>
                   <input
                     type="checkbox"
                     checked={sectionVisibility[key]}
                     onChange={(e) => setSectionVisibility({ ...sectionVisibility, [key]: e.target.checked })}
-                    className="h-4 w-4 rounded accent-diletto-blue"
+                    className="h-4 w-4 rounded accent-brand-blue"
                   />
                 </label>
               ))}
-              <p className="text-xs text-diletto-gray mt-2">※ 氏名・フリガナ・生年月日などの必須項目は常に表示されます</p>
+              <p className="text-xs text-brand-gray mt-2">※ 氏名・フリガナ・生年月日などの必須項目は常に表示されます</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -632,24 +632,24 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">書類テンプレート</CardTitle>
-              <p className="text-xs text-diletto-gray-light mt-1">
+              <p className="text-xs text-brand-gray-light mt-1">
                 社員に提出させる書類（PDF）のテンプレート登録・タグ配置・並び替えを行います。
               </p>
             </CardHeader>
             <CardContent>
               <a
                 href="/admin/documents"
-                className="block rounded-md border border-diletto-gray/15 hover:border-diletto-blue/40 hover:bg-diletto-blue/[0.03] p-4 transition-all group"
+                className="block rounded-md border border-brand-gray/15 hover:border-brand-blue/40 hover:bg-brand-blue/[0.03] p-4 transition-all group"
               >
                 <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-2xl bg-diletto-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  <div className="h-12 w-12 rounded-2xl bg-brand-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     📄
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-bold text-diletto-ink text-sm">書類テンプレート管理を開く</h3>
-                    <p className="text-xs text-diletto-gray mt-0.5">PDF アップロード／タグ配置／並び替え／一括 PDF 出力</p>
+                    <h3 className="font-bold text-brand-ink text-sm">書類テンプレート管理を開く</h3>
+                    <p className="text-xs text-brand-gray mt-0.5">PDF アップロード／タグ配置／並び替え／一括 PDF 出力</p>
                   </div>
-                  <span className="text-diletto-gray-light group-hover:text-diletto-blue group-hover:translate-x-1 transition-all">→</span>
+                  <span className="text-brand-gray-light group-hover:text-brand-blue group-hover:translate-x-1 transition-all">→</span>
                 </div>
               </a>
             </CardContent>
@@ -678,29 +678,29 @@ function NavCard({
 }) {
   const inner = (
     <CardContent className="p-5 flex items-center gap-4">
-      <div className="h-12 w-12 rounded-2xl bg-diletto-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+      <div className="h-12 w-12 rounded-2xl bg-brand-blue/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="font-bold text-diletto-ink text-sm flex items-center gap-1.5">
+        <h3 className="font-bold text-brand-ink text-sm flex items-center gap-1.5">
           {title}
           {href && (
-            <span className="text-[10px] font-normal text-diletto-blue/70 bg-diletto-blue/10 rounded px-1.5 py-0.5">
+            <span className="text-[10px] font-normal text-brand-blue/70 bg-brand-blue/10 rounded px-1.5 py-0.5">
               別ページ
             </span>
           )}
         </h3>
-        <p className="text-[10px] text-diletto-gray truncate">{description}</p>
+        <p className="text-[10px] text-brand-gray truncate">{description}</p>
       </div>
       {href && (
-        <span className="text-diletto-gray-light group-hover:text-diletto-blue group-hover:translate-x-1 transition-all">
+        <span className="text-brand-gray-light group-hover:text-brand-blue group-hover:translate-x-1 transition-all">
           →
         </span>
       )}
     </CardContent>
   );
 
-  const cls = 'cursor-pointer hover:border-diletto-blue/50 hover:shadow-md transition-all group overflow-hidden border-diletto-gray/10 block';
+  const cls = 'cursor-pointer hover:border-brand-blue/50 hover:shadow-md transition-all group overflow-hidden border-brand-gray/10 block';
 
   if (href) {
     return (
@@ -799,8 +799,8 @@ function FacilityRowItem({
       title={`${label}: ${checked ? 'ON' : 'OFF'}`}
       className={`text-[10px] font-bold px-2 py-1 rounded border transition-colors whitespace-nowrap ${
         checked
-          ? 'bg-diletto-blue text-white border-diletto-blue'
-          : 'bg-white text-diletto-gray-light border-diletto-gray/20'
+          ? 'bg-brand-blue text-white border-brand-blue'
+          : 'bg-white text-brand-gray-light border-brand-gray/20'
       }`}
     >
       {label} {checked ? 'ON' : 'OFF'}
@@ -810,7 +810,7 @@ function FacilityRowItem({
     <div ref={setNodeRef} style={style} className="flex gap-2 items-center bg-white">
       <button
         type="button"
-        className="cursor-grab text-diletto-gray-light hover:text-diletto-ink px-1 select-none"
+        className="cursor-grab text-brand-gray-light hover:text-brand-ink px-1 select-none"
         title="ドラッグで並び替え"
         {...attributes}
         {...listeners}
@@ -851,7 +851,7 @@ function FacilityRowItem({
       {/* シフト統括アカウント発行ボタン (migration 140)。
           保存済 facility (facility.id あり) のみ表示。同じ事業所で 2 度押すと API 側で 409。 */}
       {facility.id && <ShiftManagerIssueButton facilityId={facility.id} facilityName={facility.name} />}
-      <Button size="sm" variant="ghost" className="text-diletto-red" onClick={onDelete}>
+      <Button size="sm" variant="ghost" className="text-brand-red" onClick={onDelete}>
         削除
       </Button>
     </div>
@@ -916,7 +916,7 @@ function ShiftManagerIssueButton({ facilityId, facilityName }: { facilityId: str
             <DialogTitle className="flex items-center gap-2">
               ✓ シフト統括アカウントを発行しました
             </DialogTitle>
-            <DialogDescription className="text-diletto-red font-bold pt-2">
+            <DialogDescription className="text-brand-red font-bold pt-2">
               ⚠ パスワードはこの画面でしか表示されません。必ずコピーして控えてください。
             </DialogDescription>
           </DialogHeader>
@@ -930,7 +930,7 @@ function ShiftManagerIssueButton({ facilityId, facilityName }: { facilityId: str
               <div>
                 <Label className="text-xs">ログイン用メールアドレス</Label>
                 <div className="flex gap-2 mt-1">
-                  <code className="flex-1 bg-diletto-gray/5 px-3 py-2 rounded text-xs font-mono break-all">
+                  <code className="flex-1 bg-brand-gray/5 px-3 py-2 rounded text-xs font-mono break-all">
                     {result.email}
                   </code>
                   <Button size="sm" variant="outline" onClick={() => copyTo('email', result.email)}>
@@ -949,7 +949,7 @@ function ShiftManagerIssueButton({ facilityId, facilityName }: { facilityId: str
                   </Button>
                 </div>
               </div>
-              <p className="text-[10px] text-diletto-gray-light leading-relaxed">
+              <p className="text-[10px] text-brand-gray-light leading-relaxed">
                 このアカウントは事業所の操作端末でログインしっぱなしで使う想定です。
                 マネージャー不在時でも シフト・送迎・日次出力 などの日常業務が可能になります。
                 書類・お知らせ等の Staffbase 側にはアクセスできません。
@@ -1039,7 +1039,7 @@ function PositionRowItem({
     <div ref={setNodeRef} style={style} className="flex gap-2 items-center bg-white">
       <button
         type="button"
-        className="cursor-grab text-diletto-gray-light hover:text-diletto-ink px-1 select-none"
+        className="cursor-grab text-brand-gray-light hover:text-brand-ink px-1 select-none"
         title="ドラッグで並び替え"
         {...attributes}
         {...listeners}
@@ -1053,7 +1053,7 @@ function PositionRowItem({
         value={position.name}
         onChange={(e) => onChange({ ...position, name: e.target.value })}
       />
-      <Button size="sm" variant="ghost" className="text-diletto-red p-2" onClick={onDelete}>
+      <Button size="sm" variant="ghost" className="text-brand-red p-2" onClick={onDelete}>
         <span className="text-xs">削除</span>
       </Button>
     </div>

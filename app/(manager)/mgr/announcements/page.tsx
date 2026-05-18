@@ -237,7 +237,7 @@ export default function ManagerAnnouncementsPage() {
         }));
     };
 
-    if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /></div>;
+    if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /></div>;
 
     const uncategorizedDocs = announcements.filter(d => !d.category_id);
     const catMap = new Map(categories.map(c => [c.id, c]));
@@ -260,7 +260,7 @@ export default function ManagerAnnouncementsPage() {
                     </div>
                 </div>
 
-                <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して内容を確認・投稿してください。新規投稿はカテゴリを開いて行います。</p>
+                <p className="text-sm text-brand-gray mb-6">カテゴリを選択して内容を確認・投稿してください。新規投稿はカテゴリを開いて行います。</p>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {categories.map((cat) => {
@@ -269,7 +269,7 @@ export default function ManagerAnnouncementsPage() {
                             <button
                                 key={cat.id}
                                 onClick={() => setSelectedCategory(cat)}
-                                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+                                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
                             >
                                 <div className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" style={{ backgroundColor: cat.color }} />
                                 <div className="flex justify-between items-start mb-auto relative">
@@ -278,8 +278,8 @@ export default function ManagerAnnouncementsPage() {
                                     </span>
                                 </div>
                                 <div className="relative">
-                                    <span className="text-sm font-bold text-diletto-ink block truncate mb-1">{cat.name}</span>
-                                    <span className="text-[10px] text-diletto-gray">{catDocs.length} 項目</span>
+                                    <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
+                                    <span className="text-[10px] text-brand-gray">{catDocs.length} 項目</span>
                                 </div>
                             </button>
                         );
@@ -288,14 +288,14 @@ export default function ManagerAnnouncementsPage() {
                     {uncategorizedDocs.length > 0 && (
                         <button
                             onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📎', color: '#94a3b8' } as Category)}
-                            className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+                            className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
                         >
                             <div className="flex justify-between items-start mb-auto relative">
                                 <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📎</span>
                             </div>
                             <div className="relative">
-                                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                                <span className="text-[10px] text-diletto-gray block">{uncategorizedDocs.length} 項目</span>
+                                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                                <span className="text-[10px] text-brand-gray block">{uncategorizedDocs.length} 項目</span>
                             </div>
                         </button>
                     )}
@@ -312,7 +312,7 @@ export default function ManagerAnnouncementsPage() {
     return (
         <div>
             <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
-                <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
+                <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-brand-gray-light hover:text-brand-ink shrink-0">
                     ← 戻る
                 </Button>
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -326,7 +326,7 @@ export default function ManagerAnnouncementsPage() {
                         scopeLabel="このカテゴリ"
                         onChanged={() => me && reloadAnnouncements(me.tenant_id)}
                     />
-                    <Button onClick={openNew} className="bg-diletto-ink hover:bg-black text-white rounded-xl h-11 font-bold px-8 shadow-sm transition-all hover:shadow-md">
+                    <Button onClick={openNew} className="bg-brand-ink hover:bg-black text-white rounded-xl h-11 font-bold px-8 shadow-sm transition-all hover:shadow-md">
                         + 新規投稿
                     </Button>
                 </div>
@@ -344,12 +344,12 @@ export default function ManagerAnnouncementsPage() {
                     return (
                         <DragSortItem key={a.id} index={idx}>
                             {(handle) => (
-                        <Card className="border-diletto-gray/5 shadow-sm rounded-xl overflow-hidden hover:border-diletto-blue/20 transition-all bg-white" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
+                        <Card className="border-brand-gray/5 shadow-sm rounded-xl overflow-hidden hover:border-brand-blue/20 transition-all bg-white" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
                             <CardContent className="py-6">
                                 <div className="flex flex-wrap items-center gap-3 mb-2">
                                     <DragHandleIcon {...handle} />
                                     <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
-                                        <p className="font-bold text-diletto-ink text-lg break-words md:truncate">{a.title}</p>
+                                        <p className="font-bold text-brand-ink text-lg break-words md:truncate">{a.title}</p>
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <PersonInline label="作成者" person={a.creator} />
                                             {a.created_by !== a.updated_by && <PersonInline label="編集者" person={a.editor} />}
@@ -358,7 +358,7 @@ export default function ManagerAnnouncementsPage() {
                                     <div className="flex items-center gap-2 flex-wrap order-2 md:order-none">
                                         <NewBadge createdAt={a.created_at} />
                                         <CategoryBadge category={a.category_id ? catMap.get(a.category_id) : null} />
-                                        <p className="text-xs text-diletto-gray-light font-medium ml-2">
+                                        <p className="text-xs text-brand-gray-light font-medium ml-2">
                                             {new Date(a.created_at).toLocaleDateString('ja-JP')}
                                         </p>
                                     </div>
@@ -372,13 +372,13 @@ export default function ManagerAnnouncementsPage() {
                                                     onChanged={() => me && reloadAnnouncements(me.tenant_id)}
                                                 />
                                                 <Button variant="ghost" size="sm" onClick={() => openEdit(a)} className="h-8 rounded-md text-xs font-bold">編集</Button>
-                                                <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-diletto-red" onClick={() => handleDelete(a.id)}>削除</Button>
+                                                <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-brand-red" onClick={() => handleDelete(a.id)}>削除</Button>
                                             </>
                                         )}
                                     </div>
                                 </div>
-                                <p className="text-sm text-diletto-gray mb-4 whitespace-pre-wrap line-clamp-3 leading-relaxed">{a.body}</p>
-                                <div className="pt-4 border-t border-diletto-gray/5">
+                                <p className="text-sm text-brand-gray mb-4 whitespace-pre-wrap line-clamp-3 leading-relaxed">{a.body}</p>
+                                <div className="pt-4 border-t border-brand-gray/5">
                                     <TargetAttributeBadges
                                         targetType={a.target_type}
                                         targetFacilityIds={a.target_facility_ids}
@@ -394,8 +394,8 @@ export default function ManagerAnnouncementsPage() {
                     );
                 })}
                 {visible.length === 0 && (
-                    <Card className="border-dashed border-2 border-diletto-gray/10 bg-transparent rounded-3xl">
-                        <CardContent className="py-20 text-center text-diletto-gray-light font-medium">
+                    <Card className="border-dashed border-2 border-brand-gray/10 bg-transparent rounded-3xl">
+                        <CardContent className="py-20 text-center text-brand-gray-light font-medium">
                             該当するお知らせはありません
                         </CardContent>
                     </Card>
@@ -418,8 +418,8 @@ export default function ManagerAnnouncementsPage() {
                                         type="button"
                                         onClick={() => toggleFacility(f.id)}
                                         className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${form.target_facility_ids.includes(f.id)
-                                            ? 'bg-diletto-blue text-white border-diletto-blue shadow-sm'
-                                            : 'bg-white text-diletto-gray border-diletto-gray/15 hover:border-diletto-blue/30'
+                                            ? 'bg-brand-blue text-white border-brand-blue shadow-sm'
+                                            : 'bg-white text-brand-gray border-brand-gray/15 hover:border-brand-blue/30'
                                             }`}
                                     >
                                         {f.name}

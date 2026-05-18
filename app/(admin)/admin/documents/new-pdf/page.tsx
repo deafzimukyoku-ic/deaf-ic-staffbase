@@ -51,7 +51,7 @@ export default function NewPdfDocumentPage() {
     <div>
       <button
         onClick={() => router.push('/admin/documents')}
-        className="flex items-center gap-1 text-sm text-diletto-gray hover:text-diletto-ink transition-colors mb-4"
+        className="flex items-center gap-1 text-sm text-brand-gray hover:text-brand-ink transition-colors mb-4"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="15 18 9 12 15 6" />
@@ -68,9 +68,9 @@ export default function NewPdfDocumentPage() {
 
         {file && (
           <>
-            <div className="rounded-md border border-diletto-gray/20 p-3">
+            <div className="rounded-md border border-brand-gray/20 p-3">
               <p className="text-sm font-medium">{file.name}</p>
-              <p className="text-xs text-diletto-gray mt-1">
+              <p className="text-xs text-brand-gray mt-1">
                 {(file.size / 1024 / 1024).toFixed(1)} MB
               </p>
             </div>

@@ -144,11 +144,11 @@ export default function MyAnnouncementsPage() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-2xl font-bold text-diletto-ink">お知らせ</h1>
-            <p className="text-sm text-diletto-gray mt-1">カテゴリを選択して確認してください</p>
+            <h1 className="text-2xl font-bold text-brand-ink">お知らせ</h1>
+            <p className="text-sm text-brand-gray mt-1">カテゴリを選択して確認してください</p>
           </div>
           {unreadCount > 0 && (
-            <Badge className="bg-diletto-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
+            <Badge className="bg-brand-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
@@ -161,12 +161,12 @@ export default function MyAnnouncementsPage() {
         {/* 進捗バー (my/dashboard を踏襲) */}
         <div className="mb-8 mt-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-diletto-gray">既読状況 — {readCount}/{totalCount} 既読</p>
-            <p className="text-sm font-semibold text-diletto-ink">{progressPercent}%</p>
+            <p className="text-sm text-brand-gray">既読状況 — {readCount}/{totalCount} 既読</p>
+            <p className="text-sm font-semibold text-brand-ink">{progressPercent}%</p>
           </div>
-          <div className="h-3 w-full rounded-full bg-diletto-beige overflow-hidden">
+          <div className="h-3 w-full rounded-full bg-brand-beige overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-diletto-green' : 'bg-diletto-blue'}`}
+              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-brand-green' : 'bg-brand-blue'}`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -183,7 +183,7 @@ export default function MyAnnouncementsPage() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
               >
                 <div
                   className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity"
@@ -194,25 +194,25 @@ export default function MyAnnouncementsPage() {
                     {cat.icon || '📢'}
                   </span>
                   {cat.unread > 0 && (
-                    <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                    <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                       {cat.unread}
                     </span>
                   )}
                 </div>
 
                 <div className="relative">
-                  <span className="text-sm font-bold text-diletto-ink block truncate mb-1">
+                  <span className="text-sm font-bold text-brand-ink block truncate mb-1">
                     {cat.name}
                   </span>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-diletto-gray">
+                    <span className="text-[10px] text-brand-gray">
                       {catRead}/{catTotal} 既読
                     </span>
                     {catPct === 100 && <Badge variant="success" className="text-[9px] py-0 h-4">完了</Badge>}
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                  <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-diletto-green' : 'bg-diletto-blue'}`}
+                      className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-brand-green' : 'bg-brand-blue'}`}
                       style={{ width: `${catPct}%` }}
                     />
                   </div>
@@ -224,22 +224,22 @@ export default function MyAnnouncementsPage() {
           {uncategorizedItems.length > 0 && (
             <button
               onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📎', color: '#94a3b8' } as any)}
-              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
             >
               <div className="flex justify-between items-start mb-auto relative">
                 <span className="text-4xl group-hover:scale-110 transition-transform duration-300">📎</span>
                 {uncategorizedUnread > 0 && (
-                  <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                  <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                     {uncategorizedUnread}
                   </span>
                 )}
               </div>
               <div className="relative">
-                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                <span className="text-[10px] text-diletto-gray block mb-2">{uncategorizedItems.length} 件</span>
-                <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                <span className="text-[10px] text-brand-gray block mb-2">{uncategorizedItems.length} 件</span>
+                <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
                   <div
-                    className={`h-full rounded-full bg-diletto-gray-light/30`}
+                    className={`h-full rounded-full bg-brand-gray-light/30`}
                     style={{ width: `${Math.round(((uncategorizedItems.length - uncategorizedUnread) / uncategorizedItems.length) * 100)}%` }}
                   />
                 </div>
@@ -264,7 +264,7 @@ export default function MyAnnouncementsPage() {
           variant="ghost"
           size="sm"
           onClick={() => setSelectedCategory(null)}
-          className="text-diletto-gray-light hover:text-diletto-ink px-0"
+          className="text-brand-gray-light hover:text-brand-ink px-0"
         >
           ← カテゴリ一覧へ
         </Button>
@@ -306,7 +306,7 @@ export default function MyAnnouncementsPage() {
     const open = openId ? items.find((i) => i.id === openId) : null;
 
     if (items.length === 0) {
-      return <p className="text-center py-20 text-diletto-gray-light">このカテゴリのお知らせはありません</p>;
+      return <p className="text-center py-20 text-brand-gray-light">このカテゴリのお知らせはありません</p>;
     }
 
     return (
@@ -338,22 +338,22 @@ export default function MyAnnouncementsPage() {
                       <NewBadge createdAt={open.created_at} />
                     </div>
                     {open.isRead ? (
-                      <Badge variant="outline" className="text-[10px] shrink-0 border-diletto-gray/20 text-diletto-gray">既読</Badge>
+                      <Badge variant="outline" className="text-[10px] shrink-0 border-brand-gray/20 text-brand-gray">既読</Badge>
                     ) : (
-                      <Badge className="bg-diletto-red text-white text-[10px] shrink-0 border-none">未読</Badge>
+                      <Badge className="bg-brand-red text-white text-[10px] shrink-0 border-none">未読</Badge>
                     )}
                   </div>
                 </DialogHeader>
                 <div className="pt-2">
                   <BlockRenderer blocks={open.content_blocks || []} fallbackText={open.body} />
                 </div>
-                <p className="text-[10px] text-diletto-gray-light mt-4 pt-3 border-t border-diletto-gray/5">
+                <p className="text-[10px] text-brand-gray-light mt-4 pt-3 border-t border-brand-gray/5">
                   {new Date(open.created_at).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
                 </p>
                 {/* お知らせは「既読にする」ボタンを持たず開いた瞬間に既読化されるため、
                     重複ボタンの問題は無い。常に「✓ 確認しました（N 回目）」を表示。 */}
                 {tenantId && employeeId && (
-                  <div className="pt-3 border-t border-diletto-gray/10 mt-3">
+                  <div className="pt-3 border-t border-brand-gray/10 mt-3">
                     <ViewConfirmButton
                       table="announcement_view_logs"
                       tenantId={tenantId}

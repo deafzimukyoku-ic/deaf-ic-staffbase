@@ -166,13 +166,13 @@ export default function MyCompliancePage() {
     setAckLoading(null);
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   if (docs.length === 0) {
     return (
       <div>
         <h1 className="text-2xl font-bold mb-6">遵守事項</h1>
-        <p className="text-diletto-gray-light">遵守事項はまだ登録されていません</p>
+        <p className="text-brand-gray-light">遵守事項はまだ登録されていません</p>
       </div>
     );
   }
@@ -198,11 +198,11 @@ export default function MyCompliancePage() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-2xl font-bold text-diletto-ink">遵守事項</h1>
-            <p className="text-sm text-diletto-gray mt-1">カテゴリを選択して確認してください</p>
+            <h1 className="text-2xl font-bold text-brand-ink">遵守事項</h1>
+            <p className="text-sm text-brand-gray mt-1">カテゴリを選択して確認してください</p>
           </div>
           {unacknowledgedCount > 0 && (
-            <Badge className="bg-diletto-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
+            <Badge className="bg-brand-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
@@ -215,12 +215,12 @@ export default function MyCompliancePage() {
         {/* 進捗バー (my/dashboard を踏襲) */}
         <div className="mb-8 mt-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-diletto-gray">全体の進捗 — {acknowledgedCount}/{totalCount} 完了</p>
-            <p className="text-sm font-semibold text-diletto-ink">{progressPercent}%</p>
+            <p className="text-sm text-brand-gray">全体の進捗 — {acknowledgedCount}/{totalCount} 完了</p>
+            <p className="text-sm font-semibold text-brand-ink">{progressPercent}%</p>
           </div>
-          <div className="h-3 w-full rounded-full bg-diletto-beige overflow-hidden">
+          <div className="h-3 w-full rounded-full bg-brand-beige overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-diletto-green' : 'bg-diletto-blue'}`}
+              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-brand-green' : 'bg-brand-blue'}`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -237,7 +237,7 @@ export default function MyCompliancePage() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
               >
                 <div
                   className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity"
@@ -248,25 +248,25 @@ export default function MyCompliancePage() {
                     {cat.icon || '📜'}
                   </span>
                   {cat.unread > 0 && (
-                    <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                    <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                       {cat.unread}
                     </span>
                   )}
                 </div>
 
                 <div className="relative">
-                  <span className="text-sm font-bold text-diletto-ink block truncate mb-1">
+                  <span className="text-sm font-bold text-brand-ink block truncate mb-1">
                     {cat.name}
                   </span>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-diletto-gray">
+                    <span className="text-[10px] text-brand-gray">
                       {catDone}/{catTotal} 完了
                     </span>
                     {catPct === 100 && <Badge variant="success" className="text-[9px] py-0 h-4">完了</Badge>}
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                  <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-diletto-green' : 'bg-diletto-blue'}`}
+                      className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-brand-green' : 'bg-brand-blue'}`}
                       style={{ width: `${catPct}%` }}
                     />
                   </div>
@@ -278,22 +278,22 @@ export default function MyCompliancePage() {
           {uncategorizedDocs.length > 0 && (
             <button
               onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📎', color: '#94a3b8' } as any)}
-              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
             >
               <div className="flex justify-between items-start mb-auto relative">
                 <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📎</span>
                 {uncategorizedUnread > 0 && (
-                  <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                  <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                     {uncategorizedUnread}
                   </span>
                 )}
               </div>
               <div className="relative">
-                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                <span className="text-[10px] text-diletto-gray block mb-2">{uncategorizedDocs.length} 項目</span>
-                <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
+                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                <span className="text-[10px] text-brand-gray block mb-2">{uncategorizedDocs.length} 項目</span>
+                <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
                   <div
-                    className={`h-full rounded-full bg-diletto-gray-light/30`}
+                    className={`h-full rounded-full bg-brand-gray-light/30`}
                     style={{ width: `${Math.round(((uncategorizedDocs.length - uncategorizedUnread) / uncategorizedDocs.length) * 100)}%` }}
                   />
                 </div>
@@ -316,7 +316,7 @@ export default function MyCompliancePage() {
           variant="ghost"
           size="sm"
           onClick={() => setSelectedCategory(null)}
-          className="text-diletto-gray-light hover:text-diletto-ink"
+          className="text-brand-gray-light hover:text-brand-ink"
         >
           ← 戻る
         </Button>
@@ -364,7 +364,7 @@ function GridView({ docs, ackMap, ackLoading, onAcknowledge, tenantId, employeeI
   const [wasAckedAtOpen, setWasAckedAtOpen] = useState<boolean>(false);
 
   if (docs.length === 0) {
-    return <p className="text-center py-20 text-diletto-gray-light">このカテゴリのドキュメントはありません</p>;
+    return <p className="text-center py-20 text-brand-gray-light">このカテゴリのドキュメントはありません</p>;
   }
 
   const openDoc = openId ? docs.find((d) => d.id === openId) : null;
@@ -401,20 +401,20 @@ function GridView({ docs, ackMap, ackLoading, onAcknowledge, tenantId, employeeI
                     <NewBadge createdAt={openDoc.created_at || openDoc.updated_at} />
                   </div>
                   {ackMap[openDoc.id] ? (
-                    <Badge className="bg-diletto-green/10 text-diletto-green border-none">同意済</Badge>
+                    <Badge className="bg-brand-green/10 text-brand-green border-none">同意済</Badge>
                   ) : (
-                    <Badge className="bg-diletto-red/10 text-diletto-red border-none">未同意</Badge>
+                    <Badge className="bg-brand-red/10 text-brand-red border-none">未同意</Badge>
                   )}
                 </div>
               </DialogHeader>
 
               <div className="space-y-4 pt-2">
-                <div className="border border-diletto-gray/10 rounded-md p-5 bg-white shadow-inner min-h-[120px]">
+                <div className="border border-brand-gray/10 rounded-md p-5 bg-white shadow-inner min-h-[120px]">
                   <BlockRenderer blocks={(openDoc as any).content_blocks || []} fallbackText={openDoc.content} />
                 </div>
 
                 {openDoc.admin_comment && (
-                  <div className="text-xs text-diletto-gray-light bg-diletto-gray/5 p-3 rounded-md flex gap-2 italic">
+                  <div className="text-xs text-brand-gray-light bg-brand-gray/5 p-3 rounded-md flex gap-2 italic">
                     <span>💡</span>
                     {openDoc.admin_comment}
                   </div>
@@ -422,13 +422,13 @@ function GridView({ docs, ackMap, ackLoading, onAcknowledge, tenantId, employeeI
 
                 {!ackMap[openDoc.id] && (
                   <div className="space-y-2">
-                    <p className="text-xs text-diletto-gray-light text-center">
+                    <p className="text-xs text-brand-gray-light text-center">
                       下記ボタンを押すことで「内容を確認し、遵守して勤務に取り組むこと」に同意したとみなされます
                     </p>
                     <Button
                       onClick={() => onAcknowledge(openDoc)}
                       disabled={ackLoading === openDoc.id}
-                      className="w-full h-12 bg-diletto-blue hover:bg-diletto-ink text-white font-bold rounded-md shadow-lg shadow-diletto-blue/10 transition-all active:scale-[0.98]"
+                      className="w-full h-12 bg-brand-blue hover:bg-brand-ink text-white font-bold rounded-md shadow-lg shadow-brand-blue/10 transition-all active:scale-[0.98]"
                     >
                       {ackLoading === openDoc.id ? '処理中...' : '✓ 内容を確認し、遵守して勤務に取り組むことに同意します'}
                     </Button>
@@ -439,7 +439,7 @@ function GridView({ docs, ackMap, ackLoading, onAcknowledge, tenantId, employeeI
                     1 回目（未同意 → 同意 → カウント 1）は同セッション中ボタンを出さず、
                     閉じて再度開くと「2 回目」として表示される。 */}
                 {tenantId && employeeId && wasAckedAtOpen && (
-                  <div className="pt-3 border-t border-diletto-gray/10">
+                  <div className="pt-3 border-t border-brand-gray/10">
                     <ViewConfirmButton
                       table="compliance_view_logs"
                       tenantId={tenantId}

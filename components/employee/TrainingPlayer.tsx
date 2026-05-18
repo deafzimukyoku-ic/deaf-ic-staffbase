@@ -35,7 +35,7 @@ export function TrainingPlayer({ title, youtubeUrl, pdfUrl }: Props) {
     <div className="space-y-4">
       {embedUrl ? (
         <div
-          className="mx-auto rounded-md overflow-hidden border border-diletto-gray/10 bg-black block"
+          className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block"
           style={{
             aspectRatio: '16 / 9',
             width: 'min(100%, calc(65vh * 16 / 9))',
@@ -55,7 +55,7 @@ export function TrainingPlayer({ title, youtubeUrl, pdfUrl }: Props) {
           href={youtubeUrl}
           target="_blank"
           rel="noreferrer"
-          className="mx-auto rounded-md overflow-hidden border border-diletto-gray/10 bg-black block relative group"
+          className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block relative group"
           style={{
             aspectRatio: '16 / 9',
             width: 'min(100%, calc(65vh * 16 / 9))',
@@ -84,14 +84,14 @@ export function TrainingPlayer({ title, youtubeUrl, pdfUrl }: Props) {
             href={pdfUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-diletto-blue hover:underline text-sm"
+            className="text-brand-blue hover:underline text-sm"
           >
             📁 PDFスライドを開く
           </a>
         </div>
       )}
       {!embedUrl && !ytId && !pdfUrl && (
-        <p className="text-sm text-diletto-gray-light text-center py-4">教材が未登録です</p>
+        <p className="text-sm text-brand-gray-light text-center py-4">教材が未登録です</p>
       )}
     </div>
   );

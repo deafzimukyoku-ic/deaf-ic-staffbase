@@ -154,12 +154,12 @@ export default function SetupPage() {
   const currentIndex = steps.findIndex((s) => s.key === step);
 
   return (
-    <div className="min-h-screen bg-diletto-beige py-12">
+    <div className="min-h-screen bg-brand-beige py-12">
       <div className="mx-auto max-w-xl px-4">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold">初期セットアップ</h1>
-          <p className="mt-1 text-sm text-diletto-gray">
+          <p className="mt-1 text-sm text-brand-gray">
             基本情報を設定してstaffbaseを始めましょう
           </p>
         </div>
@@ -171,21 +171,21 @@ export default function SetupPage() {
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
                   i <= currentIndex
-                    ? 'bg-diletto-blue text-white'
-                    : 'bg-[rgba(0,0,0,0.06)] text-diletto-gray-light'
+                    ? 'bg-brand-blue text-white'
+                    : 'bg-[rgba(0,0,0,0.06)] text-brand-gray-light'
                 }`}
               >
                 {s.num}
               </div>
               <span
                 className={`hidden text-xs font-medium sm:inline ${
-                  i <= currentIndex ? 'text-[#111]' : 'text-diletto-gray-light'
+                  i <= currentIndex ? 'text-[#111]' : 'text-brand-gray-light'
                 }`}
               >
                 {s.label}
               </span>
               {i < steps.length - 1 && (
-                <div className={`mx-2 h-px w-8 ${i < currentIndex ? 'bg-diletto-blue' : 'bg-black/10'}`} />
+                <div className={`mx-2 h-px w-8 ${i < currentIndex ? 'bg-brand-blue' : 'bg-black/10'}`} />
               )}
             </div>
           ))}

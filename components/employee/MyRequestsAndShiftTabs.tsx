@@ -46,7 +46,7 @@ export default function MyRequestsAndShiftTabs({ employeeId, tenantId, facilityI
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="bg-diletto-beige/40 border border-diletto-gray/10 rounded-xl h-10 p-1 gap-1">
+      <TabsList className="bg-brand-beige/40 border border-brand-gray/10 rounded-xl h-10 p-1 gap-1">
         <TabsTrigger
           value="requests"
           className="px-3 sm:px-4 text-sm font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:font-bold"

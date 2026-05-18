@@ -77,7 +77,7 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
         <TableBody>
           {employees.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="h-24 text-center text-diletto-gray-light">
+              <TableCell colSpan={8} className="h-24 text-center text-brand-gray-light">
                 社員がまだ登録されていません
               </TableCell>
             </TableRow>
@@ -92,7 +92,7 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/admin/employees/${emp.id}`}
-                      className="font-medium text-diletto-blue hover:underline inline-block min-w-[9em]"
+                      className="font-medium text-brand-blue hover:underline inline-block min-w-[9em]"
                     >
                       {emp.last_name} {emp.first_name}
                     </Link>
@@ -100,25 +100,25 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
                       <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-600 w-[6.5em] justify-center whitespace-nowrap">管理者</Badge>
                     )}
                     {emp.role === 'manager' && (
-                      <Badge variant="outline" className="text-[10px] border-diletto-blue/30 text-diletto-blue w-[6.5em] justify-center whitespace-nowrap">マネージャー</Badge>
+                      <Badge variant="outline" className="text-[10px] border-brand-blue/30 text-brand-blue w-[6.5em] justify-center whitespace-nowrap">マネージャー</Badge>
                     )}
                     {emp.role === 'shift_manager' && (
                       <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 w-[6.5em] justify-center whitespace-nowrap">シフト統括</Badge>
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="text-sm text-diletto-gray">{emp.email}</TableCell>
+                <TableCell className="text-sm text-brand-gray">{emp.email}</TableCell>
                 <TableCell className="text-sm">
                   {emp.facility_id ? (facilityMap?.get(emp.facility_id) || '-') : '-'}
                 </TableCell>
                 <TableCell className="text-sm">{emp.join_date}</TableCell>
                 <TableCell>
                   {emp.status === 'active' ? (
-                    <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">
+                    <Badge className="bg-brand-green/10 text-brand-green border-brand-green/20">
                       在籍
                     </Badge>
                   ) : (
-                    <Badge className="bg-diletto-red/[0.06] text-diletto-red border-diletto-red/15">
+                    <Badge className="bg-brand-red/[0.06] text-brand-red border-brand-red/15">
                       退職
                     </Badge>
                   )}
@@ -129,7 +129,7 @@ export function EmployeeTable({ employees, facilityMap }: Props) {
                       <button
                         onClick={() => handleResendInvite(emp)}
                         disabled={resending === emp.id}
-                        className="text-xs px-2 py-1 rounded-md border border-diletto-blue/30 text-diletto-blue hover:bg-diletto-blue/5 transition-all disabled:opacity-50"
+                        className="text-xs px-2 py-1 rounded-md border border-brand-blue/30 text-brand-blue hover:bg-brand-blue/5 transition-all disabled:opacity-50"
                       >
                         {resending === emp.id ? '送信中...' : '招待再送'}
                       </button>

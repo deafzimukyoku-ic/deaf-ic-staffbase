@@ -196,7 +196,7 @@ export default function AdminAnnouncementsPage() {
 
   const catMap = new Map(categories.map(c => [c.id, c]));
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   const uncategorizedDocs = announcements.filter(d => !d.category_id);
 
@@ -216,7 +216,7 @@ export default function AdminAnnouncementsPage() {
           </div>
         </div>
 
-        <p className="text-sm text-diletto-gray mb-6">カテゴリを選択してお知らせを確認・修正してください。新規投稿はカテゴリを開いて行います。</p>
+        <p className="text-sm text-brand-gray mb-6">カテゴリを選択してお知らせを確認・修正してください。新規投稿はカテゴリを開いて行います。</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {categories.map((cat) => {
@@ -225,7 +225,7 @@ export default function AdminAnnouncementsPage() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
               >
                 <div className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" style={{ backgroundColor: cat.color }} />
                 <div className="flex justify-between items-start mb-auto relative">
@@ -234,8 +234,8 @@ export default function AdminAnnouncementsPage() {
                   </span>
                 </div>
                 <div className="relative">
-                  <span className="text-sm font-bold text-diletto-ink block truncate mb-1">{cat.name}</span>
-                  <span className="text-[10px] text-diletto-gray">{catDocs.length} 項目</span>
+                  <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
+                  <span className="text-[10px] text-brand-gray">{catDocs.length} 項目</span>
                 </div>
               </button>
             );
@@ -244,14 +244,14 @@ export default function AdminAnnouncementsPage() {
           {uncategorizedDocs.length > 0 && (
             <button
               onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📎', color: '#94a3b8' } as any)}
-              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
             >
               <div className="flex justify-between items-start mb-auto relative">
                 <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📎</span>
               </div>
               <div className="relative">
-                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                <span className="text-[10px] text-diletto-gray block">{uncategorizedDocs.length} 項目</span>
+                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                <span className="text-[10px] text-brand-gray block">{uncategorizedDocs.length} 項目</span>
               </div>
             </button>
           )}
@@ -269,7 +269,7 @@ export default function AdminAnnouncementsPage() {
   return (
     <div>
       <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-brand-gray-light hover:text-brand-ink shrink-0">
           ← 戻る
         </Button>
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -302,12 +302,12 @@ export default function AdminAnnouncementsPage() {
         {visible.map((a, idx) => (
           <DragSortItem key={a.id} index={idx}>
             {(handle) => (
-          <Card className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
+          <Card className="rounded-lg shadow-sm border-brand-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
             <CardContent className="py-4">
               <div className="flex flex-wrap items-center gap-3">
                 <DragHandleIcon {...handle} />
                 <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
-                  <p className="font-bold text-diletto-ink break-words md:truncate">{a.title}</p>
+                  <p className="font-bold text-brand-ink break-words md:truncate">{a.title}</p>
                   <PersonInline label="作成者" person={a.creator} />
                   {a.created_by !== a.updated_by && <PersonInline label="編集者" person={a.editor} />}
                 </div>
@@ -322,15 +322,15 @@ export default function AdminAnnouncementsPage() {
                   <CategoryBadge category={a.category_id ? catMap.get(a.category_id) : null} />
                 </div>
                 <div className="flex items-center gap-2 flex-wrap order-3 md:order-none">
-                  <Button size="sm" onClick={() => openEdit(a)} className="rounded-md font-bold bg-diletto-blue hover:bg-diletto-blue/90 text-white">✎ 編集</Button>
-                  <Button variant="outline" size="sm" className="rounded-md font-bold text-diletto-red border-diletto-red/40 hover:bg-diletto-red/10" onClick={() => handleDelete(a.id)}>
+                  <Button size="sm" onClick={() => openEdit(a)} className="rounded-md font-bold bg-brand-blue hover:bg-brand-blue/90 text-white">✎ 編集</Button>
+                  <Button variant="outline" size="sm" className="rounded-md font-bold text-brand-red border-brand-red/40 hover:bg-brand-red/10" onClick={() => handleDelete(a.id)}>
                     削除
                   </Button>
                 </div>
               </div>
-              <p className="text-sm text-diletto-gray mt-1 whitespace-pre-wrap line-clamp-3 leading-relaxed">{a.body}</p>
+              <p className="text-sm text-brand-gray mt-1 whitespace-pre-wrap line-clamp-3 leading-relaxed">{a.body}</p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <p className="text-xs text-diletto-gray-light">{new Date(a.created_at).toLocaleDateString('ja-JP')}</p>
+                <p className="text-xs text-brand-gray-light">{new Date(a.created_at).toLocaleDateString('ja-JP')}</p>
                 <TargetAttributeBadges
                   targetType={a.target_type}
                   targetFacilityIds={a.target_facility_ids}
@@ -345,7 +345,7 @@ export default function AdminAnnouncementsPage() {
           </DragSortItem>
         ))}
         {visible.length === 0 && (
-          <Card><CardContent className="py-12 text-center text-diletto-gray-light">お知らせはありません</CardContent></Card>
+          <Card><CardContent className="py-12 text-center text-brand-gray-light">お知らせはありません</CardContent></Card>
         )}
       </DragSortList>
 

@@ -47,7 +47,25 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-18（通知メール集約 + cron 信頼化 機能完了 / GH Actions 削除のみ 24h 観測後） / 全体完了率: 約 97%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-18（rebrand: diletto- → brand- 着手） / 全体完了率: 約 97%</p>
+
+<!-- 2026-05-18 計画 #6: rebrand diletto- → brand- (見た目維持・識別子のみ) -->
+<div class="phase">
+  <h2>rebrand: diletto- → brand- (2026-05-18 着手) <span class="phase-pct">0%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>参照元アプリ (`diletto-shift-maker` / `diletto-staffbase`) と deaf-ic を比較する際、deaf-ic 側にも `diletto-` 接頭辞の Tailwind 色クラスや CSS 変数が残っていて識別が面倒。**色値そのものは変更せず**、識別子だけ汎用名の `brand-` に揃える (将来 deaf-ic のブランド名が変わってもクラス名を変えずに済む)。CLAUDE.md §1 「デザインは現 staffbase をそのまま維持」ルール準拠</td><td class="files">—</td><td><span class="status block">未着手</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr><td>R-0</td><td>本フェーズ追加 + 事前 grep スコープ確定</td><td class="files">docs/progress.html</td><td><span class="status doing">進行中</span></td><td class="pct">20%</td><td>1392 件の色クラス + 20 件の CSS 変数 + Diletto* 2 ファイル を確認済</td></tr>
+      <tr><td>R-1</td><td>一括置換スクリプト作成 (app/**, components/**, lib/** 配下の *.ts/*.tsx/*.css のみ対象。docs/ / CLAUDE.md / seed/ / scripts/ / .next/ は除外。`diletto-shift-maker` / `diletto-staffbase` / `diletto-new-staffbase` は保持)</td><td class="files">scripts/rebrand-diletto-to-brand.mjs (新規)</td><td><span class="status block">未着手</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr><td>R-2</td><td>置換実行: 色トークン 8 種 (ink/beige/blue/gold/green/red/gray/gray-light) + diletto-bg + CSS 変数 (`--color-diletto-` / `--shadow-diletto`) + Tailwind shadow クラス + コメント内 diletto</td><td class="files">app/**, components/**, lib/** (120 ファイル前後)</td><td><span class="status block">未着手</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr><td>R-3</td><td>DilettoHeader.tsx / DilettoFooter.tsx を git mv で BrandHeader.tsx / BrandFooter.tsx にリネーム + コンポーネント名 + import パスを更新</td><td class="files">components/auth/DilettoHeader.tsx → BrandHeader.tsx, components/auth/DilettoFooter.tsx → BrandFooter.tsx + 5 箇所の import</td><td><span class="status block">未着手</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr><td>R-4</td><td>dev サーバ再起動 + tsc 0 エラー確認 + ブラウザでログイン画面 / admin ダッシュボード / employee ダッシュボード を実際に表示して**色が崩れてない**ことを確認</td><td class="files">—</td><td><span class="status block">未着手</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr><td>R-5</td><td>commit + main fast-forward push</td><td class="files">—</td><td><span class="status block">未着手</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① 置換前後の色値が完全に一致 (--color-brand-blue の hex が #1a3eb8 のまま等) ② tsc が 0 エラー ③ ブラウザで login / admin dashboard / employee dashboard / 書類モーダル / シフト表 を見た目を比較して差分ゼロ ④ docs/ / CLAUDE.md / seed/ の `diletto-shift-maker` / `diletto-staffbase` 参照は **そのまま残っている** ⑤ `Diletto` (PascalCase) を grep して 0 件、`diletto-(ink\|beige\|blue\|gold\|green\|red\|gray\|bg)` を grep して 0 件 (履歴ドキュメント以外で)</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-05-18 計画 #5: 通知メール集約 + cron 信頼化 -->
 <div class="phase">

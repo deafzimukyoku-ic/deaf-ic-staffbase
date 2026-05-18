@@ -214,7 +214,7 @@ export default function DailyReportFull({ role: _role }: Props) {
 
   if (!facilityId) {
     return (
-      <div className="p-8 text-center text-sm text-diletto-gray">
+      <div className="p-8 text-center text-sm text-brand-gray">
         施設を選択してください
       </div>
     );
@@ -223,34 +223,34 @@ export default function DailyReportFull({ role: _role }: Props) {
   return (
     <>
       {/* 操作バー（印刷時は非表示） */}
-      <div className="no-print sticky top-0 z-30 bg-white border-b border-diletto-gray/10 p-4 flex items-center gap-3 flex-wrap">
+      <div className="no-print sticky top-0 z-30 bg-white border-b border-brand-gray/10 p-4 flex items-center gap-3 flex-wrap">
         <h1 className="text-xl font-bold mr-auto">📋 業務日報</h1>
-        <label className="text-xs text-diletto-gray flex items-center gap-1">
+        <label className="text-xs text-brand-gray flex items-center gap-1">
           開始
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 rounded-md border border-diletto-gray/20 bg-white px-2 text-sm"
+            className="h-9 rounded-md border border-brand-gray/20 bg-white px-2 text-sm"
           />
         </label>
-        <label className="text-xs text-diletto-gray flex items-center gap-1">
+        <label className="text-xs text-brand-gray flex items-center gap-1">
           終了
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 rounded-md border border-diletto-gray/20 bg-white px-2 text-sm"
+            className="h-9 rounded-md border border-brand-gray/20 bg-white px-2 text-sm"
           />
         </label>
         <Button onClick={() => window.print()}>🖨️ 印刷 / PDF</Button>
       </div>
 
-      {loading && <p className="p-8 text-center text-sm text-diletto-gray-light">読み込み中...</p>}
-      {error && <p className="p-8 text-center text-sm text-diletto-red">エラー: {error}</p>}
+      {loading && <p className="p-8 text-center text-sm text-brand-gray-light">読み込み中...</p>}
+      {error && <p className="p-8 text-center text-sm text-brand-red">エラー: {error}</p>}
 
       {!loading && !error && dates.length === 0 && (
-        <p className="p-8 text-center text-sm text-diletto-gray-light">期間が不正です。</p>
+        <p className="p-8 text-center text-sm text-brand-gray-light">期間が不正です。</p>
       )}
 
       {/* 印刷本体 */}

@@ -44,7 +44,7 @@ export function SubordinateTable({ employees }: Props) {
           <TableBody>
             {employees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-diletto-gray-light">
+                <TableCell colSpan={6} className="h-24 text-center text-brand-gray-light">
                   担当施設に所属する社員がいません
                 </TableCell>
               </TableRow>
@@ -55,7 +55,7 @@ export function SubordinateTable({ employees }: Props) {
                   <TableCell className="whitespace-nowrap">
                     <Link
                       href={`/mgr/subordinates/${emp.id}`}
-                      className="font-medium text-diletto-blue hover:underline"
+                      className="font-medium text-brand-blue hover:underline"
                     >
                       {emp.last_name} {emp.first_name}
                     </Link>
@@ -64,11 +64,11 @@ export function SubordinateTable({ employees }: Props) {
                   <TableCell className="text-sm whitespace-nowrap">{emp.join_date}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {emp.status === 'active' ? (
-                      <Badge className="bg-diletto-green/10 text-diletto-green border-diletto-green/20">
+                      <Badge className="bg-brand-green/10 text-brand-green border-brand-green/20">
                         在籍
                       </Badge>
                     ) : (
-                      <Badge className="bg-diletto-red/[0.06] text-diletto-red border-diletto-red/15">
+                      <Badge className="bg-brand-red/[0.06] text-brand-red border-brand-red/15">
                         退職
                       </Badge>
                     )}

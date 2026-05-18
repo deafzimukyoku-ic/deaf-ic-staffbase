@@ -77,7 +77,7 @@ export function SetupBankForm({ banks, onChange, onNext, onBack }: Props) {
               variant="ghost"
               size="sm"
               onClick={() => removeBank(i)}
-              className="shrink-0 text-diletto-red"
+              className="shrink-0 text-brand-red"
             >
               削除
             </Button>

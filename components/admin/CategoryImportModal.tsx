@@ -135,18 +135,18 @@ export function CategoryImportModal({ destinationType, isOpen, onClose, onImport
         </DialogHeader>
 
         <div className="space-y-4">
-          <p className="text-xs text-diletto-gray">
+          <p className="text-xs text-brand-gray">
             他の分類で作成したカテゴリ枠をこの「<strong>{TYPE_LABEL[destinationType]}</strong>」に取り込みます。
             紐付いている内容自体はコピーされません（カテゴリの設定だけ）。
           </p>
 
           {/* コピー元選択 */}
           <div>
-            <label className="text-xs font-bold text-diletto-gray-light block mb-1">コピー元</label>
+            <label className="text-xs font-bold text-brand-gray-light block mb-1">コピー元</label>
             <select
               value={sourceType}
               onChange={(e) => setSourceType(e.target.value as CategoryType)}
-              className="w-full rounded-md border border-diletto-gray/20 px-3 py-2 text-sm bg-white"
+              className="w-full rounded-md border border-brand-gray/20 px-3 py-2 text-sm bg-white"
             >
               {otherTypes.map((t) => (
                 <option key={t} value={t}>{TYPE_LABEL[t]}</option>
@@ -157,26 +157,26 @@ export function CategoryImportModal({ destinationType, isOpen, onClose, onImport
           {/* カテゴリリスト */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-diletto-gray-light">取り込むカテゴリ</label>
+              <label className="text-xs font-bold text-brand-gray-light">取り込むカテゴリ</label>
               <button
                 onClick={toggleAll}
                 disabled={loading || sourceCategories.length === 0}
-                className="text-xs text-diletto-blue hover:underline disabled:text-diletto-gray-light disabled:no-underline"
+                className="text-xs text-brand-blue hover:underline disabled:text-brand-gray-light disabled:no-underline"
               >
                 {allSelected ? '全解除' : '全選択'}
               </button>
             </div>
-            <div className="rounded-md border border-diletto-gray/15 max-h-[300px] overflow-y-auto bg-white">
+            <div className="rounded-md border border-brand-gray/15 max-h-[300px] overflow-y-auto bg-white">
               {loading ? (
-                <p className="p-4 text-sm text-diletto-gray-light text-center">読み込み中...</p>
+                <p className="p-4 text-sm text-brand-gray-light text-center">読み込み中...</p>
               ) : sourceCategories.length === 0 ? (
-                <p className="p-4 text-sm text-diletto-gray-light text-center">{TYPE_LABEL[sourceType]}にはカテゴリがありません</p>
+                <p className="p-4 text-sm text-brand-gray-light text-center">{TYPE_LABEL[sourceType]}にはカテゴリがありません</p>
               ) : (
-                <ul className="divide-y divide-diletto-gray/10">
+                <ul className="divide-y divide-brand-gray/10">
                   {sourceCategories.map((cat) => {
                     const checked = selectedIds.has(cat.id);
                     return (
-                      <li key={cat.id} className="flex items-center gap-3 px-3 py-2 hover:bg-diletto-beige/30">
+                      <li key={cat.id} className="flex items-center gap-3 px-3 py-2 hover:bg-brand-beige/30">
                         <input
                           type="checkbox"
                           checked={checked}
@@ -188,7 +188,7 @@ export function CategoryImportModal({ destinationType, isOpen, onClose, onImport
                           className="h-3 w-3 rounded-full shrink-0"
                           style={{ backgroundColor: cat.color }}
                         />
-                        <span className="text-sm text-diletto-ink flex-1">{cat.name}</span>
+                        <span className="text-sm text-brand-ink flex-1">{cat.name}</span>
                       </li>
                     );
                   })}
@@ -199,11 +199,11 @@ export function CategoryImportModal({ destinationType, isOpen, onClose, onImport
 
           {/* 重複処理 */}
           <div>
-            <label className="text-xs font-bold text-diletto-gray-light block mb-1">同名カテゴリが既にあるとき</label>
+            <label className="text-xs font-bold text-brand-gray-light block mb-1">同名カテゴリが既にあるとき</label>
             <select
               value={onConflict}
               onChange={(e) => setOnConflict(e.target.value as 'skip' | 'rename')}
-              className="w-full rounded-md border border-diletto-gray/20 px-3 py-2 text-sm bg-white"
+              className="w-full rounded-md border border-brand-gray/20 px-3 py-2 text-sm bg-white"
             >
               <option value="skip">スキップ（重複は取り込まない）</option>
               <option value="rename">「(2)」を付けて取り込む</option>

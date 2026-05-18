@@ -327,7 +327,7 @@ export default function MatrixGrid({
           className={`h-10 px-4 rounded-md font-medium text-sm transition-all ${
             saved
               ? 'bg-green-600 text-white shadow-sm'
-              : 'bg-diletto-blue text-white hover:bg-[#1535a0] shadow-sm'
+              : 'bg-brand-blue text-white hover:bg-[#1535a0] shadow-sm'
           } disabled:opacity-50 disabled:pointer-events-none`}
         >
           {saving ? '保存中...' : saved ? '保存済み' : '保存'}
@@ -335,7 +335,7 @@ export default function MatrixGrid({
         {onExport && (
           <button
             onClick={() => onExport()}
-            className="h-10 bg-diletto-blue text-white font-medium px-4 rounded-md hover:bg-[#1535a0] shadow-sm transition-all text-sm"
+            className="h-10 bg-brand-blue text-white font-medium px-4 rounded-md hover:bg-[#1535a0] shadow-sm transition-all text-sm"
           >
             PDF出力
           </button>
@@ -346,13 +346,13 @@ export default function MatrixGrid({
       </div>
 
       {/* グリッド */}
-      <div className="overflow-auto border border-diletto-gray/20 rounded-md bg-white shadow-sm focus:outline-none" tabIndex={0} onPaste={handlePaste}>
+      <div className="overflow-auto border border-brand-gray/20 rounded-md bg-white shadow-sm focus:outline-none" tabIndex={0} onPaste={handlePaste}>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="w-12 px-2 py-2 bg-diletto-bg border-b border-r border-diletto-gray/20 text-xs text-diletto-gray-light font-medium">#</th>
+              <th className="w-12 px-2 py-2 bg-brand-bg border-b border-r border-brand-gray/20 text-xs text-brand-gray-light font-medium">#</th>
               {hasActions && (
-                <th className="w-24 px-2 py-2 bg-diletto-bg border-b border-r border-diletto-gray/20 text-xs text-diletto-gray-light font-medium">操作</th>
+                <th className="w-24 px-2 py-2 bg-brand-bg border-b border-r border-brand-gray/20 text-xs text-brand-gray-light font-medium">操作</th>
               )}
               {columns.map((col, colIdx) => (
                 <th
@@ -363,39 +363,39 @@ export default function MatrixGrid({
                   onDragLeave={handleColDragLeave}
                   onDrop={() => handleColDrop(colIdx)}
                   onDragEnd={handleColDragEnd}
-                  className={`min-w-[140px] border-b border-r border-diletto-gray/20 p-0 relative group ${
-                    dropColIdx === colIdx ? 'bg-diletto-blue/10' : ''
+                  className={`min-w-[140px] border-b border-r border-brand-gray/20 p-0 relative group ${
+                    dropColIdx === colIdx ? 'bg-brand-blue/10' : ''
                   }`}
                 >
                   <div className="flex items-center">
-                    <span className="shrink-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing text-diletto-gray-light opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="shrink-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing text-brand-gray-light opacity-0 group-hover:opacity-100 transition-opacity">
                       <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>
                     </span>
                     <div className="flex-1 min-w-0">
                       <MatrixCell value={col.name} displayValue={col.name || 'クリックして入力'} onChange={(v) => handleHeaderChange(colIdx, v)} onBlur={() => {}} isHeader />
                     </div>
                     <div className="shrink-0 flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleSort(col.key)} title="ソート" className="p-0.5 rounded hover:bg-diletto-blue/10 text-diletto-gray-light hover:text-diletto-blue transition-all">
+                      <button onClick={() => handleSort(col.key)} title="ソート" className="p-0.5 rounded hover:bg-brand-blue/10 text-brand-gray-light hover:text-brand-blue transition-all">
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
                           {sortCol === col.key && sortDir === 'desc' ? <path d="M6 2v8M3 7l3 3 3-3" /> : <path d="M6 10V2M3 5l3-3 3 3" />}
                         </svg>
                       </button>
-                      <button onClick={() => deleteColumn(colIdx)} title="列を削除" className="p-0.5 rounded hover:bg-diletto-red/10 text-diletto-gray-light hover:text-diletto-red transition-all">
+                      <button onClick={() => deleteColumn(colIdx)} title="列を削除" className="p-0.5 rounded hover:bg-brand-red/10 text-brand-gray-light hover:text-brand-red transition-all">
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
                       </button>
                     </div>
                   </div>
-                  {sortCol === col.key && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-diletto-blue" />}
+                  {sortCol === col.key && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-blue" />}
                 </th>
               ))}
-              <th className="w-10 px-2 py-2 bg-diletto-bg border-b border-diletto-gray/20 text-center cursor-pointer hover:bg-diletto-blue/5 transition-all" onClick={addColumn} title="列を追加">
-                <span className="text-lg text-diletto-gray-light hover:text-diletto-blue">+</span>
+              <th className="w-10 px-2 py-2 bg-brand-bg border-b border-brand-gray/20 text-center cursor-pointer hover:bg-brand-blue/5 transition-all" onClick={addColumn} title="列を追加">
+                <span className="text-lg text-brand-gray-light hover:text-brand-blue">+</span>
               </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, rowIdx) => (
-              <tr key={rowIdx} className={dropRowIdx === rowIdx ? 'bg-diletto-blue/5' : ''}>
+              <tr key={rowIdx} className={dropRowIdx === rowIdx ? 'bg-brand-blue/5' : ''}>
                 <td
                   draggable
                   onDragStart={() => handleRowDragStart(rowIdx)}
@@ -403,20 +403,20 @@ export default function MatrixGrid({
                   onDragLeave={handleRowDragLeave}
                   onDrop={() => handleRowDrop(rowIdx)}
                   onDragEnd={handleRowDragEnd}
-                  className="px-1 py-1 bg-diletto-bg border-b border-r border-diletto-gray/20 text-xs text-diletto-gray-light text-center font-mono cursor-grab active:cursor-grabbing group/row select-none"
+                  className="px-1 py-1 bg-brand-bg border-b border-r border-brand-gray/20 text-xs text-brand-gray-light text-center font-mono cursor-grab active:cursor-grabbing group/row select-none"
                 >
                   <div className="flex items-center justify-center gap-0.5">
                     <span>{rowIdx + 1}</span>
-                    <button onClick={() => deleteRow(rowIdx)} title="行を削除" className="p-0.5 rounded opacity-0 group-hover/row:opacity-100 hover:bg-diletto-red/10 text-diletto-gray-light hover:text-diletto-red transition-all">
+                    <button onClick={() => deleteRow(rowIdx)} title="行を削除" className="p-0.5 rounded opacity-0 group-hover/row:opacity-100 hover:bg-brand-red/10 text-brand-gray-light hover:text-brand-red transition-all">
                       <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
                     </button>
                   </div>
                 </td>
                 {hasActions && (
-                  <td className="px-1 py-1 bg-diletto-bg border-b border-r border-diletto-gray/20">
+                  <td className="px-1 py-1 bg-brand-bg border-b border-r border-brand-gray/20">
                     <div className="flex items-center gap-1">
                       {onExport && (
-                        <button onClick={() => onExport(rowIdx)} title="PDF出力" className="text-xs px-1.5 py-0.5 rounded text-diletto-gray hover:text-green-600 hover:bg-green-50 transition-all">
+                        <button onClick={() => onExport(rowIdx)} title="PDF出力" className="text-xs px-1.5 py-0.5 rounded text-brand-gray hover:text-green-600 hover:bg-green-50 transition-all">
                           PDF
                         </button>
                       )}
@@ -424,16 +424,16 @@ export default function MatrixGrid({
                   </td>
                 )}
                 {columns.map((col, colIdx) => (
-                  <td key={`${rowIdx}-${col.key}`} data-row={rowIdx} data-col={colIdx} className="border-b border-r border-diletto-gray/20 p-0">
+                  <td key={`${rowIdx}-${col.key}`} data-row={rowIdx} data-col={colIdx} className="border-b border-r border-brand-gray/20 p-0">
                     <MatrixCell value={row[col.key] ?? ''} displayValue={getDisplayValue(row[col.key] ?? '')} onChange={(v) => handleCellChange(rowIdx, col.key, v)} onBlur={() => {}} />
                   </td>
                 ))}
-                <td className="border-b border-diletto-gray/20" />
+                <td className="border-b border-brand-gray/20" />
               </tr>
             ))}
             <tr>
-              <td colSpan={columns.length + extraCols} className="px-2 py-2 bg-diletto-bg text-center cursor-pointer hover:bg-diletto-blue/5 transition-all" onClick={addRow} title="行を追加">
-                <span className="text-lg text-diletto-gray-light hover:text-diletto-blue">+</span>
+              <td colSpan={columns.length + extraCols} className="px-2 py-2 bg-brand-bg text-center cursor-pointer hover:bg-brand-blue/5 transition-all" onClick={addRow} title="行を追加">
+                <span className="text-lg text-brand-gray-light hover:text-brand-blue">+</span>
               </td>
             </tr>
           </tbody>

@@ -48,22 +48,22 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* diletto extended palette */
-  --color-diletto-ink: #111111;
-  --color-diletto-beige: #f5f4f0;
-  --color-diletto-blue: #1a3eb8;
-  --color-diletto-gold: #8a6120;
-  --color-diletto-green: #2a7a52;
-  --color-diletto-red: #9b3333;
-  --color-diletto-gray: #5a5a55;
-  --color-diletto-gray-light: #a8a8a0;
+  /* brand extended palette (元 diletto- パレット、識別子のみ rebrand 2026-05-18) */
+  --color-brand-ink: #111111;
+  --color-brand-beige: #f5f4f0;
+  --color-brand-blue: #1a3eb8;
+  --color-brand-gold: #8a6120;
+  --color-brand-green: #2a7a52;
+  --color-brand-red: #9b3333;
+  --color-brand-gray: #5a5a55;
+  --color-brand-gray-light: #a8a8a0;
 
-  /* diletto shadows */
-  --shadow-diletto: 0 8px 32px rgba(0, 0, 0, 0.07);
-  --shadow-diletto-sm: 0 2px 12px rgba(0, 0, 0, 0.05);
+  /* brand shadows */
+  --shadow-brand: 0 8px 32px rgba(0, 0, 0, 0.07);
+  --shadow-brand-sm: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 
-/* shift-puzzle 互換: 忠実移植したコードが使う CSS 変数名を diletto 対応色にマッピング */
+/* shift-puzzle 互換: 忠実移植したコードが使う CSS 変数名を brand パレットにマッピング */
 :root {
   --ink: #111111;
   --ink-2: #3a3a36;
@@ -138,14 +138,14 @@
 }
 
 :root {
-  /* diletto palette — HSL ベース */
+  /* brand palette — HSL ベース */
   --background: oklch(0.961 0.006 90);     /* #f5f4f0 ベージュ */
   --foreground: oklch(0.145 0 0);          /* #111111 */
   --card: oklch(1 0 0);                    /* white */
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.38 0.16 264);         /* #1a3eb8 dilettoブルー */
+  --primary: oklch(0.38 0.16 264);         /* #1a3eb8 brand ブルー */
   --primary-foreground: oklch(0.98 0 0);
   --secondary: oklch(0.93 0.005 90);       /* ベージュ寄りの薄色 */
   --secondary-foreground: oklch(0.145 0 0);
@@ -154,9 +154,9 @@
   --accent: oklch(0.53 0.1 70);            /* #8a6120 ゴールド */
   --accent-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.45 0.12 25);      /* #9b3333 */
-  --border: oklch(0.88 0.005 90);          /* diletto border */
+  --border: oklch(0.88 0.005 90);          /* brand border */
   --input: oklch(0.88 0.005 90);
-  --ring: oklch(0.38 0.16 264);            /* dilettoブルー */
+  --ring: oklch(0.38 0.16 264);            /* brand ブルー */
   --chart-1: oklch(0.38 0.16 264);
   --chart-2: oklch(0.53 0.1 70);
   --chart-3: oklch(0.45 0.1 155);
@@ -184,13 +184,13 @@
   html {
     @apply font-sans;
   }
-  /* diletto: serif for headings */
+  /* brand: serif for headings */
   h1, h2, h3, h4 {
     font-family: var(--font-serif), serif;
   }
 }
 
-/* Shimmer button effect — matches diletto */
+/* Shimmer button effect — matches brand styling */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -218,7 +218,7 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Scrollbar — subtle, matches diletto */
+/* Scrollbar — subtle, matches brand styling */
 ::-webkit-scrollbar {
   width: 5px;
 }

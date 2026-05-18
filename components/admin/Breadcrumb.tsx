@@ -140,18 +140,18 @@ export function Breadcrumb() {
   if (crumbs.length === 0) return null;
 
   return (
-    <nav aria-label="パンくず" className="print-hide flex items-center gap-1 text-xs text-diletto-gray-light overflow-x-auto whitespace-nowrap px-4 py-2 bg-white border-b border-diletto-gray/10">
+    <nav aria-label="パンくず" className="print-hide flex items-center gap-1 text-xs text-brand-gray-light overflow-x-auto whitespace-nowrap px-4 py-2 bg-white border-b border-brand-gray/10">
       {crumbs.map((c, i) => {
         const isLast = i === crumbs.length - 1;
         return (
           <span key={c.href} className="flex items-center gap-1 shrink-0">
-            {i > 0 && <span className="text-diletto-gray-light/60 mx-0.5">/</span>}
+            {i > 0 && <span className="text-brand-gray-light/60 mx-0.5">/</span>}
             {isLast ? (
-              <span className="text-diletto-ink font-bold">
+              <span className="text-brand-ink font-bold">
                 <span className="mr-0.5">{c.icon}</span>{c.label}
               </span>
             ) : (
-              <Link href={c.href} className="hover:text-diletto-ink transition-colors">
+              <Link href={c.href} className="hover:text-brand-ink transition-colors">
                 <span className="mr-0.5">{c.icon}</span>{c.label}
               </Link>
             )}

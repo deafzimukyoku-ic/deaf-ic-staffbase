@@ -74,8 +74,8 @@ export function AttachmentDropZone({ onFiles, acceptMime, maxBytesLabel, helperT
         `cursor-pointer rounded-md border-2 border-dashed transition-colors text-center select-none ` +
         (compact ? 'p-2 ' : 'p-4 ') +
         (dragOver
-          ? 'border-diletto-blue bg-diletto-blue/[0.06] text-diletto-blue'
-          : 'border-diletto-gray/30 text-diletto-gray hover:border-diletto-blue/50 hover:bg-diletto-blue/[0.03] hover:text-diletto-ink')
+          ? 'border-brand-blue bg-brand-blue/[0.06] text-brand-blue'
+          : 'border-brand-gray/30 text-brand-gray hover:border-brand-blue/50 hover:bg-brand-blue/[0.03] hover:text-brand-ink')
       }
     >
       <div className={compact ? 'text-xs flex items-center justify-center gap-2' : 'space-y-1'}>
@@ -84,7 +84,7 @@ export function AttachmentDropZone({ onFiles, acceptMime, maxBytesLabel, helperT
           {dragOver ? 'ここに離してください' : (compact ? 'クリック または ドラッグ&ドロップ' : 'クリックして選択 または ここにドラッグ&ドロップ')}
         </span>
         {!compact && (
-          <span className="block text-[11px] text-diletto-gray-light">
+          <span className="block text-[11px] text-brand-gray-light">
             {helperText ?? `画像 / PDF、各 ${maxBytesLabel} まで`}
           </span>
         )}

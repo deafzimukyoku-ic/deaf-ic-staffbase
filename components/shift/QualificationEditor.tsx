@@ -33,14 +33,14 @@ export function QualificationEditor({ quals, onChange }: Props) {
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-diletto-gray/10 p-4 bg-gray-50/50">
+    <div className="space-y-3 rounded-md border border-brand-gray/10 p-4 bg-gray-50/50">
       <div className="flex items-start gap-2">
-        <Label className="text-sm font-bold text-diletto-ink flex-1">資格リスト</Label>
-        <span className="text-[10px] text-diletto-gray-light">☑ = 有資格者カウント対象</span>
+        <Label className="text-sm font-bold text-brand-ink flex-1">資格リスト</Label>
+        <span className="text-[10px] text-brand-gray-light">☑ = 有資格者カウント対象</span>
       </div>
 
       {quals.length === 0 && (
-        <p className="text-xs text-diletto-gray-light py-2">まだ資格がありません。下のフォームから追加してください（例: 保育士、児童指導員）。</p>
+        <p className="text-xs text-brand-gray-light py-2">まだ資格がありません。下のフォームから追加してください（例: 保育士、児童指導員）。</p>
       )}
 
       {quals.length > 0 && (
@@ -49,26 +49,26 @@ export function QualificationEditor({ quals, onChange }: Props) {
             <div
               key={q.name}
               className={`flex items-center gap-2 rounded-md border px-3 py-1.5 bg-white ${
-                q.countable ? 'border-diletto-blue/30' : 'border-diletto-gray/15'
+                q.countable ? 'border-brand-blue/30' : 'border-brand-gray/15'
               }`}
             >
               <input
                 type="checkbox"
                 checked={q.countable}
                 onChange={() => toggleCountable(q.name)}
-                className="h-4 w-4 accent-diletto-blue cursor-pointer"
+                className="h-4 w-4 accent-brand-blue cursor-pointer"
                 aria-label={`${q.name} のカウント対象`}
               />
-              <span className="text-sm text-diletto-ink">{q.name}</span>
-              <button type="button" onClick={() => remove(q.name)} className="text-xs text-diletto-red hover:underline ml-1" aria-label={`${q.name} を削除`}>×</button>
+              <span className="text-sm text-brand-ink">{q.name}</span>
+              <button type="button" onClick={() => remove(q.name)} className="text-xs text-brand-red hover:underline ml-1" aria-label={`${q.name} を削除`}>×</button>
             </div>
           ))}
         </div>
       )}
 
-      <div className="flex gap-2 items-end pt-2 border-t border-diletto-gray/10">
+      <div className="flex gap-2 items-end pt-2 border-t border-brand-gray/10">
         <div className="flex-1">
-          <Label className="text-[10px] text-diletto-gray-light">資格名</Label>
+          <Label className="text-[10px] text-brand-gray-light">資格名</Label>
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -77,12 +77,12 @@ export function QualificationEditor({ quals, onChange }: Props) {
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
           />
         </div>
-        <label className="flex items-center gap-1 h-9 text-xs text-diletto-gray cursor-pointer">
+        <label className="flex items-center gap-1 h-9 text-xs text-brand-gray cursor-pointer">
           <input
             type="checkbox"
             checked={newCountable}
             onChange={(e) => setNewCountable(e.target.checked)}
-            className="h-4 w-4 accent-diletto-blue"
+            className="h-4 w-4 accent-brand-blue"
           />
           カウント対象
         </label>

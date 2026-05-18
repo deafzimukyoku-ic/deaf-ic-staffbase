@@ -19,7 +19,7 @@ export function ComplianceViewer({ content, comment, acknowledged, onAcknowledge
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">遵守事項</CardTitle>
           {acknowledged && (
-            <Badge className="bg-diletto-green/10 text-diletto-green">確認済</Badge>
+            <Badge className="bg-brand-green/10 text-brand-green">確認済</Badge>
           )}
         </div>
       </CardHeader>
@@ -29,7 +29,7 @@ export function ComplianceViewer({ content, comment, acknowledged, onAcknowledge
         </div>
 
         {comment && (
-          <div className="text-sm text-diletto-gray border-l-2 border-diletto-blue pl-3">
+          <div className="text-sm text-brand-gray border-l-2 border-brand-blue pl-3">
             {comment}
           </div>
         )}

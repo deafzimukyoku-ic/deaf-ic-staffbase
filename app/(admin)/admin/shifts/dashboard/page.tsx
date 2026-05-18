@@ -125,11 +125,11 @@ export default async function AdminShiftsDashboardPage() {
   return (
     <div className="space-y-6">
       {/* ウェルカム */}
-      <div className="bg-white rounded-md border border-diletto-gray/10 p-6 shadow-sm">
-        <h1 className="text-xl font-bold text-diletto-ink mb-1">
+      <div className="bg-white rounded-md border border-brand-gray/10 p-6 shadow-sm">
+        <h1 className="text-xl font-bold text-brand-ink mb-1">
           こんにちは{userName ? `、${userName} さん` : ''}
         </h1>
-        <p className="text-sm text-diletto-gray">
+        <p className="text-sm text-brand-gray">
           管理者モード: すべての機能にアクセスできます
         </p>
       </div>

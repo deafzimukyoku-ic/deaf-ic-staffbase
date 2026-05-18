@@ -274,7 +274,7 @@ export default function ManagerCompliancePage() {
     })));
   }
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-diletto-gray">読み込み中...</span></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   const uncategorizedDocs = docs.filter(d => !d.category_id);
   const catMap = new Map(categories.map(c => [c.id, c]));
@@ -297,7 +297,7 @@ export default function ManagerCompliancePage() {
           </div>
         </div>
 
-        <p className="text-sm text-diletto-gray mb-6">カテゴリを選択して内容を確認・編集してください。新規作成はカテゴリを開いて行います。</p>
+        <p className="text-sm text-brand-gray mb-6">カテゴリを選択して内容を確認・編集してください。新規作成はカテゴリを開いて行います。</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {categories.map((cat) => {
@@ -306,7 +306,7 @@ export default function ManagerCompliancePage() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
               >
                 <div className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" style={{ backgroundColor: cat.color }} />
                 <div className="flex justify-between items-start mb-auto relative">
@@ -315,8 +315,8 @@ export default function ManagerCompliancePage() {
                   </span>
                 </div>
                 <div className="relative">
-                  <span className="text-sm font-bold text-diletto-ink block truncate mb-1">{cat.name}</span>
-                  <span className="text-[10px] text-diletto-gray">{catDocs.length} 項目</span>
+                  <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
+                  <span className="text-[10px] text-brand-gray">{catDocs.length} 項目</span>
                 </div>
               </button>
             );
@@ -325,14 +325,14 @@ export default function ManagerCompliancePage() {
           {uncategorizedDocs.length > 0 && (
             <button
               onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📎', color: '#94a3b8' } as Category)}
-              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
+              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[140px] text-left"
             >
               <div className="flex justify-between items-start mb-auto relative">
                 <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📎</span>
               </div>
               <div className="relative">
-                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                <span className="text-[10px] text-diletto-gray block">{uncategorizedDocs.length} 項目</span>
+                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                <span className="text-[10px] text-brand-gray block">{uncategorizedDocs.length} 項目</span>
               </div>
             </button>
           )}
@@ -349,7 +349,7 @@ export default function ManagerCompliancePage() {
   return (
     <div>
       <div className="flex items-center gap-2 sm:gap-4 mb-4 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-diletto-gray-light hover:text-diletto-ink shrink-0">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-brand-gray-light hover:text-brand-ink shrink-0">
           ← 戻る
         </Button>
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -379,12 +379,12 @@ export default function ManagerCompliancePage() {
           return (
             <DragSortItem key={doc.id} index={idx}>
               {(handle) => (
-            <Card className="rounded-lg shadow-sm border-diletto-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
+            <Card className="rounded-lg shadow-sm border-brand-gray/5 overflow-hidden" style={{ background: handle.isDropTarget ? 'var(--accent-pale)' : undefined }}>
               <CardHeader className="py-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <DragHandleIcon {...handle} />
                   <div className="min-w-0 basis-full md:basis-0 md:flex-1 order-1 md:order-none">
-                    <CardTitle className="text-base font-bold text-diletto-ink break-words md:truncate">{doc.title || '（無題）'}</CardTitle>
+                    <CardTitle className="text-base font-bold text-brand-ink break-words md:truncate">{doc.title || '（無題）'}</CardTitle>
                     <div className="flex items-center gap-2 flex-wrap">
                       <PersonInline label="作成者" person={doc.creator} />
                       {doc.created_by !== doc.updated_by && <PersonInline label="編集者" person={doc.editor} />}
@@ -411,7 +411,7 @@ export default function ManagerCompliancePage() {
                         <Button variant="outline" size="sm" onClick={() => openEdit(doc)} className="h-8 rounded-md text-xs font-bold">
                           編集
                         </Button>
-                        <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-diletto-red" onClick={() => handleDelete(doc.id)}>
+                        <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-bold text-brand-red" onClick={() => handleDelete(doc.id)}>
                           削除
                         </Button>
                       </>
@@ -420,16 +420,16 @@ export default function ManagerCompliancePage() {
                 </div>
               </CardHeader>
               <CardContent className="pb-4">
-                <div className="whitespace-pre-wrap text-sm leading-relaxed border border-diletto-gray/10 rounded-lg p-3 bg-gray-50/50 max-h-40 overflow-y-auto custom-scrollbar">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed border border-brand-gray/10 rounded-lg p-3 bg-gray-50/50 max-h-40 overflow-y-auto custom-scrollbar">
                   {doc.content}
                 </div>
                 {doc.admin_comment && (
-                  <div className="text-sm text-diletto-gray mt-3 border-l-4 border-diletto-blue/30 pl-3 italic bg-diletto-blue/[0.02] py-2 rounded-r-lg">
+                  <div className="text-sm text-brand-gray mt-3 border-l-4 border-brand-blue/30 pl-3 italic bg-brand-blue/[0.02] py-2 rounded-r-lg">
                     {doc.admin_comment}
                   </div>
                 )}
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  <p className="text-[10px] text-diletto-gray-light font-medium">
+                  <p className="text-[10px] text-brand-gray-light font-medium">
                     最終更新: {new Date(doc.updated_at).toLocaleString('ja-JP')}
                   </p>
                   <TargetAttributeBadges
@@ -447,7 +447,7 @@ export default function ManagerCompliancePage() {
           );
         })}
         {visible.length === 0 && (
-          <Card><CardContent className="py-12 text-center text-diletto-gray-light">該当する遵守事項はありません</CardContent></Card>
+          <Card><CardContent className="py-12 text-center text-brand-gray-light">該当する遵守事項はありません</CardContent></Card>
         )}
       </DragSortList>
 
@@ -473,8 +473,8 @@ export default function ManagerCompliancePage() {
                     type="button"
                     onClick={() => toggleFacility(f.id)}
                     className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all border ${editTargetFacilityIds.includes(f.id)
-                      ? 'bg-diletto-blue text-white border-diletto-blue shadow-sm'
-                      : 'bg-white text-diletto-gray border-diletto-gray/15 hover:border-diletto-blue/30'
+                      ? 'bg-brand-blue text-white border-brand-blue shadow-sm'
+                      : 'bg-white text-brand-gray border-brand-gray/15 hover:border-brand-blue/30'
                       }`}
                   >
                     {f.name}
@@ -523,15 +523,15 @@ export default function ManagerCompliancePage() {
           </DialogHeader>
           <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
             {acks.length === 0 ? (
-              <p className="text-sm text-diletto-gray py-4 text-center">対象の社員はいません</p>
+              <p className="text-sm text-brand-gray py-4 text-center">対象の社員はいません</p>
             ) : (
               acks.map((a, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-diletto-gray/5 last:border-0 px-1">
+                <div key={i} className="flex items-center justify-between py-2 border-b border-brand-gray/5 last:border-0 px-1">
                   <span className="text-sm font-medium">{a.employee_name}</span>
                   {a.acknowledged ? (
-                    <Badge className="bg-diletto-green/10 text-diletto-green border-none">同意済</Badge>
+                    <Badge className="bg-brand-green/10 text-brand-green border-none">同意済</Badge>
                   ) : (
-                    <Badge className="bg-diletto-red/[0.06] text-diletto-red border-none">未同意</Badge>
+                    <Badge className="bg-brand-red/[0.06] text-brand-red border-none">未同意</Badge>
                   )}
                 </div>
               ))

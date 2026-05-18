@@ -84,7 +84,7 @@ export default function EmployeesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold whitespace-nowrap">社員管理</h1>
-          <p className="text-sm text-diletto-gray mt-1">
+          <p className="text-sm text-brand-gray mt-1">
             {loading ? '読み込み中...' : `${filtered.length} / ${employees.length}名`}
           </p>
         </div>
@@ -107,7 +107,7 @@ export default function EmployeesPage() {
       </div>
 
       {!loading && (
-        <div className="mb-4 rounded-lg border border-diletto-gray/15 bg-white p-3 space-y-3">
+        <div className="mb-4 rounded-lg border border-brand-gray/15 bg-white p-3 space-y-3">
           <Input
             placeholder="氏名・社員番号・メールで検索"
             value={search}
@@ -115,11 +115,11 @@ export default function EmployeesPage() {
           />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
             <label className="space-y-1">
-              <span className="text-xs text-diletto-gray-light">施設</span>
+              <span className="text-xs text-brand-gray-light">施設</span>
               <select
                 value={facilityFilter}
                 onChange={(e) => setFacilityFilter(e.target.value)}
-                className="w-full h-9 rounded-md border border-diletto-gray/20 bg-white px-2"
+                className="w-full h-9 rounded-md border border-brand-gray/20 bg-white px-2"
               >
                 <option value="all">すべての施設</option>
                 <option value="__none__">未所属</option>
@@ -129,11 +129,11 @@ export default function EmployeesPage() {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-diletto-gray-light">ロール</span>
+              <span className="text-xs text-brand-gray-light">ロール</span>
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
-                className="w-full h-9 rounded-md border border-diletto-gray/20 bg-white px-2"
+                className="w-full h-9 rounded-md border border-brand-gray/20 bg-white px-2"
               >
                 <option value="all">すべて</option>
                 <option value="admin">管理者</option>
@@ -142,11 +142,11 @@ export default function EmployeesPage() {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-diletto-gray-light">在籍状況</span>
+              <span className="text-xs text-brand-gray-light">在籍状況</span>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                className="w-full h-9 rounded-md border border-diletto-gray/20 bg-white px-2"
+                className="w-full h-9 rounded-md border border-brand-gray/20 bg-white px-2"
               >
                 <option value="all">すべて</option>
                 <option value="active">在籍</option>

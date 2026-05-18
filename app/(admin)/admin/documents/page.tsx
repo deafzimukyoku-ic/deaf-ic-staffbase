@@ -307,34 +307,34 @@ export default function DocumentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold whitespace-nowrap">書類テンプレート</h1>
-          <p className="text-sm text-diletto-gray mt-1 whitespace-nowrap">
+          <p className="text-sm text-brand-gray mt-1 whitespace-nowrap">
             {loading ? '読み込み中...' : `${templates.length} / ${MAX_DOCUMENTS_PER_TENANT} 件`}
           </p>
         </div>
         {templates.length < MAX_DOCUMENTS_PER_TENANT && (
           <div className="flex flex-wrap items-center gap-2">
             <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
-              <DialogTrigger className="inline-flex shrink-0 items-center justify-center rounded-md border border-diletto-gray/30 bg-white text-diletto-ink shadow-sm hover:border-diletto-ink/60 text-sm font-medium h-10 px-4 whitespace-nowrap transition-all duration-300">
+              <DialogTrigger className="inline-flex shrink-0 items-center justify-center rounded-md border border-brand-gray/30 bg-white text-brand-ink shadow-sm hover:border-brand-ink/60 text-sm font-medium h-10 px-4 whitespace-nowrap transition-all duration-300">
                 📋 カタログから追加
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>テンプレートカタログ</DialogTitle>
                 </DialogHeader>
-                <p className="text-sm text-diletto-gray mb-4">
+                <p className="text-sm text-brand-gray mb-4">
                   用意されたテンプレートから選んで追加できます。
                 </p>
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {availableSamples.length === 0 ? (
-                    <p className="text-sm text-diletto-gray-light text-center py-6">
+                    <p className="text-sm text-brand-gray-light text-center py-6">
                       追加できるテンプレートはありません
                     </p>
                   ) : (
                     availableSamples.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between rounded-md border border-diletto-gray/10 p-3">
+                      <div key={s.id} className="flex items-center justify-between rounded-md border border-brand-gray/10 p-3">
                         <div>
                           <p className="text-sm font-medium">{s.name}</p>
-                          <p className="text-xs text-diletto-gray">
+                          <p className="text-xs text-brand-gray">
                             {s.template_type === 'pdf' ? `${s.page_count || 1}ページ` : `${(s.mapping as unknown[]).length} フィールド`}
                           </p>
                         </div>
@@ -383,7 +383,7 @@ export default function DocumentsPage() {
 
         {!loading && templates.length === 0 && (
           <Card>
-            <CardContent className="py-12 text-center text-diletto-gray-light">
+            <CardContent className="py-12 text-center text-brand-gray-light">
               書類テンプレートがありません。「+ テンプレート追加」から登録してください。
             </CardContent>
           </Card>
@@ -396,21 +396,21 @@ export default function DocumentsPage() {
             <DialogTitle>テンプレートの削除</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-diletto-gray">
-              「<span className="font-medium text-diletto-ink">{deleteTarget?.name}</span>」を削除します。
+            <p className="text-sm text-brand-gray">
+              「<span className="font-medium text-brand-ink">{deleteTarget?.name}</span>」を削除します。
             </p>
             {deleteSubCount > 0 && (
-              <div className="rounded-md border border-diletto-red/20 bg-diletto-red/[0.04] p-3">
-                <p className="text-sm text-diletto-red font-medium">
+              <div className="rounded-md border border-brand-red/20 bg-brand-red/[0.04] p-3">
+                <p className="text-sm text-brand-red font-medium">
                   この書類には {deleteSubCount} 件の提出データがあります。
                 </p>
-                <p className="text-xs text-diletto-red/80 mt-1">
+                <p className="text-xs text-brand-red/80 mt-1">
                   削除すると社員の提出データも全て失われます。この操作は取り消せません。
                 </p>
               </div>
             )}
             {deleteSubCount === 0 && (
-              <p className="text-xs text-diletto-gray-light">提出データはありません。</p>
+              <p className="text-xs text-brand-gray-light">提出データはありません。</p>
             )}
           </div>
           <DialogFooter>
@@ -420,7 +420,7 @@ export default function DocumentsPage() {
             <Button
               onClick={handleDelete}
               disabled={deleting}
-              className="bg-diletto-red hover:bg-[#7a2828] text-white"
+              className="bg-brand-red hover:bg-[#7a2828] text-white"
             >
               {deleting ? '削除中...' : '削除する'}
             </Button>
@@ -474,7 +474,7 @@ function SortableTemplateCard({
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <button
               type="button"
-              className="text-diletto-gray-light hover:text-diletto-ink cursor-grab active:cursor-grabbing touch-none px-1 shrink-0 mt-0.5"
+              className="text-brand-gray-light hover:text-brand-ink cursor-grab active:cursor-grabbing touch-none px-1 shrink-0 mt-0.5"
               aria-label="並び替え"
               {...attributes}
               {...listeners}
@@ -490,11 +490,11 @@ function SortableTemplateCard({
               <div className="flex gap-2 mt-1 items-center flex-wrap">
                 <Badge variant="default" className="text-xs">PDF</Badge>
                 {t.page_count && (
-                  <span className="text-xs text-diletto-gray-light whitespace-nowrap">{t.page_count}ページ</span>
+                  <span className="text-xs text-brand-gray-light whitespace-nowrap">{t.page_count}ページ</span>
                 )}
                 {/* マッピング件数 — 0 件は薄くして「未配置」と分かるように */}
                 <span
-                  className={`text-xs whitespace-nowrap ${placementCount === 0 ? 'text-diletto-red/70' : 'text-diletto-gray-light'}`}
+                  className={`text-xs whitespace-nowrap ${placementCount === 0 ? 'text-brand-red/70' : 'text-brand-gray-light'}`}
                 >
                   {placementCount === 0 ? 'マッピング未設定' : `マッピング ${placementCount} 件`}
                 </span>
@@ -504,8 +504,8 @@ function SortableTemplateCard({
                   onClick={() => setAudienceOpen(true)}
                   className={`inline-flex items-center gap-1 text-xs whitespace-nowrap rounded-md px-2 py-0.5 border transition-colors ${
                     audienceSummary.kind === 'rules'
-                      ? 'border-diletto-blue/40 bg-diletto-blue/[0.06] text-diletto-blue hover:bg-diletto-blue/[0.1]'
-                      : 'border-diletto-gray/30 text-diletto-gray hover:bg-diletto-gray/5'
+                      ? 'border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue hover:bg-brand-blue/[0.1]'
+                      : 'border-brand-gray/30 text-brand-gray hover:bg-brand-gray/5'
                   }`}
                   title="配布対象を編集"
                 >
@@ -519,7 +519,7 @@ function SortableTemplateCard({
                   className={`inline-flex items-center gap-1 text-xs whitespace-nowrap rounded-md px-2 py-0.5 border transition-colors ${
                     t.is_company_issued
                       ? 'border-emerald-400/50 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                      : 'border-diletto-gray/30 text-diletto-gray-light hover:bg-diletto-gray/5'
+                      : 'border-brand-gray/30 text-brand-gray-light hover:bg-brand-gray/5'
                   }`}
                   title="会社発行 (招待時自動発行 + 一括発行) の設定"
                 >
@@ -586,7 +586,7 @@ function SortableTemplateCard({
             <Button
               variant="outline"
               size="sm"
-              className="text-diletto-red border-diletto-red/30 hover:bg-diletto-red/5"
+              className="text-brand-red border-brand-red/30 hover:bg-brand-red/5"
               onClick={() => onDelete(t)}
             >
               削除
@@ -684,44 +684,44 @@ function AudienceDialog({
         <div className="space-y-4 overflow-y-auto pr-1">
           {/* モード選択 */}
           <div className="space-y-2">
-            <label className="flex items-start gap-3 rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige/30 transition-colors">
+            <label className="flex items-start gap-3 rounded-md border border-brand-gray/15 p-3 cursor-pointer hover:bg-brand-beige/30 transition-colors">
               <input
                 type="radio"
-                className="mt-0.5 h-4 w-4 accent-diletto-blue"
+                className="mt-0.5 h-4 w-4 accent-brand-blue"
                 checked={mode === 'all'}
                 onChange={() => setMode('all')}
               />
               <div className="flex-1">
                 <p className="text-sm font-medium">全員 ({allEmployees.length}名)</p>
-                <p className="text-[11px] text-diletto-gray-light mt-0.5">在籍中の社員全員に配布。新人が追加されても自動で対象に含まれます。</p>
+                <p className="text-[11px] text-brand-gray-light mt-0.5">在籍中の社員全員に配布。新人が追加されても自動で対象に含まれます。</p>
               </div>
             </label>
-            <label className="flex items-start gap-3 rounded-md border border-diletto-gray/15 p-3 cursor-pointer hover:bg-diletto-beige/30 transition-colors">
+            <label className="flex items-start gap-3 rounded-md border border-brand-gray/15 p-3 cursor-pointer hover:bg-brand-beige/30 transition-colors">
               <input
                 type="radio"
-                className="mt-0.5 h-4 w-4 accent-diletto-blue"
+                className="mt-0.5 h-4 w-4 accent-brand-blue"
                 checked={mode === 'rules'}
                 onChange={() => setMode('rules')}
               />
               <div className="flex-1">
                 <p className="text-sm font-medium">条件で絞る</p>
-                <p className="text-[11px] text-diletto-gray-light mt-0.5">下のチェックリストから条件を選択。複数選択はいずれかに該当（OR）。</p>
+                <p className="text-[11px] text-brand-gray-light mt-0.5">下のチェックリストから条件を選択。複数選択はいずれかに該当（OR）。</p>
               </div>
             </label>
           </div>
 
           {/* 条件チェックリスト */}
           {mode === 'rules' && (
-            <div className="space-y-3 pl-2 border-l-2 border-diletto-blue/20 ml-2">
+            <div className="space-y-3 pl-2 border-l-2 border-brand-blue/20 ml-2">
               {/* フラグ */}
               <div>
-                <p className="text-xs font-bold text-diletto-gray mb-2">社員フラグ</p>
+                <p className="text-xs font-bold text-brand-gray mb-2">社員フラグ</p>
                 <div className="space-y-1.5">
                   {FLAG_OPTIONS.map((f) => (
                     <label key={f.value} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 accent-diletto-blue"
+                        className="h-4 w-4 accent-brand-blue"
                         checked={flags.has(f.value)}
                         onChange={() => toggleSet(flags, setFlags, f.value)}
                       />
@@ -733,14 +733,14 @@ function AudienceDialog({
 
               {/* 施設 */}
               {allFacilities.length > 0 && (
-                <div className="pt-2 border-t border-diletto-gray/10">
-                  <p className="text-xs font-bold text-diletto-gray mb-2">特定の事業所</p>
+                <div className="pt-2 border-t border-brand-gray/10">
+                  <p className="text-xs font-bold text-brand-gray mb-2">特定の事業所</p>
                   <div className="space-y-1.5">
                     {allFacilities.map((f) => (
                       <label key={f.id} className="flex items-center gap-2 text-sm cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-diletto-blue"
+                          className="h-4 w-4 accent-brand-blue"
                           checked={facilities.has(f.id)}
                           onChange={() => toggleSet(facilities, setFacilities, f.id)}
                         />
@@ -752,8 +752,8 @@ function AudienceDialog({
               )}
 
               {/* 役職 */}
-              <div className="pt-2 border-t border-diletto-gray/10">
-                <p className="text-xs font-bold text-diletto-gray mb-2">特定の役職</p>
+              <div className="pt-2 border-t border-brand-gray/10">
+                <p className="text-xs font-bold text-brand-gray mb-2">特定の役職</p>
                 <div className="space-y-1.5">
                   {[
                     { value: 'admin', label: '管理者' },
@@ -763,7 +763,7 @@ function AudienceDialog({
                     <label key={r.value} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 accent-diletto-blue"
+                        className="h-4 w-4 accent-brand-blue"
                         checked={roles.has(r.value)}
                         onChange={() => toggleSet(roles, setRoles, r.value)}
                       />
@@ -774,23 +774,23 @@ function AudienceDialog({
               </div>
 
               {/* 個別指名 */}
-              <div className="pt-2 border-t border-diletto-gray/10">
-                <p className="text-xs font-bold text-diletto-gray mb-2">個別指名 ({employees.size}名選択中)</p>
+              <div className="pt-2 border-t border-brand-gray/10">
+                <p className="text-xs font-bold text-brand-gray mb-2">個別指名 ({employees.size}名選択中)</p>
                 <input
                   type="text"
                   placeholder="氏名・カナ・メールで検索"
                   value={empSearch}
                   onChange={(e) => setEmpSearch(e.target.value)}
-                  className="w-full h-8 rounded-md border border-diletto-gray/20 bg-white px-2 text-sm mb-2"
+                  className="w-full h-8 rounded-md border border-brand-gray/20 bg-white px-2 text-sm mb-2"
                 />
-                <div className="space-y-1 max-h-40 overflow-y-auto rounded-md border border-diletto-gray/10 p-2">
+                <div className="space-y-1 max-h-40 overflow-y-auto rounded-md border border-brand-gray/10 p-2">
                   {filteredEmployeesForPicker.length === 0 ? (
-                    <p className="text-xs text-diletto-gray-light py-2 text-center">該当する社員がいません</p>
+                    <p className="text-xs text-brand-gray-light py-2 text-center">該当する社員がいません</p>
                   ) : filteredEmployeesForPicker.map((e) => (
-                    <label key={e.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-diletto-beige/30 px-1 py-0.5 rounded">
+                    <label key={e.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-brand-beige/30 px-1 py-0.5 rounded">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 accent-diletto-blue"
+                        className="h-4 w-4 accent-brand-blue"
                         checked={employees.has(e.id)}
                         onChange={() => toggleSet(employees, setEmployees, e.id)}
                       />
@@ -798,7 +798,7 @@ function AudienceDialog({
                     </label>
                   ))}
                 </div>
-                <p className="text-[10px] text-diletto-gray-light mt-1">
+                <p className="text-[10px] text-brand-gray-light mt-1">
                   ※ 個別指名は「ピンポイント追加」用。新人が来ても自動では追加されません。
                 </p>
               </div>
@@ -806,12 +806,12 @@ function AudienceDialog({
           )}
 
           {/* プレビュー */}
-          <div className="rounded-md border border-diletto-blue/20 bg-diletto-blue/[0.04] p-3">
-            <p className="text-xs font-bold text-diletto-blue mb-1.5">📋 この設定で {previewMatches.length} 名が対象</p>
+          <div className="rounded-md border border-brand-blue/20 bg-brand-blue/[0.04] p-3">
+            <p className="text-xs font-bold text-brand-blue mb-1.5">📋 この設定で {previewMatches.length} 名が対象</p>
             {previewMatches.length === 0 ? (
-              <p className="text-[11px] text-diletto-gray-light">該当する社員がいません</p>
+              <p className="text-[11px] text-brand-gray-light">該当する社員がいません</p>
             ) : (
-              <p className="text-[11px] text-diletto-gray break-words">
+              <p className="text-[11px] text-brand-gray break-words">
                 {previewMatches.slice(0, 8).map((e) => `${e.last_name} ${e.first_name}`).join(' / ')}
                 {previewMatches.length > 8 && ` ほか ${previewMatches.length - 8} 名`}
               </p>

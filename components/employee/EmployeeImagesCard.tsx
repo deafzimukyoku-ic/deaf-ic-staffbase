@@ -122,7 +122,7 @@ export function EmployeeImagesCard({
       <CardHeader>
         <CardTitle className="text-base">提出画像</CardTitle>
         {editable && (
-          <p className="text-xs text-diletto-gray mt-1">免許証・通勤経路など必要な画像をアップロードしてください</p>
+          <p className="text-xs text-brand-gray mt-1">免許証・通勤経路など必要な画像をアップロードしてください</p>
         )}
       </CardHeader>
       <CardContent>
@@ -202,12 +202,12 @@ function ImageSlot({ label, path, fieldKey, editable, uploading, supabaseUrl, on
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-diletto-gray/20 hover:border-diletto-blue/40 transition-colors text-sm text-diletto-gray cursor-pointer"
+          className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-brand-gray/20 hover:border-brand-blue/40 transition-colors text-sm text-brand-gray cursor-pointer"
         >
           {uploading ? 'アップロード中...' : 'クリックして画像を選択'}
         </button>
       ) : (
-        <p className="text-xs text-diletto-gray-light">未アップロード</p>
+        <p className="text-xs text-brand-gray-light">未アップロード</p>
       )}
       {editable && (
         <input

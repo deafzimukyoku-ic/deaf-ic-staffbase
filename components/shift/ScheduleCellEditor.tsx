@@ -89,20 +89,20 @@ export function ScheduleCellEditor({ open, onOpenChange, child, date, entry, onS
           <DialogTitle className="flex items-center gap-2">
             <span className="text-xl">👶</span>
             <span>{child.name}</span>
-            <span className="text-sm text-diletto-gray-light font-normal">· {date}</span>
+            <span className="text-sm text-brand-gray-light font-normal">· {date}</span>
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
-          <label className="flex items-center gap-3 rounded-md border border-diletto-gray/10 p-3 cursor-pointer hover:bg-gray-50">
+          <label className="flex items-center gap-3 rounded-md border border-brand-gray/10 p-3 cursor-pointer hover:bg-gray-50">
             <input
               type="checkbox"
               checked={attending}
               onChange={(e) => setAttending(e.target.checked)}
-              className="h-5 w-5 accent-diletto-blue"
+              className="h-5 w-5 accent-brand-blue"
             />
             <div className="flex-1">
-              <span className="text-sm font-bold text-diletto-ink">この日に利用する</span>
-              <p className="text-[10px] text-diletto-gray-light">チェックを外すとこの日の予定を削除できます</p>
+              <span className="text-sm font-bold text-brand-ink">この日に利用する</span>
+              <p className="text-[10px] text-brand-gray-light">チェックを外すとこの日の予定を削除できます</p>
             </div>
           </label>
 
@@ -132,14 +132,14 @@ export function ScheduleCellEditor({ open, onOpenChange, child, date, entry, onS
               <div className="space-y-2">
                 <Label className="text-xs font-bold">🚐 迎えエリア</Label>
                 {pickupAreas.length === 0 ? (
-                  <p className="text-xs text-diletto-gray-light italic">この児童の迎えエリアが未設定です。児童管理で追加してください。</p>
+                  <p className="text-xs text-brand-gray-light italic">この児童の迎えエリアが未設定です。児童管理で追加してください。</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setPickupMark('')}
                       className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all ${
-                        pickupMark === '' ? 'bg-diletto-gray text-white border-diletto-gray' : 'bg-white text-diletto-gray border-diletto-gray/15'
+                        pickupMark === '' ? 'bg-brand-gray text-white border-brand-gray' : 'bg-white text-brand-gray border-brand-gray/15'
                       }`}
                     >
                       なし
@@ -150,7 +150,7 @@ export function ScheduleCellEditor({ open, onOpenChange, child, date, entry, onS
                         type="button"
                         onClick={() => setPickupMark(a.id)}
                         className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all ${
-                          pickupMark === a.id ? 'bg-diletto-blue text-white border-diletto-blue' : 'bg-white text-diletto-gray border-diletto-gray/15 hover:border-diletto-blue/30'
+                          pickupMark === a.id ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white text-brand-gray border-brand-gray/15 hover:border-brand-blue/30'
                         }`}
                       >
                         {a.emoji} {a.name}
@@ -163,14 +163,14 @@ export function ScheduleCellEditor({ open, onOpenChange, child, date, entry, onS
               <div className="space-y-2">
                 <Label className="text-xs font-bold">🏠 送りエリア</Label>
                 {dropoffAreas.length === 0 ? (
-                  <p className="text-xs text-diletto-gray-light italic">この児童の送りエリアが未設定です。</p>
+                  <p className="text-xs text-brand-gray-light italic">この児童の送りエリアが未設定です。</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setDropoffMark('')}
                       className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all ${
-                        dropoffMark === '' ? 'bg-diletto-gray text-white border-diletto-gray' : 'bg-white text-diletto-gray border-diletto-gray/15'
+                        dropoffMark === '' ? 'bg-brand-gray text-white border-brand-gray' : 'bg-white text-brand-gray border-brand-gray/15'
                       }`}
                     >
                       なし
@@ -181,7 +181,7 @@ export function ScheduleCellEditor({ open, onOpenChange, child, date, entry, onS
                         type="button"
                         onClick={() => setDropoffMark(a.id)}
                         className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all ${
-                          dropoffMark === a.id ? 'bg-diletto-blue text-white border-diletto-blue' : 'bg-white text-diletto-gray border-diletto-gray/15 hover:border-diletto-blue/30'
+                          dropoffMark === a.id ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white text-brand-gray border-brand-gray/15 hover:border-brand-blue/30'
                         }`}
                       >
                         {a.emoji} {a.name}
@@ -195,7 +195,7 @@ export function ScheduleCellEditor({ open, onOpenChange, child, date, entry, onS
         </div>
         <DialogFooter className="gap-2">
           {entry && (
-            <Button variant="outline" onClick={handleDelete} disabled={saving} className="text-diletto-red mr-auto">
+            <Button variant="outline" onClick={handleDelete} disabled={saving} className="text-brand-red mr-auto">
               削除
             </Button>
           )}

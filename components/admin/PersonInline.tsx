@@ -26,7 +26,7 @@ interface InlineProps {
 export function PersonInline({ label, person }: InlineProps) {
   if (!person) return null;
   return (
-    <span className="text-[10px] text-diletto-gray-light font-medium tracking-tighter">
+    <span className="text-[10px] text-brand-gray-light font-medium tracking-tighter">
       {label}: {personLabel(person)}
     </span>
   );

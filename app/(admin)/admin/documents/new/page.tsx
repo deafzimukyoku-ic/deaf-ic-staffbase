@@ -95,7 +95,7 @@ export default function NewDocumentPage() {
     <div className="max-w-2xl">
       <button
         onClick={() => router.push('/admin/documents')}
-        className="flex items-center gap-1 text-sm text-diletto-gray hover:text-diletto-ink transition-colors mb-4"
+        className="flex items-center gap-1 text-sm text-brand-gray hover:text-brand-ink transition-colors mb-4"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="15 18 9 12 15 6" />
@@ -123,7 +123,7 @@ export default function NewDocumentPage() {
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="入社誓約書" />
             </div>
 
-            <div className="text-[11px] text-diletto-gray-light leading-relaxed bg-diletto-blue/5 border border-diletto-blue/10 rounded-md p-2.5">
+            <div className="text-[11px] text-brand-gray-light leading-relaxed bg-brand-blue/5 border border-brand-blue/10 rounded-md p-2.5">
               💡 表示条件は **タグから自動判定** されます。<br />
               書類のタグに「免許番号」「マイカー車種」など特定社員にしか該当しない項目があれば、
               該当する社員にだけ書類が表示されます（マイカー通勤者・送迎運転者など）。<br />

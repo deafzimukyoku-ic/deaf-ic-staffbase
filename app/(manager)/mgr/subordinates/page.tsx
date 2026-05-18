@@ -70,8 +70,8 @@ export default function SubordinatesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" />
-        <span className="ml-3 text-sm text-diletto-gray">読み込み中...</span>
+        <div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" />
+        <span className="ml-3 text-sm text-brand-gray">読み込み中...</span>
       </div>
     );
   }
@@ -80,7 +80,7 @@ export default function SubordinatesPage() {
     <div>
       <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <h1 className="text-2xl font-bold">部下管理</h1>
-        <p className="text-xs text-diletto-gray-light">
+        <p className="text-xs text-brand-gray-light">
           {selectedFacilityId
             ? `選択中の事業所の社員 ${employees.length} 名`
             : `全管轄事業所の社員 ${employees.length} 名（事業所セレクタで絞り込み可）`}
@@ -90,8 +90,8 @@ export default function SubordinatesPage() {
       {employees.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-diletto-gray">該当する社員がいません</p>
-            <p className="text-sm text-diletto-gray-light mt-1">
+            <p className="text-brand-gray">該当する社員がいません</p>
+            <p className="text-sm text-brand-gray-light mt-1">
               事業所セレクタを切り替えるか、管理者にお問い合わせください。
             </p>
           </CardContent>

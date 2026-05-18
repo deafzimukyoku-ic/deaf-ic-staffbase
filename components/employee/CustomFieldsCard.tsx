@@ -115,7 +115,7 @@ export function CustomFieldsCard({ section, defs, values, onChange, employeeId }
                         };
                         input.click();
                       }}>変更</Button>
-                      <Button type="button" size="sm" variant="ghost" className="text-diletto-red"
+                      <Button type="button" size="sm" variant="ghost" className="text-brand-red"
                         onClick={() => updateValue(cf.field_key, null)}>削除</Button>
                     </div>
                   </div>
@@ -132,7 +132,7 @@ export function CustomFieldsCard({ section, defs, values, onChange, employeeId }
                       };
                       input.click();
                     }}
-                    className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-diletto-gray/20 hover:border-diletto-blue/40 transition-colors text-sm text-diletto-gray cursor-pointer"
+                    className="flex items-center justify-center w-full h-24 rounded-md border-2 border-dashed border-brand-gray/20 hover:border-brand-blue/40 transition-colors text-sm text-brand-gray cursor-pointer"
                   >
                     {uploadingField === cf.field_key ? 'アップロード中...' : 'クリックして画像を選択'}
                   </button>

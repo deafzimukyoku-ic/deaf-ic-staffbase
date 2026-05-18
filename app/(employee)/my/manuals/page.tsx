@@ -24,7 +24,7 @@ interface ManualWithRead extends Manual {
 /* useSearchParams を使うため、prerender (CSR bailout) 回避用に Suspense でラップ */
 export default function MyManualsPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /></div>}>
       <MyManualsPageInner />
     </Suspense>
   );
@@ -155,18 +155,18 @@ function MyManualsPageInner() {
   const readCount = items.filter((i) => i.isRead).length;
   const progressPercent = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0;
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-diletto-blue border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /></div>;
 
   if (!selectedCategory) {
     return (
       <div>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-2xl font-bold text-diletto-ink">業務マニュアル</h1>
-            <p className="text-sm text-diletto-gray mt-1">カテゴリを選択して確認してください</p>
+            <h1 className="text-2xl font-bold text-brand-ink">業務マニュアル</h1>
+            <p className="text-sm text-brand-gray mt-1">カテゴリを選択して確認してください</p>
           </div>
           {unreadCount > 0 && (
-            <Badge className="bg-diletto-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
+            <Badge className="bg-brand-red text-white border-none shadow-sm flex gap-2 items-center h-8 px-3">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
@@ -178,12 +178,12 @@ function MyManualsPageInner() {
 
         <div className="mb-8 mt-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-diletto-gray">既読状況 — {readCount}/{totalCount} 既読</p>
-            <p className="text-sm font-semibold text-diletto-ink">{progressPercent}%</p>
+            <p className="text-sm text-brand-gray">既読状況 — {readCount}/{totalCount} 既読</p>
+            <p className="text-sm font-semibold text-brand-ink">{progressPercent}%</p>
           </div>
-          <div className="h-3 w-full rounded-full bg-diletto-beige overflow-hidden">
+          <div className="h-3 w-full rounded-full bg-brand-beige overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-diletto-green' : 'bg-diletto-blue'}`}
+              className={`h-full rounded-full transition-all duration-700 ${progressPercent === 100 ? 'bg-brand-green' : 'bg-brand-blue'}`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -200,7 +200,7 @@ function MyManualsPageInner() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+                className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
               >
                 <div className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity" style={{ backgroundColor: cat.color }} />
                 <div className="flex justify-between items-start mb-auto relative">
@@ -208,19 +208,19 @@ function MyManualsPageInner() {
                     {cat.icon || '📖'}
                   </span>
                   {cat.unread > 0 && (
-                    <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                    <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                       {cat.unread}
                     </span>
                   )}
                 </div>
                 <div className="relative">
-                  <span className="text-sm font-bold text-diletto-ink block truncate mb-1">{cat.name}</span>
+                  <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-diletto-gray">{catRead}/{catTotal} 既読</span>
+                    <span className="text-[10px] text-brand-gray">{catRead}/{catTotal} 既読</span>
                     {catPct === 100 && <Badge variant="success" className="text-[9px] py-0 h-4">完了</Badge>}
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-diletto-beige overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-diletto-green' : 'bg-diletto-blue'}`} style={{ width: `${catPct}%` }} />
+                  <div className="h-1.5 w-full rounded-full bg-brand-beige overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${catPct === 100 ? 'bg-brand-green' : 'bg-brand-blue'}`} style={{ width: `${catPct}%` }} />
                   </div>
                 </div>
               </button>
@@ -230,19 +230,19 @@ function MyManualsPageInner() {
           {uncategorizedItems.length > 0 && (
             <button
               onClick={() => setSelectedCategory({ id: 'none', name: 'その他', icon: '📎', color: '#94a3b8' } as any)}
-              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-diletto-gray/5 hover:border-diletto-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
+              className="relative flex flex-col p-4 bg-white rounded-2xl shadow-sm border border-brand-gray/5 hover:border-brand-blue/30 hover:shadow-md transition-all group overflow-hidden h-[160px] text-left"
             >
               <div className="flex justify-between items-start mb-auto relative">
                 <span className="text-4xl group-hover:scale-110 transition-transform duration-300">📎</span>
                 {uncategorizedUnread > 0 && (
-                  <span className="h-5 min-w-5 px-1 rounded-full bg-diletto-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                  <span className="h-5 min-w-5 px-1 rounded-full bg-brand-red text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                     {uncategorizedUnread}
                   </span>
                 )}
               </div>
               <div className="relative">
-                <span className="text-sm font-bold text-diletto-ink block mb-1">その他</span>
-                <span className="text-[10px] text-diletto-gray block mb-2">{uncategorizedItems.length} 件</span>
+                <span className="text-sm font-bold text-brand-ink block mb-1">その他</span>
+                <span className="text-[10px] text-brand-gray block mb-2">{uncategorizedItems.length} 件</span>
               </div>
             </button>
           )}
@@ -262,7 +262,7 @@ function MyManualsPageInner() {
           variant="ghost"
           size="sm"
           onClick={() => setSelectedCategory(null)}
-          className="text-diletto-gray-light hover:text-diletto-ink px-0"
+          className="text-brand-gray-light hover:text-brand-ink px-0"
         >
           ← カテゴリ一覧へ
         </Button>
@@ -306,7 +306,7 @@ function ManualsGridView({ items, onMarkRead, onOpenPdf, tenantId, employeeId, v
   const open = openId ? items.find((i) => i.id === openId) : null;
 
   if (items.length === 0) {
-    return <p className="text-center py-20 text-diletto-gray-light">このカテゴリの業務マニュアルはありません</p>;
+    return <p className="text-center py-20 text-brand-gray-light">このカテゴリの業務マニュアルはありません</p>;
   }
 
   return (
@@ -356,9 +356,9 @@ function ManualsGridView({ items, onMarkRead, onOpenPdf, tenantId, employeeId, v
                     )}
                   </div>
                   {open.isRead ? (
-                    <Badge variant="outline" className="text-[10px] shrink-0 border-diletto-gray/20 text-diletto-gray">既読</Badge>
+                    <Badge variant="outline" className="text-[10px] shrink-0 border-brand-gray/20 text-brand-gray">既読</Badge>
                   ) : (
-                    <Badge className="bg-diletto-red text-white text-[10px] shrink-0 border-none">未読</Badge>
+                    <Badge className="bg-brand-red text-white text-[10px] shrink-0 border-none">未読</Badge>
                   )}
                 </div>
               </DialogHeader>
@@ -375,17 +375,17 @@ function ManualsGridView({ items, onMarkRead, onOpenPdf, tenantId, employeeId, v
                   📄 PDFを開く
                 </Button>
               )}
-              <p className="text-[10px] text-diletto-gray-light mt-4 pt-3 border-t border-diletto-gray/5">
+              <p className="text-[10px] text-brand-gray-light mt-4 pt-3 border-t border-brand-gray/5">
                 {new Date(open.created_at).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
               </p>
               {/* 既読ボタン: 未読時のみ表示。押すと既読化 + モーダルを閉じる。 */}
-              <div className="mt-4 pt-3 border-t border-diletto-gray/10 flex items-center justify-between gap-3">
+              <div className="mt-4 pt-3 border-t border-brand-gray/10 flex items-center justify-between gap-3">
                 {!open.isRead ? (
-                  <p className="text-xs text-diletto-red font-medium">
+                  <p className="text-xs text-brand-red font-medium">
                     ⚠ 既読ボタンを押さないと既読とみなされません
                   </p>
                 ) : (
-                  <p className="text-xs text-diletto-green font-medium">✓ 既読済み</p>
+                  <p className="text-xs text-brand-green font-medium">✓ 既読済み</p>
                 )}
                 <div className="flex gap-2 shrink-0">
                   <Button
@@ -407,7 +407,7 @@ function ManualsGridView({ items, onMarkRead, onOpenPdf, tenantId, employeeId, v
                         onMarkRead(open.id);
                         setOpenId(null);
                       }}
-                      className="bg-diletto-blue hover:bg-diletto-blue/90 text-white"
+                      className="bg-brand-blue hover:bg-brand-blue/90 text-white"
                     >
                       ✓ 既読にする
                     </Button>
@@ -418,7 +418,7 @@ function ManualsGridView({ items, onMarkRead, onOpenPdf, tenantId, employeeId, v
                   1 回目（未読 → 既読化 → カウント 1）は同セッション中ボタン非表示、
                   閉じて再度開くと「2 回目」として表示される。 */}
               {tenantId && employeeId && wasReadAtOpen && (
-                <div className="pt-3 border-t border-diletto-gray/10 mt-3">
+                <div className="pt-3 border-t border-brand-gray/10 mt-3">
                   <ViewConfirmButton
                     table="manual_view_logs"
                     tenantId={tenantId}

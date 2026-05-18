@@ -75,42 +75,42 @@ export default function MatrixExportModal({
         </DialogHeader>
 
         <div className="space-y-3 py-2">
-          <p className="text-sm text-diletto-gray">
+          <p className="text-sm text-brand-gray">
             出力モードを選択してください。
           </p>
 
           <div className="space-y-2">
             {preselectedRowIndex !== undefined && (
-              <label className="flex items-center gap-3 rounded-md border border-diletto-gray/20 p-3 cursor-pointer hover:bg-diletto-bg transition-colors">
+              <label className="flex items-center gap-3 rounded-md border border-brand-gray/20 p-3 cursor-pointer hover:bg-brand-bg transition-colors">
                 <input
                   type="radio"
                   name="exportMode"
                   value="single"
                   checked={mode === 'single'}
                   onChange={() => setMode('single')}
-                  className="accent-diletto-blue"
+                  className="accent-brand-blue"
                 />
                 <div>
                   <p className="text-sm font-medium">1行のみ出力</p>
-                  <p className="text-xs text-diletto-gray">
+                  <p className="text-xs text-brand-gray">
                     行 {(preselectedRowIndex ?? 0) + 1} のPDFをダウンロード
                   </p>
                 </div>
               </label>
             )}
 
-            <label className="flex items-center gap-3 rounded-md border border-diletto-gray/20 p-3 cursor-pointer hover:bg-diletto-bg transition-colors">
+            <label className="flex items-center gap-3 rounded-md border border-brand-gray/20 p-3 cursor-pointer hover:bg-brand-bg transition-colors">
               <input
                 type="radio"
                 name="exportMode"
                 value="all"
                 checked={mode === 'all'}
                 onChange={() => setMode('all')}
-                className="accent-diletto-blue"
+                className="accent-brand-blue"
               />
               <div>
                 <p className="text-sm font-medium">全行一括出力</p>
-                <p className="text-xs text-diletto-gray">
+                <p className="text-xs text-brand-gray">
                   {rowCount}行分のPDFをZIPでダウンロード
                 </p>
               </div>

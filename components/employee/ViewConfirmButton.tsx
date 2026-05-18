@@ -61,14 +61,14 @@ export function ViewConfirmButton({ table, tenantId, employeeId, itemId, initial
   return (
     <div className="flex flex-col items-stretch gap-2 sm:items-end">
       {summary.count > 0 && lastViewedLabel && (
-        <p className="text-xs text-diletto-gray-light text-right">
+        <p className="text-xs text-brand-gray-light text-right">
           前回確認: {lastViewedLabel}（これまで {summary.count} 回確認済み）
         </p>
       )}
       <Button
         onClick={handleClick}
         disabled={loading}
-        className="bg-diletto-blue hover:bg-diletto-blue/90 text-white font-bold"
+        className="bg-brand-blue hover:bg-brand-blue/90 text-white font-bold"
       >
         {loading ? '記録中...' : `✓ 確認しました（${nextOrdinal} 回目）`}
       </Button>

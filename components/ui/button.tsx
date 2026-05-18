@@ -9,19 +9,19 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "btn-shimmer bg-diletto-ink text-white shadow-sm hover:bg-[#2a2a2a] hover:-translate-y-0.5 active:translate-y-0",
+          "btn-shimmer bg-brand-ink text-white shadow-sm hover:bg-[#2a2a2a] hover:-translate-y-0.5 active:translate-y-0",
         destructive:
-          "bg-diletto-red text-white shadow-sm hover:bg-[#7a2828] active:bg-[#6a2222]",
+          "bg-brand-red text-white shadow-sm hover:bg-[#7a2828] active:bg-[#6a2222]",
         outline:
-          "border border-diletto-gray/30 bg-white text-diletto-ink shadow-sm hover:border-diletto-ink/60 hover:text-diletto-ink",
+          "border border-brand-gray/30 bg-white text-brand-ink shadow-sm hover:border-brand-ink/60 hover:text-brand-ink",
         secondary:
-          "bg-diletto-beige text-diletto-ink hover:bg-[#eeede8]",
+          "bg-brand-beige text-brand-ink hover:bg-[#eeede8]",
         ghost:
-          "text-diletto-gray hover:bg-diletto-beige hover:text-diletto-ink",
+          "text-brand-gray hover:bg-brand-beige hover:text-brand-ink",
         link:
-          "text-diletto-blue underline-offset-4 hover:underline",
+          "text-brand-blue underline-offset-4 hover:underline",
         gold:
-          "btn-shimmer bg-diletto-gold text-white shadow-sm hover:bg-[#7a5618] hover:-translate-y-0.5",
+          "btn-shimmer bg-brand-gold text-white shadow-sm hover:bg-[#7a5618] hover:-translate-y-0.5",
       },
       size: {
         default: "h-10 px-4 py-2",
