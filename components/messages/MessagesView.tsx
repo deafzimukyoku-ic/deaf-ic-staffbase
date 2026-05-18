@@ -33,6 +33,18 @@ const ATTACH_MAX_BYTES = 10 * 1024 * 1024;
 const ATTACH_ALLOWED_MIME = /^(image\/|application\/pdf$)/;
 const STORAGE_BUCKET = 'message-attachments';
 
+/* Supabase Storage の object key は ASCII safe 文字のみ許可
+   (日本語・空白・記号などで "Invalid key" が出る)。
+   元のファイル名は message_attachments.file_name に保存しているので、
+   Storage キーは UUID + 拡張子だけで一意化する。 */
+function buildStorageKey(messageId: string, originalName: string): string {
+  const lastDot = originalName.lastIndexOf('.');
+  const rawExt = lastDot >= 0 ? originalName.slice(lastDot + 1) : '';
+  /* 拡張子からも非 ASCII / 危険文字を除去。空なら 'bin' */
+  const safeExt = rawExt.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 10) || 'bin';
+  return `${messageId}/${crypto.randomUUID()}.${safeExt}`;
+}
+
 /**
  * 受信者に🔔通知行を挿入。
  * 通知本文の event_target_title には、メッセージ本文 80 字までを格納する。
@@ -103,9 +115,11 @@ interface EmployeePick {
 interface AttachmentInfo {
   id: string;
   file_name: string;
-  mime_type: string;
-  storage_path: string;
-  size_bytes: number;
+  mime_type: string | null;
+  storage_path: string | null;
+  size_bytes: number | null;
+  /* 178: 外部 URL リンク添付 (PDF/動画/Google Drive 等) */
+  link_url: string | null;
 }
 
 interface MessageWithAttachments extends MessageRow {
@@ -125,6 +139,8 @@ export default function MessagesView({ scope }: Props) {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [composerBody, setComposerBody] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
+  /* 178: 外部 URL リンク添付 (PDF/動画/Google Drive 等を URL で共有) */
+  const [pendingLinks, setPendingLinks] = useState<{ url: string; label: string }[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [showNewThread, setShowNewThread] = useState(false);
@@ -261,7 +277,7 @@ export default function MessagesView({ scope }: Props) {
     if (ids.length > 0) {
       const { data: atts } = await supabase
         .from('message_attachments')
-        .select('id, message_id, file_name, mime_type, storage_path, size_bytes')
+        .select('id, message_id, file_name, mime_type, storage_path, size_bytes, link_url')
         .in('message_id', ids);
       attachments = (atts ?? []) as (AttachmentInfo & { message_id: string })[];
     }
@@ -324,7 +340,7 @@ export default function MessagesView({ scope }: Props) {
   const sendMessage = async () => {
     if (!me || !activeThreadId) return;
     const body = composerBody.trim();
-    if (!body && pendingAttachments.length === 0) return;
+    if (!body && pendingAttachments.length === 0 && pendingLinks.length === 0) return;
     setSending(true);
     setError('');
     try {
@@ -336,9 +352,11 @@ export default function MessagesView({ scope }: Props) {
         .single();
       if (insErr || !inserted) throw new Error(insErr?.message ?? '送信に失敗しました');
 
-      /* 2. 添付があればストレージ + attachments テーブル */
+      /* 2. ファイル添付があればストレージ + attachments テーブル
+         Storage キーは ASCII safe (UUID + 拡張子) で生成。元のファイル名は
+         file_name に保存して DL 時にこの名前で渡す。 */
       for (const file of pendingAttachments) {
-        const path = `${inserted.id}/${Date.now()}-${file.name}`;
+        const path = buildStorageKey(inserted.id, file.name);
         const { error: upErr } = await supabase.storage
           .from(STORAGE_BUCKET)
           .upload(path, file, { contentType: file.type, upsert: false });
@@ -353,11 +371,22 @@ export default function MessagesView({ scope }: Props) {
         if (attErr) throw new Error('添付保存失敗: ' + attErr.message);
       }
 
+      /* 2b. URL リンク添付 (Storage には触らない) */
+      for (const link of pendingLinks) {
+        const { error: linkErr } = await supabase.from('message_attachments').insert({
+          message_id: inserted.id,
+          file_name: link.label || link.url,
+          link_url: link.url,
+        });
+        if (linkErr) throw new Error('リンク保存失敗: ' + linkErr.message);
+      }
+
       /* 3. 受信者に🔔通知行を入れる（自分以外の参加者向け） */
       await insertMessageNotifications(supabase, me, activeThreadId, body || '（添付）');
 
       setComposerBody('');
       setPendingAttachments([]);
+      setPendingLinks([]);
       await loadMessages(activeThreadId);
       void loadThreads();
     } catch (e) {
@@ -406,8 +435,16 @@ export default function MessagesView({ scope }: Props) {
     void loadThreads();
   };
 
-  /* --- 添付ダウンロード（署名付き URL） --- */
+  /* --- 添付を開く: link_url なら直接遷移、storage_path なら signed URL --- */
   const openAttachment = async (att: AttachmentInfo) => {
+    if (att.link_url) {
+      window.open(att.link_url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if (!att.storage_path) {
+      setError('添付情報が不完全です');
+      return;
+    }
     const { data, error: e } = await supabase.storage
       .from(STORAGE_BUCKET)
       .createSignedUrl(att.storage_path, 60);
@@ -563,17 +600,25 @@ export default function MessagesView({ scope }: Props) {
                           {/* 添付 */}
                           {!m.deleted_at && m.attachments.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-2">
-                              {m.attachments.map((a) => (
-                                <button
-                                  key={a.id}
-                                  type="button"
-                                  onClick={() => openAttachment(a)}
-                                  className={`text-[11px] px-2 py-1 rounded inline-flex items-center gap-1 ${mine ? 'bg-white/20 hover:bg-white/30' : 'bg-diletto-blue/5 hover:bg-diletto-blue/10 text-diletto-ink'}`}
-                                  title={`${a.file_name} (${(a.size_bytes / 1024).toFixed(0)}KB)`}
-                                >
-                                  {a.mime_type === 'application/pdf' ? '📄' : '🖼️'} {a.file_name}
-                                </button>
-                              ))}
+                              {m.attachments.map((a) => {
+                                const icon = a.link_url
+                                  ? '🔗'
+                                  : a.mime_type === 'application/pdf' ? '📄' : '🖼️';
+                                const title = a.link_url
+                                  ? a.link_url
+                                  : `${a.file_name}${a.size_bytes ? ` (${(a.size_bytes / 1024).toFixed(0)}KB)` : ''}`;
+                                return (
+                                  <button
+                                    key={a.id}
+                                    type="button"
+                                    onClick={() => openAttachment(a)}
+                                    className={`text-[11px] px-2 py-1 rounded inline-flex items-center gap-1 max-w-[280px] ${mine ? 'bg-white/20 hover:bg-white/30' : 'bg-diletto-blue/5 hover:bg-diletto-blue/10 text-diletto-ink'}`}
+                                    title={title}
+                                  >
+                                    {icon} <span className="truncate">{a.file_name}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -593,13 +638,23 @@ export default function MessagesView({ scope }: Props) {
 
               {/* 入力欄 */}
               <div className="border-t px-3 py-2 flex flex-col gap-2" style={{ borderColor: 'var(--rule)' }}>
-                {pendingAttachments.length > 0 && (
+                {(pendingAttachments.length > 0 || pendingLinks.length > 0) && (
                   <div className="flex flex-wrap gap-1.5">
                     {pendingAttachments.map((f, i) => (
-                      <span key={i} className="text-[11px] px-2 py-1 rounded bg-diletto-beige inline-flex items-center gap-1">
+                      <span key={`f${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-beige inline-flex items-center gap-1">
                         {f.type === 'application/pdf' ? '📄' : '🖼️'} {f.name} ({(f.size / 1024).toFixed(0)}KB)
                         <button
                           onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))}
+                          className="ml-1 text-diletto-red"
+                          aria-label="削除"
+                        >×</button>
+                      </span>
+                    ))}
+                    {pendingLinks.map((l, i) => (
+                      <span key={`l${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-blue/[0.08] text-diletto-blue inline-flex items-center gap-1 max-w-[280px]">
+                        🔗 <span className="truncate">{l.label || l.url}</span>
+                        <button
+                          onClick={() => setPendingLinks((p) => p.filter((_, j) => j !== i))}
                           className="ml-1 text-diletto-red"
                           aria-label="削除"
                         >×</button>
@@ -616,10 +671,11 @@ export default function MessagesView({ scope }: Props) {
                     className="flex-1 text-sm rounded p-2 outline-none"
                     style={{ background: 'var(--white)', border: '1px solid var(--rule)' }}
                   />
-                  <Button variant="primary" onClick={sendMessage} disabled={sending || (!composerBody.trim() && pendingAttachments.length === 0)}>
+                  <Button variant="primary" onClick={sendMessage} disabled={sending || (!composerBody.trim() && pendingAttachments.length === 0 && pendingLinks.length === 0)}>
                     {sending ? '送信中...' : '送信'}
                   </Button>
                 </div>
+                <LinkAddInline onAdd={(url, label) => setPendingLinks((p) => [...p, { url, label }])} />
                 <AttachmentDropZone
                   compact
                   acceptMime="image/*,application/pdf"
@@ -668,6 +724,8 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
   const [selectedIds, setSelectedIds] = useState<string[]>(presetRecipientId ? [presetRecipientId] : []);
   const [body, setBody] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
+  /* 178: 外部 URL リンク添付 */
+  const [links, setLinks] = useState<{ url: string; label: string }[]>([]);
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -752,7 +810,7 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
 
   const submit = async () => {
     if (selectedIds.length === 0) { setErr('宛先を 1 名以上選んでください'); return; }
-    if (!body.trim() && attachments.length === 0) { setErr('本文または添付を入力してください'); return; }
+    if (!body.trim() && attachments.length === 0 && links.length === 0) { setErr('本文または添付を入力してください'); return; }
     setSubmitting(true);
     setErr('');
     try {
@@ -779,9 +837,9 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
         .insert({ id: messageId, thread_id: threadId, sender_employee_id: me.id, body: body.trim() });
       if (msgErr) throw new Error(msgErr.message);
 
-      /* 4. 添付 */
+      /* 4a. ファイル添付。Storage キーは ASCII safe (UUID + 拡張子) で生成 */
       for (const file of attachments) {
-        const path = `${messageId}/${Date.now()}-${file.name}`;
+        const path = buildStorageKey(messageId, file.name);
         const { error: upErr } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, { contentType: file.type });
         if (upErr) throw new Error('添付アップロード失敗: ' + upErr.message);
         await supabase.from('message_attachments').insert({
@@ -791,6 +849,16 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
           storage_path: path,
           size_bytes: file.size,
         });
+      }
+
+      /* 4b. URL リンク添付 */
+      for (const link of links) {
+        const { error: linkErr } = await supabase.from('message_attachments').insert({
+          message_id: messageId,
+          file_name: link.label || link.url,
+          link_url: link.url,
+        });
+        if (linkErr) throw new Error('リンク保存失敗: ' + linkErr.message);
       }
 
       /* 5. 受信者に🔔通知 */
@@ -871,16 +939,25 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
               maxBytesLabel="10MB"
               onFiles={handleAttach}
             />
-            {attachments.length > 0 && (
+            {(attachments.length > 0 || links.length > 0) && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {attachments.map((f, i) => (
-                  <span key={i} className="text-[11px] px-2 py-1 rounded bg-diletto-beige inline-flex items-center gap-1">
+                  <span key={`f${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-beige inline-flex items-center gap-1">
                     {f.type === 'application/pdf' ? '📄' : '🖼️'} {f.name}
                     <button onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="ml-1 text-diletto-red">×</button>
                   </span>
                 ))}
+                {links.map((l, i) => (
+                  <span key={`l${i}`} className="text-[11px] px-2 py-1 rounded bg-diletto-blue/[0.08] text-diletto-blue inline-flex items-center gap-1 max-w-[280px]">
+                    🔗 <span className="truncate">{l.label || l.url}</span>
+                    <button onClick={() => setLinks((p) => p.filter((_, j) => j !== i))} className="ml-1 text-diletto-red">×</button>
+                  </span>
+                ))}
               </div>
             )}
+            <div className="mt-2">
+              <LinkAddInline onAdd={(url, label) => setLinks((p) => [...p, { url, label }])} />
+            </div>
           </div>
         </div>
 
@@ -890,6 +967,73 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
             {submitting ? '送信中...' : '送信'}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   URL リンク添付 追加 inline UI
+   ============================================================ */
+function LinkAddInline({ onAdd }: { onAdd: (url: string, label: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [label, setLabel] = useState('');
+  const [err, setErr] = useState('');
+
+  function handleAdd() {
+    const u = url.trim();
+    if (!u) { setErr('URL を入力してください'); return; }
+    if (!/^https?:\/\//i.test(u)) { setErr('URL は http:// または https:// で始めてください'); return; }
+    onAdd(u, label.trim());
+    setUrl('');
+    setLabel('');
+    setErr('');
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start text-[11px] text-diletto-blue hover:underline inline-flex items-center gap-1"
+      >
+        🔗 URL リンクを貼る (PDF / 動画 / Google Drive 等)
+      </button>
+    );
+  }
+
+  return (
+    <div className="border rounded-md p-2 space-y-1 bg-diletto-blue/[0.03]" style={{ borderColor: 'var(--rule)' }}>
+      <input
+        type="url"
+        placeholder="https://..."
+        value={url}
+        onChange={(e) => { setUrl(e.target.value); setErr(''); }}
+        className="w-full text-xs px-2 py-1 rounded border bg-white"
+        style={{ borderColor: 'var(--rule)' }}
+      />
+      <input
+        type="text"
+        placeholder="表示名 (任意)"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        className="w-full text-xs px-2 py-1 rounded border bg-white"
+        style={{ borderColor: 'var(--rule)' }}
+      />
+      {err && <p className="text-[11px] text-diletto-red">{err}</p>}
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setUrl(''); setLabel(''); setErr(''); }}
+          className="text-[11px] text-diletto-gray hover:underline"
+        >キャンセル</button>
+        <button
+          type="button"
+          onClick={handleAdd}
+          className="text-[11px] text-diletto-blue font-bold hover:underline"
+        >+ 追加</button>
       </div>
     </div>
   );
