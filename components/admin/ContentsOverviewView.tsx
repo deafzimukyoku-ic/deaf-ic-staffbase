@@ -49,6 +49,7 @@ interface RawRow {
   content_blocks: unknown;
   body: string | null;
   content: string | null; /* compliance_documents 用 */
+  created_by: string | null;
 }
 
 interface Row {
@@ -62,6 +63,7 @@ interface Row {
   textContent: string; /* ポップで表示する全文 */
   urls: string[];
   editLink: string;
+  creatorName: string; /* 投稿者 (created_by の氏名) */
 }
 
 interface Props {
@@ -136,17 +138,22 @@ export function ContentsOverviewView({ scope }: Props) {
       const tenantId = me.tenant_id;
       const base = scope === 'admin' ? '/admin' : '/mgr';
 
-      const [ann, comp, train, man, cats] = await Promise.all([
-        supabase.from('announcements').select('id, title, category_id, is_published, content_blocks, body').eq('tenant_id', tenantId),
-        supabase.from('compliance_documents').select('id, title, category_id, is_published, content_blocks, content').eq('tenant_id', tenantId),
-        supabase.from('trainings').select('id, title, category_id, is_published, content_blocks, body').eq('tenant_id', tenantId),
-        supabase.from('manuals').select('id, title, category_id, is_published, content_blocks, body').eq('tenant_id', tenantId),
+      const [ann, comp, train, man, cats, emps] = await Promise.all([
+        supabase.from('announcements').select('id, title, category_id, is_published, content_blocks, body, created_by').eq('tenant_id', tenantId),
+        supabase.from('compliance_documents').select('id, title, category_id, is_published, content_blocks, content, created_by').eq('tenant_id', tenantId),
+        supabase.from('trainings').select('id, title, category_id, is_published, content_blocks, body, created_by').eq('tenant_id', tenantId),
+        supabase.from('manuals').select('id, title, category_id, is_published, content_blocks, body, created_by').eq('tenant_id', tenantId),
         supabase.from('categories').select('id, name, type, sort_order').eq('tenant_id', tenantId),
+        supabase.from('employees').select('id, last_name, first_name').eq('tenant_id', tenantId),
       ]);
 
       const catInfo = new Map<string, { name: string; sort: number }>();
       for (const c of (cats.data ?? []) as Array<{ id: string; name: string; sort_order: number | null }>) {
         catInfo.set(c.id, { name: c.name, sort: c.sort_order ?? 9999 });
+      }
+      const empName = new Map<string, string>();
+      for (const e of (emps.data ?? []) as Array<{ id: string; last_name: string | null; first_name: string | null }>) {
+        empName.set(e.id, `${e.last_name ?? ''} ${e.first_name ?? ''}`.trim() || '(名前未設定)');
       }
 
       function toRow(feature: FeatureKey, basePath: string) {
@@ -163,6 +170,7 @@ export function ContentsOverviewView({ scope }: Props) {
             textContent: blocksToText(r.content_blocks, r.body, r.content),
             urls: extractUrls(r.content_blocks, r.body, r.content),
             editLink: `${base}${basePath}`,
+            creatorName: r.created_by ? (empName.get(r.created_by) ?? '(削除済)') : '(不明)',
           };
         };
       }
@@ -328,87 +336,159 @@ export function ContentsOverviewView({ scope }: Props) {
                 </button>
 
                 {isOpen && (
-                  <div className="overflow-x-auto border-t">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-xs text-diletto-gray-light bg-diletto-gray/[0.03]">
-                          <th className="py-2 px-2 whitespace-nowrap">カテゴリ</th>
-                          <th className="py-2 px-2 whitespace-nowrap">タイトル</th>
-                          <th className="py-2 px-2 whitespace-nowrap">内容</th>
-                          <th className="py-2 px-2 whitespace-nowrap">URL</th>
-                          <th className="py-2 px-2 whitespace-nowrap text-center">公開</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {featureRows.map((r) => (
-                          <tr key={`${r.feature}::${r.id}`} className="border-b last:border-0 hover:bg-diletto-gray/[0.03]">
-                            <td className="py-2 px-2 align-top whitespace-nowrap text-xs">{r.categoryName}</td>
-                            <td className="py-2 px-2 align-top">
-                              <Link href={r.editLink} className="text-diletto-blue hover:underline">
-                                {r.title}
-                              </Link>
-                            </td>
-                            <td className="py-2 px-2 align-top max-w-[240px]">
-                              {r.textContent ? (
-                                <button
-                                  type="button"
-                                  className="text-left text-xs text-diletto-gray-light hover:text-diletto-ink line-clamp-2 underline decoration-dotted"
-                                  onClick={() => setContentPreview({ title: r.title, text: r.textContent })}
-                                  title="クリックで全文表示"
-                                >
-                                  {r.textContent.slice(0, 80)}{r.textContent.length > 80 ? '…' : ''}
-                                </button>
-                              ) : (
-                                <span className="text-xs text-diletto-gray-light">(本文なし)</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-2 align-top max-w-[240px]">
-                              {r.urls.length === 0 ? (
-                                <span className="text-xs text-diletto-gray-light">—</span>
-                              ) : (
-                                <div className="space-y-1">
-                                  {r.urls.map((u) => {
-                                    const sameUrlRows = urlToRows.get(u) ?? [];
-                                    const others = sameUrlRows.filter((o) => !(o.feature === r.feature && o.id === r.id));
-                                    const isDup = others.length > 0;
-                                    const tooltip = isDup
-                                      ? `他で使用中:\n${others.map((o) => `・[${FEATURE_LABEL[o.feature]}/${o.categoryName}] ${o.title}`).join('\n')}`
-                                      : '';
-                                    return (
-                                      <div key={u} className="flex items-center gap-1.5">
-                                        <a
-                                          href={u}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-[11px] text-diletto-blue hover:underline truncate max-w-[200px]"
-                                          title={u}
-                                        >
-                                          {u}
-                                        </a>
-                                        {isDup && (
-                                          <span
-                                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 cursor-help shrink-0"
-                                            title={tooltip}
-                                          >
-                                            重複 {sameUrlRows.length}
-                                          </span>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-2 px-2 align-top text-center">
-                              {r.isPublished
-                                ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">公開</Badge>
-                                : <Badge variant="outline" className="text-[10px] text-diletto-gray-light">非公開</Badge>}
-                            </td>
+                  <>
+                    {/* デスクトップ・タブレット: テーブル表示 (md 以上) */}
+                    <div className="hidden md:block overflow-x-auto border-t">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-xs text-diletto-gray-light bg-diletto-gray/[0.03]">
+                            <th className="py-2 px-2 whitespace-nowrap">カテゴリ</th>
+                            <th className="py-2 px-2 whitespace-nowrap">タイトル</th>
+                            <th className="py-2 px-2 whitespace-nowrap">内容</th>
+                            <th className="py-2 px-2 whitespace-nowrap">URL</th>
+                            <th className="py-2 px-2 whitespace-nowrap text-center">公開</th>
+                            <th className="py-2 px-2 whitespace-nowrap">投稿者</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {featureRows.map((r) => (
+                            <tr key={`${r.feature}::${r.id}`} className="border-b last:border-0 hover:bg-diletto-gray/[0.03]">
+                              <td className="py-2 px-2 align-top whitespace-nowrap text-xs">{r.categoryName}</td>
+                              <td className="py-2 px-2 align-top">
+                                <Link href={r.editLink} className="text-diletto-blue hover:underline break-words">
+                                  {r.title}
+                                </Link>
+                              </td>
+                              <td className="py-2 px-2 align-top max-w-[240px]">
+                                {r.textContent ? (
+                                  <button
+                                    type="button"
+                                    className="text-left text-xs text-diletto-gray-light hover:text-diletto-ink line-clamp-2 underline decoration-dotted"
+                                    onClick={() => setContentPreview({ title: r.title, text: r.textContent })}
+                                    title="クリックで全文表示"
+                                  >
+                                    {r.textContent.slice(0, 80)}{r.textContent.length > 80 ? '…' : ''}
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-diletto-gray-light">(本文なし)</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 align-top max-w-[240px]">
+                                {r.urls.length === 0 ? (
+                                  <span className="text-xs text-diletto-gray-light">—</span>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {r.urls.map((u) => {
+                                      const sameUrlRows = urlToRows.get(u) ?? [];
+                                      const others = sameUrlRows.filter((o) => !(o.feature === r.feature && o.id === r.id));
+                                      const isDup = others.length > 0;
+                                      const tooltip = isDup
+                                        ? `他で使用中:\n${others.map((o) => `・[${FEATURE_LABEL[o.feature]}/${o.categoryName}] ${o.title}`).join('\n')}`
+                                        : '';
+                                      return (
+                                        <div key={u} className="flex items-center gap-1.5">
+                                          <a
+                                            href={u}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] text-diletto-blue hover:underline truncate max-w-[200px]"
+                                            title={u}
+                                          >
+                                            {u}
+                                          </a>
+                                          {isDup && (
+                                            <span
+                                              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 cursor-help shrink-0"
+                                              title={tooltip}
+                                            >
+                                              重複 {sameUrlRows.length}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 align-top text-center">
+                                {r.isPublished
+                                  ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">公開</Badge>
+                                  : <Badge variant="outline" className="text-[10px] text-diletto-gray-light">非公開</Badge>}
+                              </td>
+                              <td className="py-2 px-2 align-top whitespace-nowrap text-xs text-diletto-gray">
+                                {r.creatorName}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* モバイル: カードレイアウト (md 未満) */}
+                    <div className="md:hidden border-t divide-y">
+                      {featureRows.map((r) => (
+                        <div key={`m::${r.feature}::${r.id}`} className="p-3 space-y-2 hover:bg-diletto-gray/[0.03]">
+                          {/* 1 行目: カテゴリ + 公開バッジ */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-diletto-gray-light truncate">{r.categoryName}</span>
+                            {r.isPublished
+                              ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] shrink-0">公開</Badge>
+                              : <Badge variant="outline" className="text-[10px] text-diletto-gray-light shrink-0">非公開</Badge>}
+                          </div>
+                          {/* 2 行目: タイトル */}
+                          <Link href={r.editLink} className="block text-sm font-medium text-diletto-blue hover:underline break-words leading-snug">
+                            {r.title}
+                          </Link>
+                          {/* 内容 */}
+                          {r.textContent && (
+                            <button
+                              type="button"
+                              className="block text-left text-[11px] text-diletto-gray-light hover:text-diletto-ink line-clamp-2 underline decoration-dotted"
+                              onClick={() => setContentPreview({ title: r.title, text: r.textContent })}
+                            >
+                              {r.textContent.slice(0, 80)}{r.textContent.length > 80 ? '…' : ''}
+                            </button>
+                          )}
+                          {/* URL */}
+                          {r.urls.length > 0 && (
+                            <div className="space-y-1">
+                              {r.urls.map((u) => {
+                                const sameUrlRows = urlToRows.get(u) ?? [];
+                                const others = sameUrlRows.filter((o) => !(o.feature === r.feature && o.id === r.id));
+                                const isDup = others.length > 0;
+                                const tooltip = isDup
+                                  ? `他で使用中:\n${others.map((o) => `・[${FEATURE_LABEL[o.feature]}/${o.categoryName}] ${o.title}`).join('\n')}`
+                                  : '';
+                                return (
+                                  <div key={u} className="flex items-center gap-1.5 flex-wrap">
+                                    <a
+                                      href={u}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-diletto-blue hover:underline break-all"
+                                      title={u}
+                                    >
+                                      {u}
+                                    </a>
+                                    {isDup && (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 cursor-help shrink-0"
+                                        title={tooltip}
+                                      >
+                                        重複 {sameUrlRows.length}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {/* 投稿者 */}
+                          <p className="text-[10px] text-diletto-gray-light">投稿者: {r.creatorName}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
