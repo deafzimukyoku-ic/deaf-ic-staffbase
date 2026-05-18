@@ -756,34 +756,36 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
     setSubmitting(true);
     setErr('');
     try {
-      /* 1. スレッド作成 */
-      const { data: thread, error: tErr } = await supabase
+      /* 1. スレッド作成
+         ⚠ INSERT 後の .select().single() は PostgreSQL の RETURNING 仕様で
+         SELECT policy にも合致しないと弾かれ 403 になる (自分が member 追加前は
+         message_threads_select の is_message_thread_member が false → 403)。
+         クライアント側で UUID を事前生成して RETURNING を回避する。 */
+      const threadId = crypto.randomUUID();
+      const { error: tErr } = await supabase
         .from('message_threads')
-        .insert({ tenant_id: me.tenant_id })
-        .select()
-        .single();
-      if (tErr || !thread) throw new Error(tErr?.message ?? 'スレッド作成失敗');
+        .insert({ id: threadId, tenant_id: me.tenant_id });
+      if (tErr) throw new Error(tErr.message);
 
       /* 2. 参加者: 自分 + 受信者 */
-      const memberRows = [me.id, ...selectedIds].map((eid) => ({ thread_id: thread.id, employee_id: eid }));
+      const memberRows = [me.id, ...selectedIds].map((eid) => ({ thread_id: threadId, employee_id: eid }));
       const { error: mErr } = await supabase.from('message_thread_members').insert(memberRows);
       if (mErr) throw new Error(mErr.message);
 
-      /* 3. 最初のメッセージ */
-      const { data: msg, error: msgErr } = await supabase
+      /* 3. 最初のメッセージ。同じ理由で UUID を事前生成 (message_id 後段で使う) */
+      const messageId = crypto.randomUUID();
+      const { error: msgErr } = await supabase
         .from('messages')
-        .insert({ thread_id: thread.id, sender_employee_id: me.id, body: body.trim() })
-        .select()
-        .single();
-      if (msgErr || !msg) throw new Error(msgErr?.message ?? 'メッセージ送信失敗');
+        .insert({ id: messageId, thread_id: threadId, sender_employee_id: me.id, body: body.trim() });
+      if (msgErr) throw new Error(msgErr.message);
 
       /* 4. 添付 */
       for (const file of attachments) {
-        const path = `${msg.id}/${Date.now()}-${file.name}`;
+        const path = `${messageId}/${Date.now()}-${file.name}`;
         const { error: upErr } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, { contentType: file.type });
         if (upErr) throw new Error('添付アップロード失敗: ' + upErr.message);
         await supabase.from('message_attachments').insert({
-          message_id: msg.id,
+          message_id: messageId,
           file_name: file.name,
           mime_type: file.type,
           storage_path: path,
@@ -792,9 +794,9 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
       }
 
       /* 5. 受信者に🔔通知 */
-      await insertMessageNotifications(supabase, me, thread.id, body.trim() || '（添付）');
+      await insertMessageNotifications(supabase, me, threadId, body.trim() || '（添付）');
 
-      await onCreated(thread.id);
+      await onCreated(threadId);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '送信失敗');
     } finally {
