@@ -1,20 +1,25 @@
 name: notification-cron
 
 # Vercel Hobby プランは cron jobs を 1 日 1 回しか実行できないため、
-# 10 分毎の通知配信は GitHub Actions の schedule で代用する。
+# 30 分毎の通知配信は GitHub Actions の schedule で代用する。
 #
 # 必要な GitHub Secrets:
 #   - CRON_TARGET_URL : 例 https://www.deaf-ic-nagoya.org (末尾スラッシュ無し)
 #   - CRON_SECRET     : Vercel env と同じ値。Authorization: Bearer ${CRON_SECRET} で検証される
 #
-# 動作: 10 分毎に POST /api/cron/send-notifications を叩き、
+# 動作: 30 分毎に POST /api/cron/send-notifications を叩き、
 # notification_queue から scheduled_at <= now() の行を Resend で送信する。
+#
+# 履歴: 当初 */10 (10 分) だったが、GitHub Actions schedule は公式「best-effort」
+# 仕様で高頻度ほど高負荷時に discard されやすく、実際 12 時間以上 1 度も
+# 走らないケースがあった (2026-05-17→18)。30 分間隔に下げて discard 確率を
+# 抑える方針に変更。digest メールは「2 時間ウィンドウ」設計なので、
+# cron 30 分間隔でも最大 2.5 時間以内に発火する想定。
 
 on:
   schedule:
-    # GitHub Actions cron は UTC で評価される。10 分間隔は問題なく使える。
-    # ただし高負荷時に数分の遅延が出る場合がある (公式仕様)。
-    - cron: '*/10 * * * *'
+    # GitHub Actions cron は UTC で評価される。
+    - cron: '*/30 * * * *'
   workflow_dispatch:  # 手動トリガーも可能 (デバッグ用)
 
 # 重複実行を抑止 (前のジョブが長引いていても次の cron を待たせる)
