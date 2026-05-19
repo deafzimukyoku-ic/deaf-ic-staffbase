@@ -633,6 +633,16 @@ export default function DailyOutputFull({ role: _role }: Props) {
                 grid-template-columns: 1fr !important;
                 gap: 0.75rem !important;
               }
+              /* 真因 (7ea9679 mobile fix の不完全性): React 側で子要素に
+                 style={{ gridColumn: pos.col, gridRow: pos.row }} を inline で
+                 当てているため、grid-template-columns を 1fr にしても子が依然
+                 col 2 / col 3 を要求 → ブラウザが implicit column を生成して
+                 結局 3 列のまま表示される。inline スタイルを !important で
+                 打ち消して真の 1 列縦積みに戻す。 */
+              .transport-three-col > div {
+                grid-column: 1 !important;
+                grid-row: auto !important;
+              }
               .transport-block {
                 max-width: 100% !important;
               }

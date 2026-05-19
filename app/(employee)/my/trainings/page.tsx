@@ -94,7 +94,10 @@ function TrainingsGrid({
         <DialogContent className="!max-w-6xl sm:!max-w-6xl max-h-[90vh] overflow-y-auto">
           {open && (() => {
             const { training, submission } = open;
-            const canResubmit = submission?.result === 'resubmit' || submission?.result === 'failed';
+            /* canResubmit: 合格者も再提出可能 (ユーザー要望)。
+               pending (判定待ち) のみ admin の判定中なので編集不可。
+               未提出 (!submission) は当然 form 表示。 */
+            const canResubmit = submission?.result === 'resubmit' || submission?.result === 'failed' || submission?.result === 'passed';
             const showForm = !submission || canResubmit;
             return (
               <>
@@ -139,6 +142,27 @@ function TrainingsGrid({
                       <span className="text-brand-blue font-bold">💡 判定コメント:</span>
                       <span className="text-brand-ink">{submission.admin_comment}</span>
                     </div>
+                  )}
+
+                  {/* 判定待ち (pending) のみ再編集不可。自分が書いた感想を read-only で表示。
+                     passed / failed / resubmit は下の form で pre-fill されるためここには出さない (重複防止)。
+                     旧 UI は submission 存在時に showForm=false で textarea を隠したまま
+                     summary_text の表示も無く「自分が何を書いたか分からない」状態だった。 */}
+                  {submission && !showForm && submission.summary_text && (
+                    <Card className="border-none shadow-sm bg-brand-beige/30">
+                      <CardContent className="py-5 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-sm font-bold">提出した感想</Label>
+                          <span className="text-[10px] text-brand-gray-light">
+                            判定待ち
+                            {submission.submitted_at && ` ・ ${new Date(submission.submitted_at).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                          </span>
+                        </div>
+                        <p className="text-sm text-brand-ink whitespace-pre-wrap leading-relaxed">
+                          {submission.summary_text}
+                        </p>
+                      </CardContent>
+                    </Card>
                   )}
 
                   {showForm && (
@@ -240,10 +264,17 @@ export default function MyTrainingsPage() {
           .eq('is_published', true)
           .order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true });
 
+        /* submitted_at ASC で取って Map.set すると、同じ training_id では
+           最後に set される (= 最新の) 提出が勝つ。
+           training_submissions は UNIQUE 制約が無く、再提出のたびに行が増える
+           設計。「画面に出すのは常に最新行」を decisive にするため ORDER 必須。
+           合格者も再提出可能になったので、ここの並びが不定だと
+           「passed → resubmit → 再 fetch で再び passed badge」みたいなチラつきが出る。 */
         const { data: subs } = await supabase
           .from('training_submissions')
           .select('*')
-          .eq('employee_id', me.id);
+          .eq('employee_id', me.id)
+          .order('submitted_at', { ascending: true });
 
         const subMap = new Map((subs || []).map((s) => [s.training_id, s as TrainingSubmission]));
         const texts: Record<string, string> = {};
