@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { TRAINING_RESULT } from '@/lib/constants';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
+import { isItemInAudience } from '@/lib/multi-facility';
 
 type Category = 'compliance' | 'training' | 'announcement' | 'manual';
 
@@ -38,6 +39,8 @@ interface ItemRow {
   title: string;
   target_type: 'all' | 'facility';
   target_facility_ids: string[];
+  /* position 限定アイテムも audience 判定に含めるため、ReportData にも持たせる (API 側で同時取得済み) */
+  target_position_ids?: string[] | null;
   category_id: string | null;
   created_at: string;
 }
@@ -49,6 +52,10 @@ interface EmpRow {
   facility_id: string | null;
   facility_name: string;
   role: string;
+  /* audience 判定用。null/undefined の場合は position 指定アイテムから除外される */
+  position_id?: string | null;
+  /* 兼任 facility (employee_facilities)。複数所属社員向け */
+  additional_facility_ids?: string[] | null;
 }
 
 /* 従業員番号順ソート: 数値変換できれば数値、それ以外は ja-locale 文字列比較、
@@ -341,12 +348,22 @@ function ReportBody({
     setReviewTarget(null);
   }
 
-  /* 各アイテムについて、対象オーディエンス（その施設の社員）を返す。
-     target_type='all' は全員、'facility' は target_facility_ids に含まれる社員のみ。 */
+  /* 各アイテムについて、対象オーディエンス（target_type + target_facility_ids + target_position_ids）
+     の社員リストを返す。lib/multi-facility.ts の isItemInAudience と同じ判定 (集約済み)。
+     兼任 (additional_facility_ids) + position 限定も AND で考慮する。 */
   function audienceFor(item: ItemRow): EmpRow[] {
-    if (item.target_type === 'all') return employees;
-    const set = new Set(item.target_facility_ids);
-    return employees.filter((e) => e.facility_id && set.has(e.facility_id));
+    return employees.filter((e) => {
+      const myFacilityIds: string[] = [];
+      if (e.facility_id) myFacilityIds.push(e.facility_id);
+      for (const f of e.additional_facility_ids ?? []) {
+        if (!myFacilityIds.includes(f)) myFacilityIds.push(f);
+      }
+      return isItemInAudience(
+        { target_type: item.target_type, target_facility_ids: item.target_facility_ids, target_position_ids: item.target_position_ids ?? null },
+        myFacilityIds,
+        e.position_id ?? null,
+      );
+    });
   }
 
   /* 全体既読率 = (対象 × 既読セル数) / (対象セル総数)。「対象外」セルは分母から除外。 */

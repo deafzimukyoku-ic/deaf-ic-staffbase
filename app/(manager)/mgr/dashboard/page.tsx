@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import { NotificationsAlertModal } from '@/components/notifications/NotificationsAlertModal';
+import { isItemInAudience } from '@/lib/multi-facility';
+import type { TargetType } from '@/lib/types';
 
 interface ProgressRow {
   employee_id: string;
@@ -27,6 +29,9 @@ interface ProgressRow {
   trainings_passed: number;
   announcements_read: number;
   manuals_read: number;
+  /* 183: audience 判定用 (per-employee の publishedTotals 計算で使う) */
+  position_id?: string | null;
+  additional_facility_ids?: string[] | null;
 }
 
 /* migration 156: get_my_subordinate_progress RPC の戻り行。
@@ -48,6 +53,9 @@ interface SubordinateProgressRow {
   manuals_read: number;
   last_doc_submitted_at: string | null;
   last_compliance_at: string | null;
+  /* 183 追加: per-employee audience 判定用。RLS で SELECT 不可な列を SECURITY DEFINER 経由で取得 */
+  position_id?: string | null;
+  additional_facility_ids?: string[] | null;
   last_training_at: string | null;
   last_announcement_at: string | null;
   last_manual_at: string | null;
@@ -103,6 +111,8 @@ export default function ManagerDashboardPage() {
      - allTotals: 概要カード「公開 / 全件」表示の右側
      書類 (docs) は document_templates に is_published なしのため両 state とも同値。 */
   const [publishedTotals, setPublishedTotals] = useState({ docs: 0, compliance: 0, trainings: 0, announcements: 0, manuals: 0 });
+  /* 183: per-employee 分母 (兼任 + position フィルタ込み)。fallback で publishedTotals を使う */
+  const [publishedTotalsByEmployee, setPublishedTotalsByEmployee] = useState<Record<string, { compliance: number; trainings: number; announcements: number; manuals: number }>>({});
   const [allTotals, setAllTotals] = useState({ docs: 0, compliance: 0, trainings: 0, announcements: 0, manuals: 0 });
   const [lastCompletedAt, setLastCompletedAt] = useState<Partial<Record<CategoryKey, Record<string, string>>>>({});
   const [loading, setLoading] = useState(true);
@@ -153,21 +163,22 @@ export default function ManagerDashboardPage() {
 
       const tid = meData.tenant_id;
 
-      // 部下進捗は SECURITY DEFINER RPC 経由（migration 156）。
+      // 部下進捗は SECURITY DEFINER RPC 経由(migration 156)。
       // manager は submission 系テーブル / 他社員 employees 行に RLS 権限が無いため、
-      // employee_progress ビュー（security_invoker）直読みでは全件 0 件になる。
-      // コンテンツ件数（totals）はテナント共通の SELECT ポリシーで読めるので直クエリのまま。
+      // employee_progress ビュー(security_invoker)直読みでは全件 0 件になる。
+      // コンテンツ件数(totals)はテナント共通の SELECT ポリシーで読めるので直クエリのまま。
       // dashboard-published-filter: 4テーブルは is_published=true と全件の 2 系統を取得。
       const [progressRes, templatesRes, complianceRes, complianceAllRes, trainingsRes, trainingsAllRes, announcementsRes, announcementsAllRes, manualsRes, manualsAllRes] = await Promise.all([
         supabase.rpc('get_my_subordinate_progress', { p_facility_id: null }),
         supabase.from('document_templates').select('id').eq('tenant_id', tid),
-        supabase.from('compliance_documents').select('id').eq('tenant_id', tid).eq('is_published', true),
+        /* 4 機能は audience 判定用カラム (target_type/facility_ids/position_ids) も取得して per-employee 分母にする */
+        supabase.from('compliance_documents').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('compliance_documents').select('id').eq('tenant_id', tid),
-        supabase.from('trainings').select('id').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('trainings').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('trainings').select('id').eq('tenant_id', tid),
-        supabase.from('announcements').select('id').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('announcements').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('announcements').select('id').eq('tenant_id', tid),
-        supabase.from('manuals').select('id').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('manuals').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('manuals').select('id').eq('tenant_id', tid),
       ]);
 
@@ -192,6 +203,8 @@ export default function ManagerDashboardPage() {
         trainings_passed: Number(p.trainings_passed) || 0,
         announcements_read: Number(p.announcements_read) || 0,
         manuals_read: Number(p.manuals_read) || 0,
+        position_id: p.position_id ?? null,
+        additional_facility_ids: p.additional_facility_ids ?? [],
       }));
 
       setRows(pRows);
@@ -203,6 +216,31 @@ export default function ManagerDashboardPage() {
         announcements: announcementsRes.data?.length || 0,
         manuals: manualsRes.data?.length || 0,
       });
+
+      /* 183: per-employee の publishedTotals (兼任 + position 考慮)。
+         旧コードは全社員に同じ全公開件数を分母にしていたため、配信対象外アイテムが
+         達成率を下げる現象があった。isItemInAudience で社員ごとに対象数を計算する。 */
+      type AudRow = { id: string; target_type: TargetType; target_facility_ids: string[] | null; target_position_ids: string[] | null };
+      const audCompliance = (complianceRes.data ?? []) as AudRow[];
+      const audTrainings = (trainingsRes.data ?? []) as AudRow[];
+      const audAnnouncements = (announcementsRes.data ?? []) as AudRow[];
+      const audManuals = (manualsRes.data ?? []) as AudRow[];
+      const perEmpTotals: Record<string, { compliance: number; trainings: number; announcements: number; manuals: number }> = {};
+      for (const p of pRows) {
+        const myFacilityIds: string[] = [];
+        if (p.facility_id) myFacilityIds.push(p.facility_id);
+        for (const f of p.additional_facility_ids ?? []) {
+          if (!myFacilityIds.includes(f)) myFacilityIds.push(f);
+        }
+        const myPositionId = p.position_id ?? null;
+        perEmpTotals[p.employee_id] = {
+          compliance: audCompliance.filter((r) => isItemInAudience(r, myFacilityIds, myPositionId)).length,
+          trainings: audTrainings.filter((r) => isItemInAudience(r, myFacilityIds, myPositionId)).length,
+          announcements: audAnnouncements.filter((r) => isItemInAudience(r, myFacilityIds, myPositionId)).length,
+          manuals: audManuals.filter((r) => isItemInAudience(r, myFacilityIds, myPositionId)).length,
+        };
+      }
+      setPublishedTotalsByEmployee(perEmpTotals);
       setAllTotals({
         docs: tplCount,
         compliance: complianceAllRes.data?.length || 0,
@@ -211,7 +249,7 @@ export default function ManagerDashboardPage() {
         manuals: manualsAllRes.data?.length || 0,
       });
 
-      // 各カテゴリの最終完了日時マップ（リマインドモーダルの「完了」表示用）。
+      // 各カテゴリの最終完了日時マップ(リマインドモーダルの「完了」表示用)。
       // RPC が部下ごとに max() 済みの値を返すのでそのまま employee_id でマップ化する。
       function buildLastMap(col: TimestampKey): Record<string, string> {
         const map: Record<string, string> = {};
@@ -236,18 +274,37 @@ export default function ManagerDashboardPage() {
   const active = rows.filter(r => r.status === 'active');
   const filteredActive = facilityId ? active.filter(r => r.facility_id === facilityId) : active;
 
-  const calcRate = (key: CategoryKey, total: number) => {
+  /* 183: per-employee 分母 helper。fallback で全社員共通 publishedTotals。 */
+  const totalsFor = (r: ProgressRow): { compliance: number; trainings: number; announcements: number; manuals: number } =>
+    publishedTotalsByEmployee[r.employee_id] ?? { compliance: publishedTotals.compliance, trainings: publishedTotals.trainings, announcements: publishedTotals.announcements, manuals: publishedTotals.manuals };
+
+  const calcRateGlobal = (key: CategoryKey, total: number) => {
     if (filteredActive.length === 0 || total === 0) return 0;
     const sum = filteredActive.reduce((acc, r) => acc + Math.min(Number(r[key]) / total, 1), 0);
     return Math.round((sum / filteredActive.length) * 100);
   };
+  /* 4 機能は per-employee 分母 (audience filter 済み)。分母 0 の社員は計算から除外。 */
+  const calcRatePerEmp = (key: CategoryKey, totalOf: (r: ProgressRow) => number) => {
+    if (filteredActive.length === 0) return 0;
+    let denom = 0;
+    let numerSum = 0;
+    for (const r of filteredActive) {
+      const t = totalOf(r);
+      if (t === 0) continue;
+      denom += 1;
+      numerSum += Math.min(Number(r[key]) / t, 1);
+    }
+    if (denom === 0) return 0;
+    return Math.round((numerSum / denom) * 100);
+  };
 
-  /* 達成率の分母は publishedTotals (公開済み件数) を使う。書類は publish 概念なしのため同値 */
-  const docRate    = calcRate('docs_submitted',     publishedTotals.docs);
-  const compRate   = calcRate('compliance_done',    publishedTotals.compliance);
-  const trainRate  = calcRate('trainings_passed',   publishedTotals.trainings);
-  const annRate    = calcRate('announcements_read', publishedTotals.announcements);
-  const manualRate = calcRate('manuals_read',       publishedTotals.manuals);
+  /* 書類は publish 概念なし → 単純な global 平均。
+     4 機能は per-employee 分母 (兼任 + position 考慮)。 */
+  const docRate    = calcRateGlobal('docs_submitted', publishedTotals.docs);
+  const compRate   = calcRatePerEmp('compliance_done',    (r) => totalsFor(r).compliance);
+  const trainRate  = calcRatePerEmp('trainings_passed',   (r) => totalsFor(r).trainings);
+  const annRate    = calcRatePerEmp('announcements_read', (r) => totalsFor(r).announcements);
+  const manualRate = calcRatePerEmp('manuals_read',       (r) => totalsFor(r).manuals);
 
   async function handleSendReminder() {
     if (!openKey || selectedIds.size === 0 || !me) return;
@@ -313,7 +370,7 @@ export default function ManagerDashboardPage() {
               <CardContent className="pt-4">
                 <div className="overflow-x-auto">
                   {/* モバイル: whitespace-nowrap で名前縦折れ防止 + min-w で社員名最低幅確保。
-                      列が増えても overflow-x-auto で横スクロール対応（admin/ProgressDashboard と同パターン） */}
+                      列が増えても overflow-x-auto で横スクロール対応(admin/ProgressDashboard と同パターン) */}
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-xs text-brand-gray-light uppercase font-bold tracking-wider">
@@ -326,20 +383,23 @@ export default function ManagerDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-gray/5">
-                      {filteredActive.map((r) => (
-                        <tr key={r.employee_id} className="hover:bg-brand-beige/20 transition-colors">
-                          <td className="py-3 pr-4 font-bold whitespace-nowrap min-w-[7em]">
-                            <Link href={`/mgr/subordinates?id=${r.employee_id}`} className="hover:text-brand-blue transition-colors">
-                              {r.last_name} {r.first_name}
-                            </Link>
-                          </td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.docs_submitted}      total={publishedTotals.docs} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.compliance_done}    total={publishedTotals.compliance} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.trainings_passed}   total={publishedTotals.trainings} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.announcements_read} total={publishedTotals.announcements} /></td>
-                          <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.manuals_read}       total={publishedTotals.manuals} /></td>
-                        </tr>
-                      ))}
+                      {filteredActive.map((r) => {
+                        const rowTotals = totalsFor(r);
+                        return (
+                          <tr key={r.employee_id} className="hover:bg-brand-beige/20 transition-colors">
+                            <td className="py-3 pr-4 font-bold whitespace-nowrap min-w-[7em]">
+                              <Link href={`/mgr/subordinates?id=${r.employee_id}`} className="hover:text-brand-blue transition-colors">
+                                {r.last_name} {r.first_name}
+                              </Link>
+                            </td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.docs_submitted}      total={publishedTotals.docs} /></td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.compliance_done}    total={rowTotals.compliance} /></td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.trainings_passed}   total={rowTotals.trainings} /></td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.announcements_read} total={rowTotals.announcements} /></td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap"><ProgressBadge current={r.manuals_read}       total={rowTotals.manuals} /></td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   {filteredActive.length === 0 && <p className="text-center py-10 text-brand-gray-light font-medium italic">社員がまだ登録されていません</p>}
@@ -355,6 +415,19 @@ export default function ManagerDashboardPage() {
               rows={filteredActive}
               facilities={facilities}
               total={openKey === 'docs_submitted' ? publishedTotals.docs : openKey === 'compliance_done' ? publishedTotals.compliance : openKey === 'trainings_passed' ? publishedTotals.trainings : openKey === 'announcements_read' ? publishedTotals.announcements : publishedTotals.manuals}
+              /* 183: per-employee 分母を伝播。未指定の社員は total (全社員共通) を fallback */
+              totalForRow={(r: ProgressRow) => {
+                if (openKey === 'docs_submitted') return publishedTotals.docs;
+                const t = publishedTotalsByEmployee[r.employee_id];
+                if (!t) return openKey === 'compliance_done' ? publishedTotals.compliance
+                       : openKey === 'trainings_passed' ? publishedTotals.trainings
+                       : openKey === 'announcements_read' ? publishedTotals.announcements
+                       : publishedTotals.manuals;
+                if (openKey === 'compliance_done') return t.compliance;
+                if (openKey === 'trainings_passed') return t.trainings;
+                if (openKey === 'announcements_read') return t.announcements;
+                return t.manuals;
+              }}
               lastCompletedAt={lastCompletedAt}
               selectedIds={selectedIds}
               onClose={() => setOpenKey(null)}
@@ -418,10 +491,14 @@ function ProgressBadge({ current, total }: { current: number; total: number }) {
   );
 }
 
-function ReminderModal({ openKey, rows, facilities, total, lastCompletedAt, selectedIds, onClose, onToggle, onSelectAll, onSend, sending }: any) {
+function ReminderModal({ openKey, rows, facilities, total, totalForRow, lastCompletedAt, selectedIds, onClose, onToggle, onSelectAll, onSend, sending }: any) {
   const meta = CATEGORY_META[openKey as CategoryKey];
-  const incomplete = rows.filter((r: any) => Number(r[openKey]) < total);
-  const completed = rows.filter((r: any) => Number(r[openKey]) >= total && total > 0);
+  /* 183: per-employee 分母 (totalForRow) があれば社員ごとに判定する。
+     旧コードは全社員共通 total で判定していたため、対象 0 件の社員も「未完了」扱いになり
+     リマインダー候補に紛れ込む問題があった。 */
+  const totalFor = (r: any): number => totalForRow ? totalForRow(r) : total;
+  const incomplete = rows.filter((r: any) => totalFor(r) > 0 && Number(r[openKey]) < totalFor(r));
+  const completed = rows.filter((r: any) => totalFor(r) > 0 && Number(r[openKey]) >= totalFor(r));
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'incomplete' | 'complete'>('incomplete');
 
@@ -497,7 +574,7 @@ function ReminderModal({ openKey, rows, facilities, total, lastCompletedAt, sele
                   <Badge className={viewMode === 'incomplete'
                     ? 'bg-brand-gold/[0.08] text-brand-gold text-[10px] border-none'
                     : 'bg-brand-green/10 text-brand-green text-[10px] border-none'}>
-                    {r[openKey]} / {total}
+                    {r[openKey]} / {totalFor(r)}
                   </Badge>
                 </label>
               );

@@ -8,7 +8,9 @@ import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { applyScopeFilter } from '@/components/admin/FacilityScopeSelector';
-import type { TargetType } from '@/lib/types';
+import { fetchMyFacilityIds, isItemInAudience } from '@/lib/multi-facility';
+import type { TargetType, DocumentTemplate, PdfTag } from '@/lib/types';
+import { extractReferencedEmployeeFields, needsResubmitBySnapshot } from '@/lib/document-resubmit';
 
 interface TodoItem {
   label: string;
@@ -183,17 +185,22 @@ export default function EmployeeDashboardPage() {
       const thisMonthTo = `${thisMonthEnd.getFullYear()}-${String(thisMonthEnd.getMonth() + 1).padStart(2, '0')}-${String(thisMonthEnd.getDate()).padStart(2, '0')}`;
 
       const [templates, submissions, compliance, compAcks, trainings, trainSubs, announcements, annReads, manuals, manualReads, shiftReqs, threadMembers, messageReads, shiftPlanned] = await Promise.all([
-        supabase.from('document_templates').select('id').eq('tenant_id', tid),
-        /* submitted_at も取得して、基本情報更新後の要再提出件数を判定する */
-        supabase.from('document_submissions').select('id, submitted_at').eq('employee_id', eid).eq('status', 'submitted'),
+        /* 175 同期: /my/documents と同じ列を取得して同じ filter + snapshot 判定を回す。
+           id だけだと audience / is_company_issued / matrix 除外ができず、tTotal/tDone がズレる。 */
+        supabase.from('document_templates').select('id, template_type, data_mode, is_company_issued, mapping').eq('tenant_id', tid),
+        /* submitted_at + employee_snapshot を取得して needsResubmitBySnapshot にかける */
+        supabase.from('document_submissions').select('id, document_template_id, submitted_at, employee_snapshot').eq('employee_id', eid).eq('status', 'submitted'),
         // is_published=true のみ進捗カウント対象に。非公開分はダッシュボードにも反映しない（migration 141）
-        supabase.from('compliance_documents').select('id').eq('tenant_id', tid).eq('is_published', true),
+        /* audience filter (兼任 + position) のため target_type/facility_ids/position_ids も取得。
+           旧コードは tenant 全件 count(*) で、他施設限定アイテム / position 違いアイテムが
+           分母に入り達成率が永遠に下がる問題があった。 */
+        supabase.from('compliance_documents').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('compliance_acknowledgments').select('compliance_document_id').eq('employee_id', eid),
-        supabase.from('trainings').select('id').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('trainings').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('training_submissions').select('training_id').eq('employee_id', eid).eq('result', 'passed'),
-        supabase.from('announcements').select('id').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('announcements').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('announcement_reads').select('announcement_id').eq('employee_id', eid),
-        supabase.from('manuals').select('id').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('manuals').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
         supabase.from('manual_reads').select('manual_id').eq('employee_id', eid),
         supabase.from('shift_requests').select('id').eq('employee_id', eid).eq('month', nextMonth),
         /* 個別連絡 未読: 自分が参加するスレッドのメッセージで自分以外発信 & 未既読のもの (sidebar と同じロジック) */
@@ -210,22 +217,83 @@ export default function EmployeeDashboardPage() {
           .lte('date', thisMonthTo),
       ]);
 
-      const tTotal = templates.data?.length || 0;
-      const tDone = submissions.data?.length || 0;
-      /* 提出済みかつ、submitted_at より後に基本情報(employees.updated_at)が更新された件数。
-         /my/documents 側の needsResubmit 判定と一致させる。 */
+      /* 175: /my/documents と同じ filter + snapshot 判定をここでもやる。
+         旧コードは tenant 全テンプ × 単純 updated_at 比較で、配布対象外/会社発行/matrix の
+         テンプまで分母に入り、かつ「住所だけ変えた」でも全件再提出フラグが立っていた。 */
+      const allTemplates = (templates.data ?? []) as DocumentTemplate[];
+      const allTemplateIds = allTemplates.map((t) => t.id);
+      const { isEmployeeInAudience, loadTemplateAudience } = await import('@/lib/template-audience');
+      const audienceByTemplate = await loadTemplateAudience(supabase, allTemplateIds);
+      const filteredTemplates = allTemplates.filter((t) => {
+        if (t.template_type === 'pdf' && t.data_mode === 'matrix') return false;
+        if (t.is_company_issued) return false;
+        return isEmployeeInAudience(t.id, me as unknown as import('@/lib/types').Employee, audienceByTemplate);
+      });
+      const filteredTemplateIdSet = new Set(filteredTemplates.map((t) => t.id));
+
+      /* PDF テンプの参照 employees カラムを per-template で集計 */
+      const { data: pdfTagsRows } = await supabase
+        .from('pdf_tags')
+        .select('*')
+        .in('template_id', filteredTemplates.map((t) => t.id));
+      const tagsByTemplate = new Map<string, PdfTag[]>();
+      for (const tag of (pdfTagsRows ?? []) as PdfTag[]) {
+        const arr = tagsByTemplate.get(tag.template_id) ?? [];
+        arr.push(tag);
+        tagsByTemplate.set(tag.template_id, arr);
+      }
+      const refMap = new Map<string, Set<string>>();
+      for (const t of filteredTemplates) {
+        refMap.set(t.id, extractReferencedEmployeeFields(t, tagsByTemplate.get(t.id) ?? []));
+      }
+
+      const filteredSubs = ((submissions.data ?? []) as { id: string; document_template_id: string; submitted_at: string | null; employee_snapshot: Record<string, unknown> | null }[])
+        .filter((s) => filteredTemplateIdSet.has(s.document_template_id));
+
+      const tTotal = filteredTemplates.length;
+      const tDone = filteredSubs.length;
       const empUpdatedAt = (me.updated_at as string) ?? null;
-      const docResubmitCount = ((submissions.data || []) as { submitted_at: string | null }[])
-        .filter((s) => s.submitted_at && empUpdatedAt && new Date(empUpdatedAt) > new Date(s.submitted_at))
-        .length;
-      const cTotal = compliance.data?.length || 0;
-      const cDone = compAcks.data?.length || 0;
-      const trTotal = trainings.data?.length || 0;
-      const trDone = trainSubs.data?.length || 0;
-      const aTotal = announcements.data?.length || 0;
-      const aDone = annReads.data?.length || 0;
-      const mTotal = manuals.data?.length || 0;
-      const mDone = manualReads.data?.length || 0;
+      const docResubmitCount = filteredSubs.filter((s) => {
+        if (!s.submitted_at) return false;
+        /* snapshot がある新提出: 参照カラム集合のみで差分判定 (false positive 抑制) */
+        if (s.employee_snapshot) {
+          return needsResubmitBySnapshot(
+            s.employee_snapshot,
+            me as unknown as Record<string, unknown>,
+            refMap.get(s.document_template_id) ?? new Set<string>(),
+          );
+        }
+        /* snapshot 無い旧提出: 旧来の updated_at vs submitted_at 比較に fallback */
+        return empUpdatedAt && new Date(empUpdatedAt) > new Date(s.submitted_at);
+      }).length;
+      /* audience filter (isItemInAudience): facility 兼任 + position の AND 判定。
+         layout tab badge と同じロジックなので、ダッシュボードカードと赤バッジが一致する。 */
+      const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
+      const myPositionId = (me.position_id as string | null) ?? null;
+      type Row4 = { id: string; target_type: TargetType; target_facility_ids: string[] | null; target_position_ids: string[] | null };
+      const scopedCompList = ((compliance.data ?? []) as Row4[]).filter((r) => isItemInAudience(r, myFacilityIds, myPositionId));
+      const scopedTrainList = ((trainings.data ?? []) as Row4[]).filter((r) => isItemInAudience(r, myFacilityIds, myPositionId));
+      const scopedAnnList = ((announcements.data ?? []) as Row4[]).filter((r) => isItemInAudience(r, myFacilityIds, myPositionId));
+      const scopedManList = ((manuals.data ?? []) as Row4[]).filter((r) => isItemInAudience(r, myFacilityIds, myPositionId));
+
+      /* 分子 (Done) は audience 外で誤って既読された行も除外して分子分母を一致させる。
+         過去に既読したが後から audience 外にされたアイテムは「対象外」扱いで完了率に影響させない。 */
+      const scopedCompIds = new Set(scopedCompList.map((r) => r.id));
+      const scopedTrainIds = new Set(scopedTrainList.map((r) => r.id));
+      const scopedAnnIds = new Set(scopedAnnList.map((r) => r.id));
+      const scopedManIds = new Set(scopedManList.map((r) => r.id));
+      const cTotal = scopedCompList.length;
+      const cDone = ((compAcks.data ?? []) as { compliance_document_id: string }[])
+        .filter((a) => scopedCompIds.has(a.compliance_document_id)).length;
+      const trTotal = scopedTrainList.length;
+      const trDone = ((trainSubs.data ?? []) as { training_id: string }[])
+        .filter((s) => scopedTrainIds.has(s.training_id)).length;
+      const aTotal = scopedAnnList.length;
+      const aDone = ((annReads.data ?? []) as { announcement_id: string }[])
+        .filter((r) => scopedAnnIds.has(r.announcement_id)).length;
+      const mTotal = scopedManList.length;
+      const mDone = ((manualReads.data ?? []) as { manual_id: string }[])
+        .filter((r) => scopedManIds.has(r.manual_id)).length;
       const reqDone = (shiftReqs.data?.length || 0) > 0;
 
       /* 個別連絡 未読件数 (sidebar layout と同じロジック) */

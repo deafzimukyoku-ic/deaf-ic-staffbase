@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { logView, type ViewLogTable, type ViewSummary } from '@/lib/view-log';
+import { notifyBadgeRefresh } from '@/lib/badge-refresh';
 
 interface Props {
   table: ViewLogTable;
@@ -41,6 +42,7 @@ export function ViewConfirmButton({ table, tenantId, employeeId, itemId, initial
       const newCount = summary.count + 1;
       setSummary({ count: newCount, lastAt: now });
       onConfirmed?.(newCount, now);
+      notifyBadgeRefresh(); /* layout の赤バッジに即時反映 (ButtonClick → layout の useEffect は走らないため) */
       toast.success(`確認を記録しました (${newCount} 回目)`);
     } finally {
       setLoading(false);

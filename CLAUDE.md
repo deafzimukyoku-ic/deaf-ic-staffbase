@@ -187,6 +187,13 @@ deaf-ic/
 - タグのフォントファミリーは IPAex 明朝 固定（IPA Font License v1.0 で同梱、MS 明朝相当）
 - タグの装飾機能（太字/斜体/下線/色/回転）禁止
 
+### メール HTML 編集ルール (binding)
+- `lib/email/*.ts` を変更する場合は **編集前に必ず `docs/mail-design-rules.md` を読む**
+- ブランド表記 (`認定NPO法人 名古屋ろう国際センター`) / 色 (`#4169e1`) / 骨格 (canonical HTML) を完全一致させる
+- 「いい感じ」「適当に」等のあいまい表現で実装してはならない (= 本ドキュメントの違反)
+- deaf-ic 側に `diletto`, `diletto-s.com` 等の他ブランド要素を書いた瞬間に違反
+- 詳細は `docs/mail-design-rules.md` §1〜§7 を参照
+
 ---
 
 ## 8. ハードコード制約（constants.ts）

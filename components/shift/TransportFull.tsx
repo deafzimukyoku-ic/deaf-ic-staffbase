@@ -238,7 +238,7 @@ export default function TransportFull({ role }: Props) {
           const ao = a.shift_display_order ?? Number.MAX_SAFE_INTEGER;
           const bo = b.shift_display_order ?? Number.MAX_SAFE_INTEGER;
           if (ao !== bo) return ao - bo;
-          return a.last_name.localeCompare(b.last_name, 'ja');
+          return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
         });
 
       const [

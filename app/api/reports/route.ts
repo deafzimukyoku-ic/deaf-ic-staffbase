@@ -75,10 +75,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  /* items: アイテム本体。target_type / target_facility_ids / category_id を含める。
+  /* items: アイテム本体。target_type / target_facility_ids / target_position_ids / category_id を含める。
      compliance/training/announcement/manual すべて 036 / 091 で同じ列構成 + 034 で category_id 追加済。
-     並び順は admin/{category} ページと揃える: sort_order ASC（NULL は末尾）→ created_at ASC。 */
-  const itemsSel = `id, ${cfg.titleField}, target_type, target_facility_ids, category_id, sort_order, created_at`;
+     並び順は admin/{category} ページと揃える: sort_order ASC（NULL は末尾）→ created_at ASC。
+     target_position_ids は ReportMatrix の audienceFor (isItemInAudience) で position フィルタに使う。 */
+  const itemsSel = `id, ${cfg.titleField}, target_type, target_facility_ids, target_position_ids, category_id, sort_order, created_at`;
   const { data: itemsData, error: itemsErr } = await supabase
     .from(cfg.itemsTable)
     .select(itemsSel)
@@ -100,13 +101,29 @@ export async function GET(req: NextRequest) {
      171: shift_manager は閲覧レポート対象から除外 (運用上「進捗管理対象外」) */
   let empQuery = supabase
     .from('employees')
-    .select('id, employee_number, last_name, first_name, facility_id, role, status')
+    .select('id, employee_number, last_name, first_name, facility_id, position_id, role, status')
     .eq('tenant_id', me.tenant_id)
     .eq('status', 'active')
     .neq('role', 'shift_manager');
   if (allowedFacilityIds) empQuery = empQuery.in('facility_id', allowedFacilityIds);
   const { data: employeesData, error: empErr } = await empQuery;
   if (empErr) return NextResponse.json({ error: empErr.message }, { status: 500 });
+
+  /* 兼任 facility (employee_facilities) を employee_id でまとめて引いて、
+     ReportMatrix の audienceFor (isItemInAudience) に渡せる形にする */
+  const empIds = (employeesData ?? []).map((e) => e.id);
+  const efByEmp = new Map<string, string[]>();
+  if (empIds.length > 0) {
+    const { data: efRows } = await supabase
+      .from('employee_facilities')
+      .select('employee_id, facility_id')
+      .in('employee_id', empIds);
+    for (const r of (efRows ?? []) as { employee_id: string; facility_id: string }[]) {
+      const arr = efByEmp.get(r.employee_id) ?? [];
+      arr.push(r.facility_id);
+      efByEmp.set(r.employee_id, arr);
+    }
+  }
 
   /* facility 名解決 */
   const { data: facilities } = await supabase
@@ -190,6 +207,7 @@ export async function GET(req: NextRequest) {
       title: it[cfg.titleField] || '（無題）',
       target_type: it.target_type,
       target_facility_ids: it.target_facility_ids,
+      target_position_ids: it.target_position_ids ?? null,
       category_id: it.category_id,
       created_at: it.created_at,
     })),
@@ -201,6 +219,8 @@ export async function GET(req: NextRequest) {
       facility_id: e.facility_id,
       facility_name: e.facility_id ? (facMap.get(e.facility_id) || '') : '',
       role: e.role,
+      position_id: (e as { position_id?: string | null }).position_id ?? null,
+      additional_facility_ids: efByEmp.get(e.id) ?? [],
     })),
     views,
     submissions, /* category='training' のみ非空。判定ボタン UI で利用 */

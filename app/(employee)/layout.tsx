@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { applyScopeFilter } from '@/components/admin/FacilityScopeSelector';
 import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
 import { ManualIntroDialog } from '@/components/employee/ManualIntroDialog';
 import { countDocumentsNeedingResubmit } from '@/lib/document-resubmit-count';
+import { fetchMyFacilityIds, isItemInAudience } from '@/lib/multi-facility';
+import { listenBadgeRefresh } from '@/lib/badge-refresh';
 import type { Employee, TargetType } from '@/lib/types';
 
 type UnreadKey = 'document' | 'compliance' | 'training' | 'announcement' | 'manual' | 'message';
@@ -61,14 +62,18 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         setIntroState({ employeeId: me.id, manualCategoryId: (cat?.id as string) ?? null });
       }
 
-      // 未確認/未読/未合格のカウント計算（施設スコープ考慮）
-      type Row = { id: string; updated_at?: string; target_type: TargetType; target_facility_ids: string[] };
+      /* 兼任先 (employee_facilities) も含めた所属 facility 集合を取得。
+         migration 130/131 の兼任対応に追従するため、layout 側もここで取得する。 */
+      const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
+
+      // 未確認/未読/未合格のカウント計算（施設スコープ + position スコープ考慮）
+      type Row = { id: string; updated_at?: string; target_type: TargetType; target_facility_ids: string[] | null; target_position_ids: string[] | null };
       const [compRes, trainRes, annRes, manRes, ackRes, subRes, readRes, manReadRes, threadRes, msgReadRes, docResubmit] = await Promise.all([
         // 非公開分はバッジ件数からも除外（admin/manager が社員画面を閲覧した際にも正しく動かすため明示フィルタ。employee は RLS でも除外される）
-        supabase.from('compliance_documents').select('id, updated_at, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
-        supabase.from('trainings').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
-        supabase.from('announcements').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
-        supabase.from('manuals').select('id, target_type, target_facility_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('compliance_documents').select('id, updated_at, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('trainings').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('announcements').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('manuals').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
         supabase.from('compliance_acknowledgments').select('compliance_document_id, document_updated_at').eq('employee_id', me.id),
         supabase.from('training_submissions').select('training_id, result').eq('employee_id', me.id),
         supabase.from('announcement_reads').select('announcement_id').eq('employee_id', me.id),
@@ -82,10 +87,15 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         countDocumentsNeedingResubmit(supabase, me as Employee),
       ]);
 
-      const scopedComp = applyScopeFilter((compRes.data || []) as Row[], me.facility_id);
-      const scopedTrain = applyScopeFilter((trainRes.data || []) as Row[], me.facility_id);
-      const scopedAnn = applyScopeFilter((annRes.data || []) as Row[], me.facility_id);
-      const scopedMan = applyScopeFilter((manRes.data || []) as Row[], me.facility_id);
+      /* 旧 applyScopeFilter (FacilityScopeSelector.tsx) は単一 facility_id + position 無視で、
+         /my/{4ページ} 側ロジックと判定が乖離していた。isItemInAudience に統一して
+         facility 兼任 + position の AND 判定を 1 箇所に集約 (再発防止)。 */
+      const myPositionId = (me.position_id as string | null) ?? null;
+      const inAud = (row: Row) => isItemInAudience(row, myFacilityIds, myPositionId);
+      const scopedComp = ((compRes.data || []) as Row[]).filter(inAud);
+      const scopedTrain = ((trainRes.data || []) as Row[]).filter(inAud);
+      const scopedAnn = ((annRes.data || []) as Row[]).filter(inAud);
+      const scopedMan = ((manRes.data || []) as Row[]).filter(inAud);
 
       // 現在のupdated_atバージョンでの確認済みセット
       const confirmedSet = new Set(
@@ -124,6 +134,11 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
       });
     }
     loadCompany();
+    /* badge-refresh: ページ内で read action (ViewConfirmButton / compliance agree /
+       training submit / 個別メッセージ既読 等) が完了したら再 fetch して赤バッジを
+       即時に減らす。pathname に依存しないため別 useEffect ではなく購読を追加。 */
+    const unsubscribe = listenBadgeRefresh(loadCompany);
+    return unsubscribe;
   }, [pathname]);
 
   async function handleLogout() {

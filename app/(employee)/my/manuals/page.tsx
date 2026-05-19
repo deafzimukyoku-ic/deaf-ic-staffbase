@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { notifyBadgeRefresh } from '@/lib/badge-refresh';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -123,6 +124,7 @@ function MyManualsPageInner() {
     if (!me) return;
     await supabase.from('manual_reads').insert({ manual_id: manualId, employee_id: me.id });
     setItems((prev) => prev.map((i) => i.id === manualId ? { ...i, isRead: true } : i));
+    notifyBadgeRefresh(); /* layout の赤バッジに即時反映 */
     /* 既読化 = 1 回目の確認とカウント。view_logs にも 1 行追加。
        同セッション中は ViewConfirmButton 非表示なので「2 重ボタン」問題は起きない。 */
     await logView(supabase, 'manual_view_logs', { tenant_id: me.tenant_id, employee_id: me.id, item_id: manualId });

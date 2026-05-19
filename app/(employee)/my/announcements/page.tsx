@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { notifyBadgeRefresh } from '@/lib/badge-refresh';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,87 @@ import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facili
 
 interface AnnouncementWithRead extends Announcement {
   isRead: boolean;
+}
+
+/* GridView: 親 MyAnnouncementsPage の nested function として置くと、
+   開封時の親 state 更新で再レンダー → 関数参照新規 → Dialog が unmount/remount で閉じる。
+   必ず module level に置くこと(同種パターンを §1 で trainings 側も修正済)。 */
+function GridView({ items, onOpen, tenantId, employeeId, viewSummaries, onViewConfirmed }: {
+  items: AnnouncementWithRead[];
+  onOpen: (id: string) => void;
+  tenantId: string | null;
+  employeeId: string | null;
+  viewSummaries: Map<string, ViewSummary>;
+  onViewConfirmed: (id: string, count: number, viewedAt: string) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const open = openId ? items.find((i) => i.id === openId) : null;
+
+  if (items.length === 0) {
+    return <p className="text-center py-20 text-brand-gray-light">このカテゴリのお知らせはありません</p>;
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
+        {items.map((a) => (
+          <ItemGridCard
+            key={a.id}
+            title={a.title}
+            excerpt={blocksToExcerpt(a.content_blocks, a.body)}
+            createdAt={a.created_at}
+            acknowledged={a.isRead}
+            ackLabel="既読"
+            pendingLabel="未読"
+            hasMedia={blocksHaveMedia(a.content_blocks)}
+            onClick={() => { setOpenId(a.id); onOpen(a.id); }}
+          />
+        ))}
+      </div>
+
+      <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
+        <DialogContent className="!max-w-6xl sm:!max-w-6xl max-h-[90vh] overflow-y-auto">
+          {open && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <DialogTitle className="text-lg font-bold">{open.title}</DialogTitle>
+                    <NewBadge createdAt={open.created_at} />
+                  </div>
+                  {open.isRead ? (
+                    <Badge variant="outline" className="text-[10px] shrink-0 border-brand-gray/20 text-brand-gray">既読</Badge>
+                  ) : (
+                    <Badge className="bg-brand-red text-white text-[10px] shrink-0 border-none">未読</Badge>
+                  )}
+                </div>
+              </DialogHeader>
+              <div className="pt-2">
+                <BlockRenderer blocks={open.content_blocks || []} fallbackText={open.body} />
+              </div>
+              <p className="text-[10px] text-brand-gray-light mt-4 pt-3 border-t border-brand-gray/5">
+                {new Date(open.created_at).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
+              </p>
+              {/* お知らせは「既読にする」ボタンを持たず開いた瞬間に既読化されるため、
+                  重複ボタンの問題は無い。常に「✓ 確認しました（N 回目）」を表示。 */}
+              {tenantId && employeeId && (
+                <div className="pt-3 border-t border-brand-gray/10 mt-3">
+                  <ViewConfirmButton
+                    table="announcement_view_logs"
+                    tenantId={tenantId}
+                    employeeId={employeeId}
+                    itemId={open.id}
+                    initialSummary={viewSummaries.get(open.id)}
+                    onConfirmed={(count, viewedAt) => onViewConfirmed(open.id, count, viewedAt)}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export default function MyAnnouncementsPage() {
@@ -121,6 +203,8 @@ export default function MyAnnouncementsPage() {
     setItems((prev) =>
       prev.map((i) => i.id === announcementId ? { ...i, isRead: true } : i)
     );
+    /* layout の赤バッジに即時反映 (依存配列 [pathname] では trigger されないため event 通知) */
+    notifyBadgeRefresh();
   }
 
   const unreadCount = items.filter((i) => !i.isRead).length;
@@ -293,82 +377,4 @@ export default function MyAnnouncementsPage() {
       />
     </div>
   );
-
-  function GridView({ items, onOpen, tenantId, employeeId, viewSummaries, onViewConfirmed }: {
-    items: AnnouncementWithRead[];
-    onOpen: (id: string) => void;
-    tenantId: string | null;
-    employeeId: string | null;
-    viewSummaries: Map<string, ViewSummary>;
-    onViewConfirmed: (id: string, count: number, viewedAt: string) => void;
-  }) {
-    const [openId, setOpenId] = useState<string | null>(null);
-    const open = openId ? items.find((i) => i.id === openId) : null;
-
-    if (items.length === 0) {
-      return <p className="text-center py-20 text-brand-gray-light">このカテゴリのお知らせはありません</p>;
-    }
-
-    return (
-      <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
-          {items.map((a) => (
-            <ItemGridCard
-              key={a.id}
-              title={a.title}
-              excerpt={blocksToExcerpt(a.content_blocks, a.body)}
-              createdAt={a.created_at}
-              acknowledged={a.isRead}
-              ackLabel="既読"
-              pendingLabel="未読"
-              hasMedia={blocksHaveMedia(a.content_blocks)}
-              onClick={() => { setOpenId(a.id); onOpen(a.id); }}
-            />
-          ))}
-        </div>
-
-        <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
-          <DialogContent className="!max-w-6xl sm:!max-w-6xl max-h-[90vh] overflow-y-auto">
-            {open && (
-              <>
-                <DialogHeader>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <DialogTitle className="text-lg font-bold">{open.title}</DialogTitle>
-                      <NewBadge createdAt={open.created_at} />
-                    </div>
-                    {open.isRead ? (
-                      <Badge variant="outline" className="text-[10px] shrink-0 border-brand-gray/20 text-brand-gray">既読</Badge>
-                    ) : (
-                      <Badge className="bg-brand-red text-white text-[10px] shrink-0 border-none">未読</Badge>
-                    )}
-                  </div>
-                </DialogHeader>
-                <div className="pt-2">
-                  <BlockRenderer blocks={open.content_blocks || []} fallbackText={open.body} />
-                </div>
-                <p className="text-[10px] text-brand-gray-light mt-4 pt-3 border-t border-brand-gray/5">
-                  {new Date(open.created_at).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
-                </p>
-                {/* お知らせは「既読にする」ボタンを持たず開いた瞬間に既読化されるため、
-                    重複ボタンの問題は無い。常に「✓ 確認しました（N 回目）」を表示。 */}
-                {tenantId && employeeId && (
-                  <div className="pt-3 border-t border-brand-gray/10 mt-3">
-                    <ViewConfirmButton
-                      table="announcement_view_logs"
-                      tenantId={tenantId}
-                      employeeId={employeeId}
-                      itemId={open.id}
-                      initialSummary={viewSummaries.get(open.id)}
-                      onConfirmed={(count, viewedAt) => onViewConfirmed(open.id, count, viewedAt)}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
 }

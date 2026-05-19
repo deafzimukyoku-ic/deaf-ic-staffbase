@@ -289,7 +289,21 @@ export default function NewEmployeePage() {
             </Button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form
+            onSubmit={handleSubmit}
+            onKeyDown={(e) => {
+              /* 真因: 単一行 Input 上での Enter キー (= HTML 標準の form submit) で
+                 「下書きを書き途中の状態」のまま invite が発射され、employees にゴミ行が
+                 作られて /admin/employees 一覧に出てしまっていた (= ユーザー報告の C)。
+                 textarea (改行入力が必要) と submit BUTTON 上の Enter (キーボードで確定) のみ通し、
+                 その他の Input/Select 上の Enter は preventDefault で握りつぶす。 */
+              const tag = (e.target as HTMLElement).tagName;
+              if (e.key === 'Enter' && tag !== 'TEXTAREA' && tag !== 'BUTTON') {
+                e.preventDefault();
+              }
+            }}
+            className="space-y-6"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="space-y-2">

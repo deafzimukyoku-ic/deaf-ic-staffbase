@@ -21,6 +21,7 @@ import { ja } from 'date-fns/locale';
 import { createClient } from '@/lib/supabase/client';
 import { staffDisplayName } from '@/lib/shift-utils';
 import { fetchEmployeeIdsForFacilities } from '@/lib/multi-facility';
+import { notifyBadgeRefresh } from '@/lib/badge-refresh';
 import Button from '@/components/shift-compat/Button';
 import { AttachmentDropZone } from '@/components/messages/AttachmentDropZone';
 import type {
@@ -302,8 +303,9 @@ export default function MessagesView({ scope }: Props) {
       await supabase
         .from('message_reads')
         .upsert(unreadIds.map((id) => ({ message_id: id, employee_id: me.id })), { onConflict: 'message_id,employee_id' });
-      /* バッジ更新のため一覧再ロード */
+      /* バッジ更新のため一覧再ロード + layout の赤バッジに即時反映 */
       void loadThreads();
+      notifyBadgeRefresh();
     }
     /* 末尾までスクロール */
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);

@@ -44,47 +44,73 @@ export function facilityTargetsMatchMine(
 }
 
 /**
+ * 4機能 (compliance / training / announcement / manual) の audience 判定統一ヘルパー。
+ * - target_type='all' でも target_position_ids が指定されていれば、その position の社員のみ対象
+ * - target_type='facility' は myFacilityIds との積集合判定 + position も AND で評価
+ *
+ * 旧 applyScopeFilter (FacilityScopeSelector.tsx) は単一 facility_id 比較 + position 無視 + 兼任未対応
+ * だったため、layout tab badge / admin・mgr dashboard / ReportMatrix で「他施設限定アイテムが
+ * カウントされる」「兼任先アイテムが届かない」「position 限定アイテムが position 違いの社員に届く」
+ * の問題が起きていた。判定ロジックを 1 ヶ所に集約することで再発防止。
+ */
+export function isItemInAudience(
+  item: {
+    target_type: 'all' | 'facility';
+    target_facility_ids?: string[] | null;
+    target_position_ids?: string[] | null;
+  },
+  myFacilityIds: string[],
+  myPositionId: string | null,
+): boolean {
+  /* facility フィルタ */
+  if (item.target_type === 'facility') {
+    if (!facilityTargetsMatchMine(item.target_facility_ids, myFacilityIds)) return false;
+  }
+  /* position フィルタ (target_type='all' / 'facility' どちらでも、position 指定があれば AND) */
+  if (item.target_position_ids && item.target_position_ids.length > 0) {
+    if (!myPositionId) return false;
+    if (!item.target_position_ids.includes(myPositionId)) return false;
+  }
+  return true;
+}
+
+/**
  * 指定 facility に所属する全職員 ID（主所属 + 兼任先）を返す。
+ * シフト表 / 休み希望表示で「この事業所の職員一覧」を組むときに使用。
  *
- * 注意: 取得後に from('employees').select(...).in('id', memberIds) しても
- *   employees の RLS で manager / shift_manager は自分の行しか見えない。
- *   行データ自体が必要なら fetchFacilityMembers を使うこと。
- *   この関数は ID 配列だけで足りる用途（assignments の結合キー判定など）専用。
- *
- * 実装: SECURITY DEFINER RPC `get_facility_member_ids` 経由（migration 154）。
+ * 注意: shift_manager / manager で呼ぶと employees の RLS により自分の行しか
+ * 取れない。続けて `from('employees').select(...).in('id', memberIds)` を呼ぶと
+ * RLS で再び弾かれるため、行データが必要な箇所では fetchFacilityMembers を使うこと。
  */
 export async function fetchFacilityMemberIds(
   supabase: SupabaseClient,
   facilityId: string
 ): Promise<string[]> {
-  const { data, error } = await supabase.rpc('get_facility_member_ids', {
-    p_facility_id: facilityId,
-  });
-  if (error) {
-    console.error('[fetchFacilityMemberIds] RPC error', error);
-    return [];
-  }
-  return ((data ?? []) as { id: string }[]).map((r) => r.id);
+  const [{ data: primary }, { data: additional }] = await Promise.all([
+    supabase.from('employees').select('id').eq('facility_id', facilityId),
+    supabase.from('employee_facilities').select('employee_id').eq('facility_id', facilityId),
+  ]);
+  const ids = new Set<string>();
+  for (const r of primary ?? []) ids.add(r.id);
+  for (const r of additional ?? []) ids.add(r.employee_id);
+  return Array.from(ids);
 }
 
 /**
- * 指定 facility に所属する全職員（主所属 + 兼任先）の運用属性を返す。
- *
- * SECURITY DEFINER RPC `get_facility_members` 経由（migration 155）。
- * シフト・送迎・職員管理 UI で必要な列のみ。住所・電話など機密項目は含まない。
- *
- * 戻り値の型: 各画面で必要な列を持つ。呼び出し側で StaffRow / EmployeeRow にキャスト or マッピング。
+ * migration 154 で追加した SECURITY DEFINER RPC `get_facility_members(uuid)` の戻り値型。
+ * employees テーブルから機密項目（住所・電話・birth_date・銀行口座・保険番号）を
+ * 除いた、シフト・送迎・職員管理 UI で必要な列だけを返す。
  */
 export interface FacilityMemberRow {
   id: string;
   tenant_id: string;
   facility_id: string | null;
   employee_number: string | null;
-  last_name: string;
-  first_name: string;
+  last_name: string | null;
+  first_name: string | null;
   email: string | null;
-  role: string;
-  status: string;
+  role: string | null;
+  status: string | null;
   employment_type: string | null;
   default_start_time: string | null;
   default_end_time: string | null;
@@ -100,6 +126,14 @@ export interface FacilityMemberRow {
   employee_position: string | null;
 }
 
+/**
+ * 指定 facility に所属する職員（主所属 + 兼任）の行データを返す。
+ * SECURITY DEFINER RPC `get_facility_members` 経由なので、shift_manager / manager が
+ * employees の RLS に弾かれる問題を回避できる（migration 154）。
+ *
+ * 認可は RPC 側で実施: admin は同テナント内任意 facility / manager・shift_manager は
+ * get_my_managed_facility_ids() 範囲 / employee は空配列。
+ */
 export async function fetchFacilityMembers(
   supabase: SupabaseClient,
   facilityId: string
@@ -117,26 +151,18 @@ export async function fetchFacilityMembers(
 /**
  * 複数 facility の和集合に所属する全職員 ID（主所属 + 兼任先）を返す。
  * mgr/subordinates 等の管理画面で manager の管轄施設群から職員一覧を組むときに使用。
- *
- * 実装: facility ごとに get_facility_member_ids RPC を並列呼び出しして union。
  */
 export async function fetchEmployeeIdsForFacilities(
   supabase: SupabaseClient,
   facilityIds: string[]
 ): Promise<string[]> {
   if (facilityIds.length === 0) return [];
-  const results = await Promise.all(
-    facilityIds.map((fid) =>
-      supabase.rpc('get_facility_member_ids', { p_facility_id: fid }),
-    ),
-  );
+  const [{ data: primary }, { data: additional }] = await Promise.all([
+    supabase.from('employees').select('id').in('facility_id', facilityIds),
+    supabase.from('employee_facilities').select('employee_id').in('facility_id', facilityIds),
+  ]);
   const ids = new Set<string>();
-  for (const { data, error } of results) {
-    if (error) {
-      console.error('[fetchEmployeeIdsForFacilities] RPC error', error);
-      continue;
-    }
-    for (const r of ((data ?? []) as { id: string }[])) ids.add(r.id);
-  }
+  for (const r of primary ?? []) ids.add(r.id);
+  for (const r of additional ?? []) ids.add(r.employee_id);
   return Array.from(ids);
 }

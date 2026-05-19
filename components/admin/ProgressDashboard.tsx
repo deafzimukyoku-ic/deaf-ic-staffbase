@@ -53,6 +53,10 @@ interface Props {
   /* 社員別の対象書類数。書類の自動判定（ゲート付きタグの AND）で社員ごとに対象数が異なるため。
      未指定の社員は totalTemplates を分母として fallback。 */
   docTotalsByEmployee?: Record<string, number>;
+  /* 社員別の 4 機能 (compliance/training/announcement/manual) 対象数。
+     facility 兼任 + position フィルタ込みで per-employee に計算した分母。
+     未指定の社員は publishedTotals を分母として fallback (= 全公開件数)。 */
+  publishedTotalsByEmployee?: Record<string, CategoryTotals>;
   publishedTotals: CategoryTotals;
   allTotals: CategoryTotals;
   facilities?: FacilityLite[];
@@ -85,7 +89,12 @@ function CollapsibleSection({ title, defaultOpen = true, children }: { title: st
   );
 }
 
-export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = {}, publishedTotals, allTotals, facilities = [], lastCompletedAt = {} }: Props) {
+export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = {}, publishedTotalsByEmployee = {}, publishedTotals, allTotals, facilities = [], lastCompletedAt = {} }: Props) {
+  /* per-row 分母 helper: publishedTotalsByEmployee 未指定の社員 (= 古いキャッシュ等) は
+     publishedTotals (全公開件数) を分母として fallback する。新ロジック適用後は
+     全社員に対して per-employee の値が入る想定。 */
+  const totalsFor = (employeeId: string): CategoryTotals =>
+    publishedTotalsByEmployee[employeeId] ?? publishedTotals;
   /* 進捗一覧は従業員番号順 (社員番号は string だが数字主体のため数値変換できる場合は数値比較、
      それ以外は文字列比較、未設定 (NULL / 空) は末尾) */
   const active = rows
@@ -158,10 +167,10 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
   };
 
   const docRate = calcRate('docs_submitted', (r) => docTotalsByEmployee[r.employee_id] ?? totalTemplates);
-  const compRate = calcRate('compliance_done', () => publishedTotals.compliance);
-  const trainRate = calcRate('trainings_passed', () => publishedTotals.trainings);
-  const annRate = calcRate('announcements_read', () => publishedTotals.announcements);
-  const manualRate = calcRate('manuals_read', () => publishedTotals.manuals);
+  const compRate = calcRate('compliance_done', (r) => totalsFor(r.employee_id).compliance);
+  const trainRate = calcRate('trainings_passed', (r) => totalsFor(r.employee_id).trainings);
+  const annRate = calcRate('announcements_read', (r) => totalsFor(r.employee_id).announcements);
+  const manualRate = calcRate('manuals_read', (r) => totalsFor(r.employee_id).manuals);
 
   return (
     <div className="space-y-5">
@@ -189,6 +198,7 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
           manuals_read: publishedTotals.manuals,
         }}
         docTotalsByEmployee={docTotalsByEmployee}
+        publishedTotalsByEmployee={publishedTotalsByEmployee}
         lastCompletedAt={lastCompletedAt}
         selectedIds={selectedIds}
         setSelectedIds={setSelectedIds}
@@ -227,30 +237,33 @@ export function ProgressDashboard({ rows, totalTemplates, docTotalsByEmployee = 
                   </tr>
                 </thead>
                 <tbody>
-                  {active.map((r) => (
-                    <tr key={r.employee_id} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-medium whitespace-nowrap min-w-[7em]">
-                        <Link href={`/admin/employees/${r.employee_id}`} className="hover:text-brand-blue transition-colors">
-                          {r.last_name} {r.first_name}
-                        </Link>
-                      </td>
-                      <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.docs_submitted)} total={docTotalsByEmployee[r.employee_id] ?? totalTemplates} />
-                      </td>
-                      <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.compliance_done)} total={publishedTotals.compliance} />
-                      </td>
-                      <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.trainings_passed)} total={publishedTotals.trainings} />
-                      </td>
-                      <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number(r.announcements_read)} total={publishedTotals.announcements} />
-                      </td>
-                      <td className="py-2 px-4 text-center">
-                        <ProgressBadge current={Number((r as { manuals_read?: number }).manuals_read ?? 0)} total={publishedTotals.manuals} />
-                      </td>
-                    </tr>
-                  ))}
+                  {active.map((r) => {
+                    const rowTotals = totalsFor(r.employee_id);
+                    return (
+                      <tr key={r.employee_id} className="border-b last:border-0">
+                        <td className="py-2 pr-4 font-medium whitespace-nowrap min-w-[7em]">
+                          <Link href={`/admin/employees/${r.employee_id}`} className="hover:text-brand-blue transition-colors">
+                            {r.last_name} {r.first_name}
+                          </Link>
+                        </td>
+                        <td className="py-2 px-4 text-center">
+                          <ProgressBadge current={Number(r.docs_submitted)} total={docTotalsByEmployee[r.employee_id] ?? totalTemplates} />
+                        </td>
+                        <td className="py-2 px-4 text-center">
+                          <ProgressBadge current={Number(r.compliance_done)} total={rowTotals.compliance} />
+                        </td>
+                        <td className="py-2 px-4 text-center">
+                          <ProgressBadge current={Number(r.trainings_passed)} total={rowTotals.trainings} />
+                        </td>
+                        <td className="py-2 px-4 text-center">
+                          <ProgressBadge current={Number(r.announcements_read)} total={rowTotals.announcements} />
+                        </td>
+                        <td className="py-2 px-4 text-center">
+                          <ProgressBadge current={Number((r as { manuals_read?: number }).manuals_read ?? 0)} total={rowTotals.manuals} />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {active.length === 0 && (
@@ -298,7 +311,7 @@ function RateCard({ label, pct, color, ring, onClick }: { label: string; pct: nu
 }
 
 function ReminderModal({
-  openKey, rows, facilities, totals, docTotalsByEmployee, lastCompletedAt, selectedIds, setSelectedIds, sending, onClose, onToggle, onSend,
+  openKey, rows, facilities, totals, docTotalsByEmployee, publishedTotalsByEmployee, lastCompletedAt, selectedIds, setSelectedIds, sending, onClose, onToggle, onSend,
 }: {
   openKey: CategoryKey;
   rows: ProgressRow[];
@@ -306,6 +319,8 @@ function ReminderModal({
   totals: Record<CategoryKey, number>;
   /* 書類だけ社員別の対象数があるので別経路で受ける */
   docTotalsByEmployee: Record<string, number>;
+  /* 4 機能 (compliance/training/announcement/manual) の per-employee 対象数 */
+  publishedTotalsByEmployee: Record<string, CategoryTotals>;
   lastCompletedAt: LastCompletedAt;
   selectedIds: Set<string>;
   setSelectedIds: (next: Set<string>) => void;
@@ -316,9 +331,16 @@ function ReminderModal({
 }) {
   const meta = CATEGORY_META[openKey];
   const total = totals[openKey];
-  /* 社員ごとの「対象数」を取得するヘルパー。docs_submitted のみ社員別、それ以外は全社員共通 */
+  /* 社員ごとの「対象数」を取得するヘルパー。書類 + 4 機能とも per-employee の値があれば
+     それを優先、なければ全社員共通 fallback。これで「対象外社員が未完了として残る」を解消。 */
   const totalFor = (r: ProgressRow): number => {
     if (openKey === 'docs_submitted') return docTotalsByEmployee[r.employee_id] ?? total;
+    const perEmp = publishedTotalsByEmployee[r.employee_id];
+    if (!perEmp) return total;
+    if (openKey === 'compliance_done') return perEmp.compliance;
+    if (openKey === 'trainings_passed') return perEmp.trainings;
+    if (openKey === 'announcements_read') return perEmp.announcements;
+    if (openKey === 'manuals_read') return perEmp.manuals;
     return total;
   };
   const incomplete = rows.filter((r) => totalFor(r) > 0 && Number(r[openKey]) < totalFor(r));

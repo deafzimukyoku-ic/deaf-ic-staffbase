@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { notifyBadgeRefresh } from '@/lib/badge-refresh';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -226,6 +227,7 @@ export default function MyDocumentsPage() {
     );
 
     toast.success('確認しました');
+    notifyBadgeRefresh(); /* layout の赤バッジ即時更新 */
     setActionId(null);
   }
 

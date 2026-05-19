@@ -22,6 +22,7 @@ import { fetchMyViewSummary, logView, type ViewSummary } from '@/lib/view-log';
 import { ViewConfirmButton } from '@/components/employee/ViewConfirmButton';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
 import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
+import { notifyBadgeRefresh } from '@/lib/badge-refresh';
 
 interface TrainingWithSub {
   training: Training;
@@ -324,6 +325,7 @@ export default function MyTrainingsPage() {
     setItems((prev) =>
       prev.map((i) => i.training.id === trainingId ? { ...i, submission: data as TrainingSubmission } : i)
     );
+    notifyBadgeRefresh(); /* layout の赤バッジに即時反映 */
 
     /* 提出 = 1 回目の確認とカウント。view_logs にも 1 行追加。 */
     await logView(supabase, 'training_view_logs', { tenant_id: me.tenant_id, employee_id: me.id, item_id: trainingId });

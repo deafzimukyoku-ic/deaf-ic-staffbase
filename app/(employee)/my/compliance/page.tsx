@@ -16,6 +16,7 @@ import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/emp
 import { fetchMyViewSummary, logView, type ViewSummary } from '@/lib/view-log';
 import { ViewConfirmButton } from '@/components/employee/ViewConfirmButton';
 import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
+import { notifyBadgeRefresh } from '@/lib/badge-refresh';
 import { toast } from 'sonner';
 import type { Category, TargetType } from '@/lib/types';
 
@@ -153,6 +154,7 @@ export default function MyCompliancePage() {
     }
 
     setAckMap((prev) => ({ ...prev, [doc.id]: true }));
+    notifyBadgeRefresh(); /* layout の赤バッジに即時反映 */
     /* 同意 = 1 回目の確認とカウント。view_logs にも 1 行追加して以降のカウントを正しく開始させる。
        同セッション中は ViewConfirmButton を非表示にしているので「2 重ボタン」問題は起きない。 */
     await logView(supabase, 'compliance_view_logs', { tenant_id: tenantId, employee_id: employeeId, item_id: doc.id });
