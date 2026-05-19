@@ -116,8 +116,11 @@ function TrainingsGrid({
                     <p className="text-sm text-brand-ink/80 leading-relaxed">{(training as any).body}</p>
                   )}
 
+                  {/* モバイル portrait では wrapper の余白・境界・背景を全消して、
+                      動画 iframe が DialogContent 内側ほぼ全幅を使えるようにする。
+                      sm 以上では従来通り白カード装飾を維持。 */}
                   {((training as any).content_blocks?.length || 0) > 0 ? (
-                    <div className="bg-white/80 rounded-md p-5 border border-brand-gray/10">
+                    <div className="sm:bg-white/80 sm:rounded-md sm:p-5 sm:border sm:border-brand-gray/10">
                       <BlockRenderer blocks={(training as any).content_blocks} />
                     </div>
                   ) : (

@@ -35,7 +35,7 @@ export function TrainingPlayer({ title, youtubeUrl, pdfUrl }: Props) {
     <div className="space-y-4">
       {embedUrl ? (
         <div
-          className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block"
+          className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-brand-gray/10 block"
           style={{
             aspectRatio: '16 / 9',
             width: 'min(100%, calc(65vh * 16 / 9))',
@@ -44,7 +44,7 @@ export function TrainingPlayer({ title, youtubeUrl, pdfUrl }: Props) {
           <iframe
             src={embedUrl}
             className="w-full h-full block"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
             allowFullScreen
             title={title}
           />
@@ -55,7 +55,7 @@ export function TrainingPlayer({ title, youtubeUrl, pdfUrl }: Props) {
           href={youtubeUrl}
           target="_blank"
           rel="noreferrer"
-          className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block relative group"
+          className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-brand-gray/10 block relative group"
           style={{
             aspectRatio: '16 / 9',
             width: 'min(100%, calc(65vh * 16 / 9))',

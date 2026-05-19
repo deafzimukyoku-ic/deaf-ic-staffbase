@@ -35,10 +35,25 @@ function youtubeThumbnailUrl(url: string): string | null {
   return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 }
 
-function googleDriveEmbedUrl(url: string): string | null {
+// Drive ファイル ID を URL から抽出。video / pdf 共通で使う。
+function extractDriveFileId(url: string): string | null {
   const match = url.match(/\/file\/d\/([\w-]+)/);
-  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
-  return null;
+  return match ? match[1] : null;
+}
+
+function googleDriveEmbedUrl(url: string): string | null {
+  const id = extractDriveFileId(url);
+  return id ? `https://drive.google.com/file/d/${id}/preview` : null;
+}
+
+// Drive 動画を <video> でネイティブ再生するための proxy URL。
+// Drive 直 URL (uc?export=download) は cross-origin で video element に渡しても
+// ウイルススキャン警告 HTML や redirect chain で再生失敗するため、
+// app/api/drive-video/[fileId]/route.ts 経由で server-side fetch + streaming する。
+// 「リンクを知っている全員」共有設定の mp4 が前提。
+function googleDriveVideoUrl(url: string): string | null {
+  const id = extractDriveFileId(url);
+  return id ? `/api/drive-video/${id}` : null;
 }
 
 // blocks が空かつ fallbackText がある場合、fallback を単一 text ブロックとして扱う
@@ -87,14 +102,13 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
           // block.source は信用せず URL から判定する（過去のデータで source が誤設定の可能性）
           const url = block.url || '';
           const ytId = extractYoutubeId(url);
-          const driveEmbed = googleDriveEmbedUrl(url);
           const isYoutubeUrl = /(?:youtube\.com|youtu\.be)/i.test(url);
 
           // 1. YouTube ID が取れた → 埋め込み iframe
           if (ytId) {
             return (
               <div key={i}
-                className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block"
+                className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-brand-gray/10 block"
                 style={{
                   aspectRatio: '16 / 9',
                   width: 'min(100%, calc(65vh * 16 / 9))',
@@ -103,7 +117,7 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
                 <iframe
                   src={`https://www.youtube.com/embed/${ytId}`}
                   className="w-full h-full block"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
                   allowFullScreen
                   title="動画"
                 />
@@ -111,22 +125,26 @@ export function BlockRenderer({ blocks, fallbackText }: { blocks: ContentBlock[]
             );
           }
 
-          // 2. Google Drive URL → /preview iframe
-          if (driveEmbed) {
+          // 2. Google Drive 動画 → <video> でネイティブ再生
+          //    iframe (/preview) はモバイル Drive player の UI バーで見切れ + タッチ無反応の事故が出るため不使用。
+          //    Drive 直 URL (uc?export=download) を src に渡すことで、ブラウザネイティブの video コントロールが動く。
+          //    Drive 側「リンクを知っている全員」共有設定が前提。
+          const driveVideoUrl = googleDriveVideoUrl(url);
+          if (driveVideoUrl) {
             return (
               <div key={i}
-                className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-black block"
+                className="mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-brand-gray/10 block"
                 style={{
                   aspectRatio: '16 / 9',
                   width: 'min(100%, calc(65vh * 16 / 9))',
                 }}
               >
-                <iframe
-                  src={driveEmbed}
-                  className="w-full h-full block"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  title="動画"
+                <video
+                  src={driveVideoUrl}
+                  className="w-full h-full object-contain block"
+                  controls
+                  playsInline
+                  preload="metadata"
                 />
               </div>
             );
