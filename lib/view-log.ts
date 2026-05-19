@@ -12,19 +12,24 @@ export interface ViewSummary {
 }
 
 /**
- * employee が「✓ 確認しました」ボタンをクリックした時に呼び出す。
- * 旧仕様（モーダル開いた瞬間に自動カウント）は廃止。明示的なクリックのみ計上。
- * 失敗時は握りつぶし、本処理を止めない（閲覧ログは付随的・障害時にも UI を妨げない）。
+ * employee が「✓ 確認しました」ボタンをクリックした時、または各カテゴリの
+ * 初回 ack / markRead 時に呼ばれる。
+ *
+ * 旧仕様 (try/catch で握り潰し) は Supabase JS の挙動と噛み合っておらず、
+ * await insert は RLS/制約違反でも throw せず { error } を返すため catch ブロックが
+ * 永久未発火だった。結果として view_logs INSERT 失敗が silent failure し、
+ * 閲覧レポートが「✗ 未読」のまま残る問題 (P2) の温床になっていた。
+ *
+ * 新仕様: error が返ってきた場合は必ず console.error に残す。UI を止めない方針は維持。
  */
 export async function logView(
   supabase: SupabaseClient,
   table: ViewLogTable,
   payload: { tenant_id: string; employee_id: string; item_id: string }
 ): Promise<void> {
-  try {
-    await supabase.from(table).insert(payload);
-  } catch {
-    /* noop */
+  const { error } = await supabase.from(table).insert(payload);
+  if (error) {
+    console.error('[logView] insert failed', { table, payload, error });
   }
 }
 

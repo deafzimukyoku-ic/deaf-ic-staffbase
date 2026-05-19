@@ -15,7 +15,7 @@ import { NewBadge } from '@/components/admin/NewBadge';
 import { BlockRenderer } from '@/components/admin/BlockRenderer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ItemGridCard, blocksToExcerpt, blocksHaveMedia } from '@/components/employee/ItemGridCard';
-import { fetchMyViewSummary, type ViewSummary } from '@/lib/view-log';
+import { fetchMyViewSummary, logView, type ViewSummary } from '@/lib/view-log';
 import { ViewConfirmButton } from '@/components/employee/ViewConfirmButton';
 import { fetchMyFacilityIds, facilityTargetsMatchMine } from '@/lib/multi-facility';
 
@@ -189,7 +189,7 @@ export default function MyAnnouncementsPage() {
 
     const { data: me } = await supabase
       .from('employees')
-      .select('id')
+      .select('id, tenant_id')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -198,6 +198,16 @@ export default function MyAnnouncementsPage() {
     await supabase.from('announcement_reads').insert({
       announcement_id: announcementId,
       employee_id: me.id,
+    });
+
+    /* 他 3 カテゴリ (compliance/training/manual) と足並みを揃え、閲覧レポートの
+       /api/reports?category=announcement が読む announcement_view_logs にも
+       1 行記録する。これが無いと社員画面で既読化しても閲覧レポート上で「✗ 未読」
+       が永遠に残る (P3 真因)。 */
+    await logView(supabase, 'announcement_view_logs', {
+      tenant_id: me.tenant_id,
+      employee_id: me.id,
+      item_id: announcementId,
     });
 
     setItems((prev) =>

@@ -97,10 +97,25 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
 }) {
+  /* 真因 (DialogPopup.d.ts L13-22 で確認): base-ui Popup の `initialFocus` default は
+     true (= 最初の tabbable element に focus)。長い Modal で内部ボタン
+     (例: 遵守事項詳細の ✓確認しました) が最初の tabbable になると、ブラウザ標準の
+     scrollIntoView でそのボタン位置までスクロールされて「開いた瞬間に下端表示」になる。
+
+     対策: initialFocus を popup 自身 (= 最上部、視覚上常に viewport 内) に向ける。
+     - focus 対象が viewport 内 → scrollIntoView が発火しない (or noop)
+     - 内部ボタンへの auto-focus は完全に起こらない
+     - Tab キーで通常通り内部 tabbable をたどれる (UX 後退なし)
+     - 旧 useEffect で focus 後に scrollTop=0 を当てる「後追い打ち消し」は場当たり的で
+       不安定だったため撤廃。focus を最初から正しい場所に向ける根本対応に切替。 */
+  const popupRef = React.useRef<HTMLDivElement | null>(null);
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
+        ref={popupRef}
+        initialFocus={popupRef}
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

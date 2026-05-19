@@ -139,13 +139,21 @@ export default function MyCompliancePage() {
     if (!employeeId || !tenantId) return;
     setAckLoading(doc.id);
 
+    /* 184: UNIQUE が (employee_id, compliance_document_id) に戻ったので、
+       書類編集 → 再 ack の場合も UPSERT で同一行を上書きする (旧 insert は版違いで
+       新規行を作って employee_progress.compliance_done が分母超え (52/51) を起こしていた)。
+       acknowledged_at は now() で都度更新、document_updated_at は doc の最新版に追従。 */
     const { error } = await supabase
       .from('compliance_acknowledgments')
-      .insert({
-        employee_id: employeeId,
-        compliance_document_id: doc.id,
-        document_updated_at: doc.updated_at,
-      });
+      .upsert(
+        {
+          employee_id: employeeId,
+          compliance_document_id: doc.id,
+          document_updated_at: doc.updated_at,
+          acknowledged_at: new Date().toISOString(),
+        },
+        { onConflict: 'employee_id,compliance_document_id' },
+      );
 
     if (error) {
       toast.error('確認の記録に失敗しました');
