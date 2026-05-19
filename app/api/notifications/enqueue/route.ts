@@ -14,6 +14,32 @@ const VALID_TYPES: NotificationContentType[] = ['announcement', 'compliance', 't
 const DELAY_HOURS = 2;
 const MAX_DELAY_HOURS = 6;
 
+/**
+ * 夜間時間帯 (JST 23:00-07:00) はメール送信を抑止する。
+ * scheduled_at が quiet 範囲内なら翌朝 07:00 JST に押し戻す。
+ *
+ * 仕様:
+ *   - JST 07:00〜22:59 → そのまま (送信 OK 帯)
+ *   - JST 23:00〜23:59 → 翌日 JST 07:00 に push
+ *   - JST 00:00〜06:59 → 同日 JST 07:00 に push
+ *
+ * dispatcher 側 (app/api/cron/send-notifications/route.ts) でも同等の
+ * safety net を持ち、scheduled_at < now() でも quiet なら send を skip する。
+ */
+function shiftOutOfQuietHoursJst(d: Date): Date {
+  /* JST = UTC+9。Date オブジェクトは UTC ベースなので +9h して JST 時刻にずらしてから判定 */
+  const jstMs = d.getTime() + 9 * 3600_000;
+  const jst = new Date(jstMs);
+  const h = jst.getUTCHours();
+  if (h >= 23 || h < 7) {
+    const target = new Date(jst);
+    if (h >= 23) target.setUTCDate(target.getUTCDate() + 1);
+    target.setUTCHours(7, 0, 0, 0);
+    return new Date(target.getTime() - 9 * 3600_000);
+  }
+  return d;
+}
+
 // POST /api/notifications/enqueue
 // Body: { content_type, content_id }
 // 作成/編集/連投時に呼ぶ。同テナントの未送信行を全部 rolling window で揃える
@@ -63,6 +89,10 @@ export async function POST(req: NextRequest) {
     const hardCap = new Date(firstAt.getTime() + MAX_DELAY_HOURS * 3600_000);
     if (proposedScheduled > hardCap) finalScheduled = hardCap;
   }
+  /* 夜間 (JST 23:00-07:00) は送信抑止。scheduled_at をその範囲外に押し出す。
+     hardCap によって quiet 範囲に丸められた場合でも、この shift で更に翌朝に押し戻すので
+     「夜間に必ず送れ」(hardCap) より「夜間は絶対送らない」が優先される設計。 */
+  finalScheduled = shiftOutOfQuietHoursJst(finalScheduled);
   const finalIso = finalScheduled.toISOString();
 
   /* 既存 (content_type, content_id) があれば UPDATE (= 同じ行のタイマーリセット)。

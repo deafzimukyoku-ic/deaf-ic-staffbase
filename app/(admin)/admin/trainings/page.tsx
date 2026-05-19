@@ -20,7 +20,7 @@ import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
-import { enqueueNotification } from '@/lib/notifications/queue';
+import { enqueueNotification, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
 import type { Training, Category, Facility, TargetType, Position } from '@/lib/types';
 
@@ -165,7 +165,7 @@ export default function AdminTrainingsPage() {
 
       setTrainings((prev) => [data as Training, ...prev]);
       await enqueueNotification('training', (data as Training).id);
-      toast.success('研修を登録しました。2時間後に対象社員へメール通知されます。');
+      toast.success(`研修を登録しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
     }
 
     setDialogOpen(false);

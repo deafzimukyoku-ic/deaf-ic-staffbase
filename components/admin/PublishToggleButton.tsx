@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
+import { enqueueNotification, cancelNotification, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import type { NotificationContentType } from '@/lib/types';
 
 /**
@@ -71,10 +71,10 @@ export function PublishToggleButton({
     const contentType = TABLE_TO_CONTENT_TYPE[table];
     if (next) {
       await enqueueNotification(contentType, id);
-      toast.success('公開しました。2時間後に対象社員へメール通知されます。');
+      toast.success(`公開しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
     } else {
       await cancelNotification(contentType, id);
-      toast.success('非公開にしました');
+      toast.success('非公開にしました(未送信のメール通知はキャンセルされました)');
     }
   };
 

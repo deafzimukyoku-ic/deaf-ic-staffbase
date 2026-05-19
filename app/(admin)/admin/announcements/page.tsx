@@ -21,7 +21,7 @@ import { FacilityScopeSelector, TargetScopeBadge } from '@/components/admin/Faci
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
-import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
+import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
 import type { Announcement, Category, Facility, TargetType, Position } from '@/lib/types';
 
@@ -130,13 +130,20 @@ export default function AdminAnnouncementsPage() {
         setSaving(false);
         return;
       }
-      await enqueueNotification('announcement', editingAnnouncement.id);
+      /* 非公開なら enqueue せず cancel。toast も is_published 状態に合わせて切替。
+         旧コードは is_published 無視で常に enqueue + 「送信される」toast を出して UX 誤誘導していた。 */
+      const isPublished = editingAnnouncement.is_published !== false;
+      const { willNotify } = await enqueueOrCancelByPublished('announcement', editingAnnouncement.id, isPublished);
       await reloadAnnouncements(tenantId);
       setDialogOpen(false);
       setEditingAnnouncement(null);
       setForm({ title: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
       setBlocks([]);
-      toast.success('お知らせを更新しました。2時間後に対象社員へメール通知されます。');
+      toast.success(
+        willNotify
+          ? `お知らせを更新しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`
+          : 'お知らせを非公開で更新しました(メール通知は行いません)。',
+      );
       setSaving(false);
       return;
     }
@@ -167,8 +174,10 @@ export default function AdminAnnouncementsPage() {
     setDialogOpen(false);
     setForm({ title: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
     setBlocks([]);
+    /* 新規作成は is_published=true がデフォルト (migration 141) なので必ず enqueue。
+       quiet hours は enqueue API 側で scheduled_at を翌朝 07:00 に shift する。 */
     await enqueueNotification('announcement', (data as Announcement).id);
-    toast.success('お知らせを投稿しました。2時間後に対象社員へメール通知されます。');
+    toast.success(`お知らせを投稿しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
     setSaving(false);
   }
 

@@ -14,7 +14,7 @@ import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
-import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
+import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
 import { nextSortOrder } from '@/lib/sort-helpers';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
@@ -131,13 +131,19 @@ export default function AdminManualsPage() {
         setSaving(false);
         return;
       }
-      await enqueueNotification('manual', editingManual.id);
+      /* 非公開なら enqueue せず cancel + toast 切替 (旧 UX 嘘問題の修正) */
+      const isPublished = editingManual.is_published !== false;
+      const { willNotify } = await enqueueOrCancelByPublished('manual', editingManual.id, isPublished);
       await reloadManuals(tenantId);
       setDialogOpen(false);
       setEditingManual(null);
       setForm({ title: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
       setBlocks([]);
-      toast.success('業務マニュアルを更新しました。2時間後に対象社員へメール通知されます。');
+      toast.success(
+        willNotify
+          ? `業務マニュアルを更新しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`
+          : '業務マニュアルを非公開で更新しました(メール通知は行いません)。',
+      );
       setSaving(false);
       return;
     }
@@ -175,7 +181,7 @@ export default function AdminManualsPage() {
     setDialogOpen(false);
     setForm({ title: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
     setBlocks([]);
-    toast.success('業務マニュアルを投稿しました。2時間後に対象社員へメール通知されます。');
+    toast.success(`業務マニュアルを投稿しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
     setSaving(false);
   }
 

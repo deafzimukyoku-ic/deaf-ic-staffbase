@@ -28,7 +28,7 @@ import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
-import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
+import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
 import type { Category, Facility, TargetType, Position, ComplianceDoc } from '@/lib/types';
 
@@ -179,8 +179,14 @@ export default function AdminCompliancePage() {
         .eq('id', editDoc.id);
 
       if (error) { toast.error('保存に失敗しました'); setSaving(false); return; }
-      await enqueueNotification('compliance', editDoc.id);
-      toast.success('保存しました。社員は再確認が必要になります。2時間後にメール通知されます。');
+      /* 非公開なら enqueue せず cancel + 「メール通知しません」toast に切替 (旧 UX 嘘問題の修正) */
+      const isPublished = editDoc.is_published !== false;
+      const { willNotify } = await enqueueOrCancelByPublished('compliance', editDoc.id, isPublished);
+      toast.success(
+        willNotify
+          ? `保存しました。社員は再確認が必要になります。2時間後 (${QUIET_HOURS_LABEL}) にメール通知されます。`
+          : '非公開で保存しました(メール通知は行いません)。',
+      );
     } else {
       // 新規作成（sort_order は migration 092 適用後のみ付与）
       const nextOrder = await nextSortOrder(supabase, 'compliance_documents', tenantId);
@@ -206,7 +212,7 @@ export default function AdminCompliancePage() {
 
       if (error) { toast.error('作成に失敗しました'); setSaving(false); return; }
       if (inserted) await enqueueNotification('compliance', inserted.id);
-      toast.success('遵守事項を作成しました。2時間後に対象社員へメール通知されます。');
+      toast.success(`遵守事項を作成しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
     }
 
     setSaving(false);

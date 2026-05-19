@@ -46,6 +46,17 @@ export async function POST(req: NextRequest) {
   return handle(req);
 }
 
+/* 夜間メール抑止 (JST 23:00-07:00)。enqueue 側で scheduled_at を翌朝 07:00 に
+   shift しているので通常はここで発火しないが、過去キュー / 手動 enqueue / 異常系
+   への safety net として dispatch でも JST 時刻チェックを入れる。
+   quiet 範囲なら全 row を未送信のまま温存して return。次の cron tick (10 分後) で
+   再評価され、quiet を抜けた瞬間に送信開始。 */
+function isInQuietHoursJst(d: Date = new Date()): boolean {
+  const jst = new Date(d.getTime() + 9 * 3600_000);
+  const h = jst.getUTCHours();
+  return h >= 23 || h < 7;
+}
+
 async function handle(req: NextRequest) {
   // Cron認証
   const auth = req.headers.get('authorization');
@@ -54,10 +65,16 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  /* 夜間 (JST 23:00-07:00) は何もせず return。
+     pg_cron は 10 分毎に叩くため、quiet 抜けた瞬間 (= JST 07:00 直後の tick) に再評価して送信される。 */
+  if (isInQuietHoursJst()) {
+    return NextResponse.json({ message: 'quiet hours (JST 23:00-07:00), skipping', processed: 0, sent: 0, skipped: 0 });
+  }
+
   /* メール内の URL リンク用。優先順位:
        env APP_URL → env NEXT_PUBLIC_APP_URL → req.nextUrl.origin (実際の Host)
      Vercel に env 未設定でも、本番ドメインで叩いた場合は origin から取得して継続。
-     localhost で叩いた場合は localhost:6001 になるためメール内のリンクも localhost に
+     localhost で叩いた場合は localhost:4003 になるためメール内のリンクも localhost に
      なるが、ローカル検証時の挙動として許容範囲。 */
   const appUrl =
     process.env.APP_URL ||
@@ -308,7 +325,7 @@ async function processTenantDigest(
     .select('company_name')
     .eq('id', tenantId)
     .single();
-  const companyName = tenant?.company_name || '名古屋ろう国際センター';
+  const companyName = tenant?.company_name || 'diletto staffbase';
 
   /* 社員ごとに digest メール構築 → batch send */
   const emails: Array<{ from: string; to: string[]; subject: string; html: string; text: string }> = [];
