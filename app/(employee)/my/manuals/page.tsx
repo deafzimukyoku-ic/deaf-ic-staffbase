@@ -70,12 +70,13 @@ function MyManualsPageInner() {
           .eq('is_published', true)
           .order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true });
 
-        const { data: reads } = await supabase
-          .from('manual_reads')
-          .select('manual_id')
-          .eq('employee_id', me.id);
-
-        const readSet = new Set((reads || []).map((r) => r.manual_id));
+        /* 既読判定は版考慮 (content-version-tracking)。manual_view_logs の
+           最終閲覧 (lastAt) が manuals.updated_at 以上なら「現版既読」。
+           編集後 (updated_at 前進) は再閲覧するまで未読に戻る。
+           manual_reads (ever-read 記録) は markRead で引き続き記録するが、
+           版考慮の表示判定には使わない。 */
+        const vs = await fetchMyViewSummary(supabase, 'manual_view_logs', me.id);
+        setViewSummaries(vs);
 
         // 自分の所属 facility 集合（主所属 + 兼任先 / migration 130）
         const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
@@ -89,11 +90,10 @@ function MyManualsPageInner() {
           return true;
         }) as Manual[];
 
-        setItems(docList.map((m) => ({ ...m, isRead: readSet.has(m.id) })));
-
-        /* 確認ボタン履歴の集計 */
-        const vs = await fetchMyViewSummary(supabase, 'manual_view_logs', me.id);
-        setViewSummaries(vs);
+        setItems(docList.map((m) => ({
+          ...m,
+          isRead: (vs.get(m.id)?.lastAt ?? '') >= m.updated_at,
+        })));
 
         try {
           const catRes = await fetch('/api/categories?type=manual');

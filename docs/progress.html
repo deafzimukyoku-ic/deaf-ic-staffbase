@@ -47,7 +47,29 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-18（rebrand: diletto- → brand- 着手） / 全体完了率: 約 97%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-20（content-version-tracking 実装） / 全体完了率: 約 97%</p>
+
+<!-- 2026-05-20 計画 #8: content-version-tracking (閲覧レポート + ダッシュボードの版整合) -->
+<div class="phase">
+  <h2>content-version-tracking — 閲覧レポート + ダッシュボードの版整合 (2026-05-20) <span class="phase-pct">90%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>ダッシュボード「社員進捗一覧」と閲覧レポートで遵守事項カウントに +1 のズレ (deaf-ic 実データ 3 名)。ダッシュボード (185/187) は compliance を現版 ack のみ集計、閲覧レポートは view_log を版無視で「✓既読」。書類編集で乖離。詳細仕様: <code>docs/features/content-version-tracking.md</code></td><td class="files">docs/features/content-version-tracking.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>root-cause-fix → feature-impact-spec で仕様確定・承認済</td></tr>
+      <tr><td>C-1</td><td>migration 188: announcements に updated_at + BEFORE UPDATE トリガ / trainings に recert_at。両方 created_at バックフィル</td><td class="files">supabase/migrations/188_content_version_columns.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>DB 適用は C-9</td></tr>
+      <tr><td>C-2</td><td>migration 189: employee_progress view + get_my_subordinate_progress RPC を版考慮集計に再定義 (列構造不変)</td><td class="files">supabase/migrations/189_progress_version_aware.sql</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>DB 適用は C-9</td></tr>
+      <tr><td>C-3</td><td>型定義: Announcement.updated_at / Training.recert_at</td><td class="files">lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+      <tr><td>C-4</td><td>閲覧レポート API: items に version_at 正規化を追加</td><td class="files">app/api/reports/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>training=recert_at, 他=updated_at</td></tr>
+      <tr><td>C-5</td><td>ReportMatrix: 現版/旧版/未読 3-way セル + サマリー3分割 + CSV + tooltip</td><td class="files">components/admin/ReportMatrix.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>旧版=琥珀 ⚠ + テキスト併用</td></tr>
+      <tr><td>C-6</td><td>研修編集 UI: 「再受講を求める」チェックボックス (admin + mgr)</td><td class="files">app/(admin)/admin/trainings/page.tsx, app/(manager)/mgr/trainings/[id]/edit/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ON 時のみ recert_at 前進</td></tr>
+      <tr><td>C-7</td><td>社員ページ版考慮化: my/announcements・my/manuals の isRead / my/dashboard 集計 / layout 赤バッジ</td><td class="files">app/(employee)/my/announcements/page.tsx, my/manuals/page.tsx, my/dashboard/page.tsx, layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>view_log 版考慮判定に統一</td></tr>
+      <tr><td>C-8</td><td>両 repo build 検証</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>staffbase + deaf-ic とも exit 0</td></tr>
+      <tr><td>C-9</td><td>migration 188/189 を両 Supabase に適用</td><td class="files">—</td><td><span class="status doing">進行中</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr><td>C-10</td><td>localhost 動作確認 (3-way 表示 / ダッシュボード一致)</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>—</td></tr>
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① ダッシュボード compliance とレポート「現版既読」が完全一致 ② 未編集アイテムは誰も旧版にならない ③ 188 バックフィルで「全件が今編集された」誤判定が起きない ④ 研修「再受講を求める」OFF 編集で既存合格者が無影響 ⑤ RPC RETURNS TABLE が 187 と同一でダッシュボード UI 無変更 ⑥ my/announcements・my/manuals・my/dashboard・layout バッジが版考慮で一貫 ⑦ shift_manager に新権限差分なし ⑧ 両 repo 色クラス以外差分なし</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-05-18 計画 #6: rebrand diletto- → brand- (見た目維持・識別子のみ) -->
 <div class="phase">

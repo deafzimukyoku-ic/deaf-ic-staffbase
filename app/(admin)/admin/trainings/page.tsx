@@ -46,6 +46,9 @@ export default function AdminTrainingsPage() {
   }>({ title: '', body: '', pdf_storage_path: '', youtube_url: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [editingTraining, setEditingTraining] = useState<Training | null>(null);
+  /* 編集時のみ: ON にすると recert_at を進めて全受講者に再受講を要求する
+     (content-version-tracking)。編集ダイアログを開くたび既定 OFF。 */
+  const [requireRecert, setRequireRecert] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const supabase = createClient();
@@ -127,10 +130,14 @@ export default function AdminTrainingsPage() {
     };
 
     if (editingTraining) {
-      // 更新（updated_by 記録）
+      /* 更新（updated_by 記録）。requireRecert=ON のときだけ recert_at を now() に
+         進め、過去の合格を「旧版」にして再受講を促す (content-version-tracking)。
+         OFF なら recert_at を update 句に含めず据え置く。 */
+      const updatePayload: Record<string, unknown> = { ...trainingData, updated_by: myEmployeeId };
+      if (requireRecert) updatePayload.recert_at = new Date().toISOString();
       const { error } = await supabase
         .from('trainings')
-        .update({ ...trainingData, updated_by: myEmployeeId })
+        .update(updatePayload)
         .eq('id', editingTraining.id);
 
       if (error) {
@@ -184,6 +191,7 @@ export default function AdminTrainingsPage() {
 
   function openEdit(t: Training) {
     setEditingTraining(t);
+    setRequireRecert(false); /* 編集ダイアログを開くたび既定 OFF */
     setForm({
       title: t.title,
       body: t.body || '',
@@ -290,6 +298,7 @@ export default function AdminTrainingsPage() {
           />
           <Button onClick={() => {
             setEditingTraining(null);
+            setRequireRecert(false);
             setBlocks([]); setForm({ title: '', body: '', pdf_storage_path: '', youtube_url: '', category_id: selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
             setDialogOpen(true);
           }}>+ 研修を追加</Button>
@@ -383,6 +392,25 @@ export default function AdminTrainingsPage() {
               onChange={(id) => setForm({ ...form, category_id: id })}
               label="カテゴリ（任意）"
             />
+            {/* 再受講要求チェック: 編集時のみ表示。研修の内容を大きく変えたときに ON にする。
+               content-version-tracking — ON で recert_at を進め、過去の合格を旧版化。 */}
+            {editingTraining && (
+              <label className="flex items-start gap-2 rounded-md border border-brand-gray/15 bg-brand-beige/30 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={requireRecert}
+                  onChange={(e) => setRequireRecert(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span className="text-sm">
+                  <span className="font-bold">この変更で再受講を求める</span>
+                  <span className="block text-xs text-brand-gray-light mt-0.5">
+                    ON にすると、これまで合格した社員も「再受講が必要」扱いになり、閲覧レポート・
+                    ダッシュボードで未達成に戻ります。誤字修正など軽微な編集では OFF のままにしてください。
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>キャンセル</Button>

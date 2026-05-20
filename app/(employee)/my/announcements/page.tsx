@@ -141,12 +141,13 @@ export default function MyAnnouncementsPage() {
           .eq('is_published', true)
           .order('sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true });
 
-        const { data: reads } = await supabase
-          .from('announcement_reads')
-          .select('announcement_id')
-          .eq('employee_id', me.id);
-
-        const readSet = new Set((reads || []).map((r) => r.announcement_id));
+        /* 既読判定は版考慮 (content-version-tracking)。announcement_view_logs の
+           最終閲覧 (lastAt) が announcements.updated_at 以上なら「現版既読」。
+           編集後 (updated_at 前進) は再閲覧するまで未読に戻る。
+           announcement_reads (ever-read 記録) は markRead で引き続き記録するが、
+           版考慮の表示判定には使わない。 */
+        const vs = await fetchMyViewSummary(supabase, 'announcement_view_logs', me.id);
+        setViewSummaries(vs);
 
         // 自分の所属 facility 集合（主所属 + 兼任先 / migration 130）
         const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
@@ -161,11 +162,10 @@ export default function MyAnnouncementsPage() {
           return true;
         }) as Announcement[];
 
-        setItems(docList.map((a) => ({ ...a, isRead: readSet.has(a.id) })));
-
-        /* 確認ボタン履歴の集計 */
-        const vs = await fetchMyViewSummary(supabase, 'announcement_view_logs', me.id);
-        setViewSummaries(vs);
+        setItems(docList.map((a) => ({
+          ...a,
+          isRead: (vs.get(a.id)?.lastAt ?? '') >= a.updated_at,
+        })));
 
         try {
           const catRes = await fetch('/api/categories?type=announcement');

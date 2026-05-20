@@ -43,6 +43,10 @@ interface ItemRow {
   target_position_ids?: string[] | null;
   category_id: string | null;
   created_at: string;
+  /* 旧版/現版 の判定基準日時 (content-version-tracking)。API が正規化:
+     training=recert_at / compliance・announcement・manual=updated_at。
+     最終閲覧 (last_viewed_at) がこれ以上なら「現版」、未満なら「旧版」。 */
+  version_at: string;
 }
 interface EmpRow {
   id: string;
@@ -366,28 +370,35 @@ function ReportBody({
     });
   }
 
-  /* 全体既読率 = (対象 × 既読セル数) / (対象セル総数)。「対象外」セルは分母から除外。 */
+  /* セルを 現版 / 旧版 / 未読 の 3-way で集計。「対象外」セルは分母から除外。
+     全体既読率 = 現版既読 / 対象セル総数。旧版 (編集後に未再閲覧) は既読扱いしない
+     → ダッシュボード達成率と同じ意味になる (content-version-tracking)。 */
   let totalCells = 0;
-  let readCells = 0;
+  let currentCells = 0;
+  let staleCells = 0;
   for (const it of items) {
     const aud = audienceFor(it);
     totalCells += aud.length;
     for (const e of aud) {
       const v = viewMap.get(`${e.id}__${it.id}`);
-      if (v && v.count > 0) readCells += 1;
+      if (!v || v.count === 0) continue; /* 未読 */
+      if (v.last_viewed_at >= it.version_at) currentCells += 1;
+      else staleCells += 1;
     }
   }
-  const readRate = totalCells > 0 ? Math.round((readCells / totalCells) * 100) : 0;
+  const unreadCells = totalCells - currentCells - staleCells;
+  const readRate = totalCells > 0 ? Math.round((currentCells / totalCells) * 100) : 0;
 
   function exportCsv() {
-    /* マトリクス CSV: 行=社員、列=アイテム。セルは閲覧回数（対象外は空、未読は0）。 */
+    /* マトリクス CSV: 行=社員、列=アイテム。セルは版状態（現版(N) / 旧版(N) / 未読、対象外は空）。 */
     const head = ['社員', '所属', ...items.map((it) => it.title)];
     const rows = employees.map((e) => {
       const cells = items.map((it) => {
         const aud = audienceFor(it);
         if (!aud.find((x) => x.id === e.id)) return '';
         const v = viewMap.get(`${e.id}__${it.id}`);
-        return v ? String(v.count) : '0';
+        if (!v || v.count === 0) return '未読';
+        return `${v.last_viewed_at < it.version_at ? '旧版' : '現版'}(${v.count})`;
       });
       return [e.name, e.facility_name, ...cells];
     });
@@ -456,12 +467,14 @@ function ReportBody({
         </Button>
       </div>
 
-      {/* サマリーカード */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* サマリーカード — 現版/旧版/未読 の 3-way 内訳 */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryCard label="社員数" value={`${employees.length} 名`} />
         <SummaryCard label="アイテム数" value={`${items.length} 件`} />
-        <SummaryCard label="既読セル" value={`${readCells} / ${totalCells}`} />
-        <SummaryCard label="全体既読率" value={`${readRate}%`} highlight={readRate < 50} />
+        <SummaryCard label="現版既読" value={`${currentCells} / ${totalCells}`} />
+        <SummaryCard label="旧版閲覧" value={`${staleCells}`} highlight={staleCells > 0} />
+        <SummaryCard label="未読" value={`${unreadCells}`} />
+        <SummaryCard label="現版既読率" value={`${readRate}%`} highlight={readRate < 50} />
       </div>
 
       {/* マトリクス */}
@@ -601,10 +614,15 @@ function ReportBody({
                         </td>
                       );
                     }
-                    /* ② tooltip 用に最近の閲覧履歴を YYYY/MM/DD HH:mm:ss で連結 */
-                    const tooltipText = v.recent_views && v.recent_views.length > 0
-                      ? `直近${v.recent_views.length}回:\n` + v.recent_views.map((iso) => formatDateTime(iso)).join('\n')
-                      : `最終閲覧: ${formatDateTime(v.last_viewed_at)}`;
+                    /* 旧版判定: 最終閲覧が版基準日時 (version_at) より前なら「旧版」
+                       (content-version-tracking)。ISO timestamptz 文字列の辞書比較。 */
+                    const isStale = v.last_viewed_at < it.version_at;
+                    /* ② tooltip 用に最近の閲覧履歴を YYYY/MM/DD HH:mm:ss で連結。
+                       旧版セルは更新前の閲覧である旨を先頭に付ける。 */
+                    const tooltipText = (isStale ? '※この閲覧履歴は旧版（更新前）のものです。再閲覧で「現版」に戻ります。\n\n' : '')
+                      + (v.recent_views && v.recent_views.length > 0
+                        ? `直近${v.recent_views.length}回:\n` + v.recent_views.map((iso) => formatDateTime(iso)).join('\n')
+                        : `最終閲覧: ${formatDateTime(v.last_viewed_at)}`);
                     /* ① 研修のみ: 提出データから合否バッジ + 判定ボタンを表示 */
                     const sub = category === 'training' ? submissionMap.get(`${e.id}__${it.id}`) : undefined;
                     /* ⑨ 合否履歴 tooltip: 全提出履歴（新しい順）を 提出日時 → 判定結果 → 判定日時 → コメント の形で連結 */
@@ -625,11 +643,18 @@ function ReportBody({
                     return (
                       <td
                         key={it.id}
-                        className="px-2 py-2 whitespace-nowrap bg-white"
-                        style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
+                        className="px-2 py-2 whitespace-nowrap"
+                        style={{
+                          background: isStale ? '#fffbeb' : '#ffffff',
+                          boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)',
+                        }}
                       >
-                        <div className="text-brand-blue font-medium" title={tooltipText} style={{ cursor: 'help' }}>
-                          ✓ {v.count} 回
+                        <div
+                          className={`font-medium ${isStale ? 'text-amber-700' : 'text-brand-blue'}`}
+                          title={tooltipText}
+                          style={{ cursor: 'help' }}
+                        >
+                          {isStale ? `⚠ 旧版 ${v.count} 回` : `✓ 現版 ${v.count} 回`}
                         </div>
                         <div className="text-[10px] text-brand-gray-light">{formatDate(v.last_viewed_at)}</div>
                         {category === 'training' && (

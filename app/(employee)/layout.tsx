@@ -67,17 +67,19 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
       const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
 
       // 未確認/未読/未合格のカウント計算（施設スコープ + position スコープ考慮）
-      type Row = { id: string; updated_at?: string; target_type: TargetType; target_facility_ids: string[] | null; target_position_ids: string[] | null };
-      const [compRes, trainRes, annRes, manRes, ackRes, subRes, readRes, manReadRes, threadRes, msgReadRes, docResubmit] = await Promise.all([
+      type Row = { id: string; updated_at?: string; recert_at?: string; target_type: TargetType; target_facility_ids: string[] | null; target_position_ids: string[] | null };
+      const [compRes, trainRes, annRes, manRes, ackRes, subRes, annViewRes, manViewRes, threadRes, msgReadRes, docResubmit] = await Promise.all([
         // 非公開分はバッジ件数からも除外（admin/manager が社員画面を閲覧した際にも正しく動かすため明示フィルタ。employee は RLS でも除外される）
+        // content-version-tracking: 版基準列 (updated_at / recert_at) も取得し現版判定する
         supabase.from('compliance_documents').select('id, updated_at, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
-        supabase.from('trainings').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
-        supabase.from('announcements').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
-        supabase.from('manuals').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('trainings').select('id, target_type, target_facility_ids, target_position_ids, recert_at').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('announcements').select('id, target_type, target_facility_ids, target_position_ids, updated_at').eq('tenant_id', me.tenant_id).eq('is_published', true),
+        supabase.from('manuals').select('id, target_type, target_facility_ids, target_position_ids, updated_at').eq('tenant_id', me.tenant_id).eq('is_published', true),
         supabase.from('compliance_acknowledgments').select('compliance_document_id, document_updated_at').eq('employee_id', me.id),
-        supabase.from('training_submissions').select('training_id, result').eq('employee_id', me.id),
-        supabase.from('announcement_reads').select('announcement_id').eq('employee_id', me.id),
-        supabase.from('manual_reads').select('manual_id').eq('employee_id', me.id),
+        supabase.from('training_submissions').select('training_id, result, submitted_at').eq('employee_id', me.id),
+        /* content-version-tracking: 既読は view_log の現版判定 (announcement_reads/manual_reads ではなく) */
+        supabase.from('announcement_view_logs').select('item_id, viewed_at').eq('employee_id', me.id),
+        supabase.from('manual_view_logs').select('item_id, viewed_at').eq('employee_id', me.id),
         /* 個別連絡の未読件数 (Phase G / migration 142) — 自分が参加するスレッドのメッセージのうち、
            自分以外が送信し、まだ message_reads に記録が無いもの */
         supabase.from('message_thread_members').select('thread_id').eq('employee_id', me.id),
@@ -102,13 +104,41 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         ((ackRes.data || []) as { compliance_document_id: string; document_updated_at: string }[])
           .map((a) => `${a.compliance_document_id}::${a.document_updated_at}`)
       );
+      /* content-version-tracking: 研修は「現 recert 版の合格提出」のみ達成扱い。
+         recert_at は scopedTrain から引く (= 公開 + audience 内の研修のみ判定対象)。 */
+      const trainRecert = new Map(scopedTrain.map((t) => [t.id, t.recert_at]));
       const passedTrainIds = new Set(
-        ((subRes.data || []) as { training_id: string; result: string }[])
-          .filter((s) => s.result === 'passed')
+        ((subRes.data || []) as { training_id: string; result: string; submitted_at: string }[])
+          .filter((s) => {
+            if (s.result !== 'passed') return false;
+            const rc = trainRecert.get(s.training_id);
+            return rc != null && s.submitted_at >= rc;
+          })
           .map((s) => s.training_id)
       );
-      const readAnnIds = new Set((readRes.data || []).map((r: { announcement_id: string }) => r.announcement_id));
-      const readManIds = new Set((manReadRes.data || []).map((r: { manual_id: string }) => r.manual_id));
+      /* お知らせ/マニュアルは view_log の最新 viewed_at が現 updated_at 以降なら既読。 */
+      const latestViewMap = (rows: { item_id: string; viewed_at: string }[]) => {
+        const m = new Map<string, string>();
+        for (const v of rows) {
+          const cur = m.get(v.item_id);
+          if (!cur || v.viewed_at > cur) m.set(v.item_id, v.viewed_at);
+        }
+        return m;
+      };
+      const annLatestView = latestViewMap((annViewRes.data || []) as { item_id: string; viewed_at: string }[]);
+      const manLatestView = latestViewMap((manViewRes.data || []) as { item_id: string; viewed_at: string }[]);
+      const readAnnIds = new Set(
+        scopedAnn.filter((a) => {
+          const lv = annLatestView.get(a.id);
+          return lv != null && a.updated_at != null && lv >= a.updated_at;
+        }).map((a) => a.id)
+      );
+      const readManIds = new Set(
+        scopedMan.filter((m) => {
+          const lv = manLatestView.get(m.id);
+          return lv != null && m.updated_at != null && lv >= m.updated_at;
+        }).map((m) => m.id)
+      );
 
       /* 個別連絡 未読件数 */
       const myThreadIds = ((threadRes.data || []) as { thread_id: string }[]).map((r) => r.thread_id);

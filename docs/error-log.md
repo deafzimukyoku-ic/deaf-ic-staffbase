@@ -599,4 +599,18 @@
   - **regression テスト**: 「外クリックで閉じる」「ESC で閉じる」「× ボタンで閉じる」「Cancel で閉じる」など、基本動作は手動で確認するチェックリストを作る
 
 ---
+## ダッシュボード「社員進捗一覧」と閲覧レポートで遵守事項カウントが食い違う (+1)
+
+- **発生日**: 2026-05-20
+- **発生箇所**: `components/admin/ReportMatrix.tsx`（閲覧レポート）/ `employee_progress` view（migration 185）/ `get_my_subordinate_progress` RPC（migration 187）
+- **フェーズ**: 本番運用中
+- **エラー内容**: admin ダッシュボードの遵守事項達成数（例 49）と閲覧レポートの既読セル数（例 50）がズレる。deaf-ic 実データで 3 名（濱田/田中/笠江）に gap=+1
+- **原因**: ダッシュボード（185/187）は compliance を `ca.document_updated_at = cd.updated_at` で「現バージョンの ack のみ」カウント = 書類編集後の旧 ack は外れる（仕様どおり正しい）。一方、閲覧レポートは `compliance_view_logs` に 1 行でもあれば「✓既読」で**バージョン概念がゼロ**。書類編集で `updated_at` が進むと、ダッシュボードからは外れるが view_log は残り続けるため、レポートだけ +1 多く出る。真因はレポート側（view_logs 集計）にバージョン判定が無いこと。
+- **解決方法**: content-version-tracking 機能（`docs/features/content-version-tracking.md`、migration 188/189）で 4 カテゴリすべてに版基準日時を持たせ、レポートもダッシュボードも「現版閲覧 = `view_log.viewed_at >= 版基準日時`」の同一ルールで判定するよう統一。ReportMatrix は「現版/旧版/未読」3-way 表示に。
+- **再発防止**:
+  - 「2 つの画面が同じ数字を出すべき」なら**集計の元データと述語を 1 つに統一する**（employee_progress / get_my_subordinate_progress / ReportMatrix が同じ「現版閲覧」述語を使う設計に）
+  - 新しい「閲覧/完了」テーブルを足すときは**バージョン（編集日時）との関係を最初に設計する**。append-only ログにバージョン列が無いと後から整合が取れない
+  - どちらの画面を「正」とするか仕様判断が割れる修正は、実装前にユーザーへ確認する
+
+---
 *(以降、新規エラーがあれば追記)*

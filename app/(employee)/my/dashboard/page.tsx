@@ -184,7 +184,7 @@ export default function EmployeeDashboardPage() {
       const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       const thisMonthTo = `${thisMonthEnd.getFullYear()}-${String(thisMonthEnd.getMonth() + 1).padStart(2, '0')}-${String(thisMonthEnd.getDate()).padStart(2, '0')}`;
 
-      const [templates, submissions, compliance, compAcks, trainings, trainSubs, announcements, annReads, manuals, manualReads, shiftReqs, threadMembers, messageReads, shiftPlanned] = await Promise.all([
+      const [templates, submissions, compliance, compAcks, trainings, trainSubs, announcements, annViewLogs, manuals, manualViewLogs, shiftReqs, threadMembers, messageReads, shiftPlanned] = await Promise.all([
         /* 175 同期: /my/documents と同じ列を取得して同じ filter + snapshot 判定を回す。
            id だけだと audience / is_company_issued / matrix 除外ができず、tTotal/tDone がズレる。 */
         supabase.from('document_templates').select('id, template_type, data_mode, is_company_issued, mapping').eq('tenant_id', tid),
@@ -194,14 +194,18 @@ export default function EmployeeDashboardPage() {
         /* audience filter (兼任 + position) のため target_type/facility_ids/position_ids も取得。
            旧コードは tenant 全件 count(*) で、他施設限定アイテム / position 違いアイテムが
            分母に入り達成率が永遠に下がる問題があった。 */
-        supabase.from('compliance_documents').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
-        supabase.from('compliance_acknowledgments').select('compliance_document_id').eq('employee_id', eid),
-        supabase.from('trainings').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
-        supabase.from('training_submissions').select('training_id').eq('employee_id', eid).eq('result', 'passed'),
-        supabase.from('announcements').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
-        supabase.from('announcement_reads').select('announcement_id').eq('employee_id', eid),
-        supabase.from('manuals').select('id, target_type, target_facility_ids, target_position_ids').eq('tenant_id', tid).eq('is_published', true),
-        supabase.from('manual_reads').select('manual_id').eq('employee_id', eid),
+        /* content-version-tracking: 版基準列 (compliance/announcement/manual=updated_at,
+           training=recert_at) を取得し、現版で完了しているかを判定する。
+           既読は announcement_reads / manual_reads ではなく append-only の
+           {category}_view_logs を参照 (編集後の再閲覧が反映されるように)。 */
+        supabase.from('compliance_documents').select('id, target_type, target_facility_ids, target_position_ids, updated_at').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('compliance_acknowledgments').select('compliance_document_id, document_updated_at').eq('employee_id', eid),
+        supabase.from('trainings').select('id, target_type, target_facility_ids, target_position_ids, recert_at').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('training_submissions').select('training_id, submitted_at').eq('employee_id', eid).eq('result', 'passed'),
+        supabase.from('announcements').select('id, target_type, target_facility_ids, target_position_ids, updated_at').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('announcement_view_logs').select('item_id, viewed_at').eq('employee_id', eid),
+        supabase.from('manuals').select('id, target_type, target_facility_ids, target_position_ids, updated_at').eq('tenant_id', tid).eq('is_published', true),
+        supabase.from('manual_view_logs').select('item_id, viewed_at').eq('employee_id', eid),
         supabase.from('shift_requests').select('id').eq('employee_id', eid).eq('month', nextMonth),
         /* 個別連絡 未読: 自分が参加するスレッドのメッセージで自分以外発信 & 未既読のもの (sidebar と同じロジック) */
         supabase.from('message_thread_members').select('thread_id').eq('employee_id', eid),
@@ -276,24 +280,61 @@ export default function EmployeeDashboardPage() {
       const scopedAnnList = ((announcements.data ?? []) as Row4[]).filter((r) => isItemInAudience(r, myFacilityIds, myPositionId));
       const scopedManList = ((manuals.data ?? []) as Row4[]).filter((r) => isItemInAudience(r, myFacilityIds, myPositionId));
 
-      /* 分子 (Done) は audience 外で誤って既読された行も除外して分子分母を一致させる。
-         過去に既読したが後から audience 外にされたアイテムは「対象外」扱いで完了率に影響させない。 */
-      const scopedCompIds = new Set(scopedCompList.map((r) => r.id));
-      const scopedTrainIds = new Set(scopedTrainList.map((r) => r.id));
-      const scopedAnnIds = new Set(scopedAnnList.map((r) => r.id));
-      const scopedManIds = new Set(scopedManList.map((r) => r.id));
+      /* content-version-tracking: 各カテゴリ「現版で完了済み」の item ID 集合を作る。
+         - compliance: ack.document_updated_at が現 updated_at と一致
+         - trainings : 合格提出の submitted_at が現 recert_at 以降
+         - announcements/manuals: view_log の最新 viewed_at が現 updated_at 以降
+         分子 (Done) は scoped list を回して done 集合に含まれる件数 → audience 外で
+         誤完了した行は自然に除外され、分子分母が一致する。 */
+      const compVer = new Map(((compliance.data ?? []) as { id: string; updated_at: string }[]).map((r) => [r.id, r.updated_at]));
+      const compDoneIds = new Set(
+        ((compAcks.data ?? []) as { compliance_document_id: string; document_updated_at: string | null }[])
+          .filter((a) => a.document_updated_at != null && a.document_updated_at === compVer.get(a.compliance_document_id))
+          .map((a) => a.compliance_document_id),
+      );
+      const trainVer = new Map(((trainings.data ?? []) as { id: string; recert_at: string }[]).map((r) => [r.id, r.recert_at]));
+      const trainDoneIds = new Set(
+        ((trainSubs.data ?? []) as { training_id: string; submitted_at: string }[])
+          .filter((s) => {
+            const ver = trainVer.get(s.training_id);
+            return ver != null && s.submitted_at >= ver;
+          })
+          .map((s) => s.training_id),
+      );
+      /* view_log は append-only。item ごとの最新 viewed_at を取り updated_at と比較。 */
+      const viewDoneIds = (
+        verData: { id: string; updated_at: string }[],
+        viewData: { item_id: string; viewed_at: string }[],
+      ): Set<string> => {
+        const verMap = new Map(verData.map((r) => [r.id, r.updated_at]));
+        const latest = new Map<string, string>();
+        for (const v of viewData) {
+          const cur = latest.get(v.item_id);
+          if (!cur || v.viewed_at > cur) latest.set(v.item_id, v.viewed_at);
+        }
+        const done = new Set<string>();
+        for (const [itemId, lv] of latest) {
+          const ver = verMap.get(itemId);
+          if (ver != null && lv >= ver) done.add(itemId);
+        }
+        return done;
+      };
+      const annDoneIds = viewDoneIds(
+        (announcements.data ?? []) as { id: string; updated_at: string }[],
+        (annViewLogs.data ?? []) as { item_id: string; viewed_at: string }[],
+      );
+      const manualDoneIds = viewDoneIds(
+        (manuals.data ?? []) as { id: string; updated_at: string }[],
+        (manualViewLogs.data ?? []) as { item_id: string; viewed_at: string }[],
+      );
       const cTotal = scopedCompList.length;
-      const cDone = ((compAcks.data ?? []) as { compliance_document_id: string }[])
-        .filter((a) => scopedCompIds.has(a.compliance_document_id)).length;
+      const cDone = scopedCompList.filter((r) => compDoneIds.has(r.id)).length;
       const trTotal = scopedTrainList.length;
-      const trDone = ((trainSubs.data ?? []) as { training_id: string }[])
-        .filter((s) => scopedTrainIds.has(s.training_id)).length;
+      const trDone = scopedTrainList.filter((r) => trainDoneIds.has(r.id)).length;
       const aTotal = scopedAnnList.length;
-      const aDone = ((annReads.data ?? []) as { announcement_id: string }[])
-        .filter((r) => scopedAnnIds.has(r.announcement_id)).length;
+      const aDone = scopedAnnList.filter((r) => annDoneIds.has(r.id)).length;
       const mTotal = scopedManList.length;
-      const mDone = ((manualReads.data ?? []) as { manual_id: string }[])
-        .filter((r) => scopedManIds.has(r.manual_id)).length;
+      const mDone = scopedManList.filter((r) => manualDoneIds.has(r.id)).length;
       const reqDone = (shiftReqs.data?.length || 0) > 0;
 
       /* 個別連絡 未読件数 (sidebar layout と同じロジック) */
@@ -340,10 +381,9 @@ export default function EmployeeDashboardPage() {
           .gte('created_at', sinceIso),
       ]);
 
-      const readAnnSet = new Set((annReads.data || []).map((r: { announcement_id: string }) => r.announcement_id));
-      const confirmedCompIds = new Set((compAcks.data || []).map((a: { compliance_document_id: string }) => a.compliance_document_id));
-      const passedTrainIds = new Set((trainSubs.data || []).map((s: { training_id: string }) => s.training_id));
-      const readManualSet = new Set((manualReads.data || []).map((r: { manual_id: string }) => r.manual_id));
+      /* 「最近の更新」フィードの未対応判定も content-version-tracking の現版完了集合
+         (compDoneIds / trainDoneIds / annDoneIds / manualDoneIds) を流用する。
+         → 編集後に「現版未完了」へ戻ったアイテムもフィードに再掲される。 */
 
       const scopedAnn = applyScopeFilter((recentAnn.data || []) as ScopedRow[], me.facility_id);
       const scopedComp = applyScopeFilter((recentComp.data || []) as ScopedRow[], me.facility_id);
@@ -351,19 +391,19 @@ export default function EmployeeDashboardPage() {
       const scopedManual = applyScopeFilter((recentManual.data || []) as ScopedRow[], me.facility_id);
 
       const allUpdates: UpdateItem[] = [
-        ...scopedAnn.filter(a => !readAnnSet.has(a.id)).map(a => ({
+        ...scopedAnn.filter(a => !annDoneIds.has(a.id)).map(a => ({
           kind: 'announcement' as const, id: a.id, title: a.title || '（無題）',
           createdAt: a.created_at, href: '/my/announcements', icon: '📢', label: 'お知らせ',
         })),
-        ...scopedComp.filter(c => !confirmedCompIds.has(c.id)).map(c => ({
+        ...scopedComp.filter(c => !compDoneIds.has(c.id)).map(c => ({
           kind: 'compliance' as const, id: c.id, title: c.title || '（無題）',
           createdAt: c.created_at, href: '/my/compliance', icon: '✅', label: '遵守事項',
         })),
-        ...scopedTrain.filter(t => !passedTrainIds.has(t.id)).map(t => ({
+        ...scopedTrain.filter(t => !trainDoneIds.has(t.id)).map(t => ({
           kind: 'training' as const, id: t.id, title: t.title || '（無題）',
           createdAt: t.created_at, href: '/my/trainings', icon: '📚', label: '研修',
         })),
-        ...scopedManual.filter(m => !readManualSet.has(m.id)).map(m => ({
+        ...scopedManual.filter(m => !manualDoneIds.has(m.id)).map(m => ({
           kind: 'manual' as const, id: m.id, title: m.title || '（無題）',
           createdAt: m.created_at, href: '/my/manuals', icon: '📘', label: '業務マニュアル',
         })),

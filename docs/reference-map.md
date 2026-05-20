@@ -945,3 +945,34 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | **app/(admin)/admin/employees/[id]/page.tsx** | **`REQUIRED_BASIC_KEYS` で `last_name / first_name / last_name_kana / first_name_kana` を空文字 → null 化禁止。`saveBasicEdit` で送信前にトーストブロック** |
 
 理由: `employees.{last_name, first_name, last_name_kana, first_name_kana}` はすべて NOT NULL。フォームの「空文字 → null 一括変換」を素通しすると `null value in column "last_name" violates not-null constraint` で保存失敗する。フロントで空文字ブロックする。
+
+---
+
+## 16. コンテンツ版整合（content-version-tracking, migration 188-189, 2026-05-20）
+
+詳細仕様: `docs/features/content-version-tracking.md`
+
+| ファイル | 役割 |
+|---|---|
+| **supabase/migrations/188_content_version_columns.sql（新規）** | `announcements.updated_at` 追加 + BEFORE UPDATE トリガ `set_updated_at()` / `trainings.recert_at` 追加。両方 `created_at` でバックフィル |
+| **supabase/migrations/189_progress_version_aware.sql（新規）** | `employee_progress` view + `get_my_subordinate_progress` RPC を版考慮集計に再定義。列構造は 185/187 と不変 |
+
+### 「現版閲覧済み」判定ルール（4 カテゴリ共通）
+`{category}_view_logs.viewed_at >= 版基準日時` で判定。レポートもダッシュボードも同一ルール。
+
+| カテゴリ | 版基準日時 | 編集での前進 |
+|---|---|---|
+| 遵守事項 | `compliance_documents.updated_at` | 全編集（app 管理。ダッシュボードは `ack.document_updated_at` 一致でも等価） |
+| お知らせ | `announcements.updated_at` | 全編集（188 のトリガ） |
+| 業務マニュアル | `manuals.updated_at` | 全編集（app 管理・既存） |
+| 研修 | `trainings.recert_at` | admin/manager が編集時「再受講を求める」ON のときだけ |
+
+### 参照ファイル
+| ファイル | 参照内容 |
+|---|---|
+| app/api/reports/route.ts | items に `version_at` を正規化して返す（training=`recert_at`、他=`updated_at`） |
+| components/admin/ReportMatrix.tsx | 現版/旧版/未読 3-way セル。`last_viewed_at >= version_at` で判定 |
+| app/(admin)/admin/trainings/page.tsx, app/(manager)/mgr/trainings/[id]/edit/page.tsx | 「再受講を求める」チェック → ON 時 `recert_at: now()` |
+| app/(employee)/my/announcements/page.tsx, app/(employee)/my/manuals/page.tsx | `isRead` を view_log の現版判定に |
+| app/(employee)/my/dashboard/page.tsx, app/(employee)/layout.tsx | 進捗カウント / サイドバー赤バッジを版考慮に |
+| lib/types.ts | `Announcement.updated_at` / `Training.recert_at` |

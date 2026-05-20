@@ -682,6 +682,9 @@ export interface Training {
   content_blocks?: ContentBlockJson[];
   /** 公開フラグ。employee は is_published=true のみ閲覧可（migration 141） */
   is_published: boolean;
+  /** 再受講基準日時（migration 188）。閲覧 view_log がこれ以上なら現版。
+      admin/manager が編集時に「再受講を求める」を選んだときだけ前進。 */
+  recert_at: string;
   created_by?: string;
   updated_by?: string | null;
   creator?: PersonRef | null;
@@ -714,6 +717,9 @@ export interface Announcement {
   /** 公開フラグ。employee は is_published=true のみ閲覧可（migration 141） */
   is_published: boolean;
   created_at: string;
+  /** 編集日時（migration 188）。BEFORE UPDATE トリガで全編集時に更新。
+      閲覧 view_log がこれ以上なら現版。 */
+  updated_at: string;
   created_by: string | null;
   updated_by?: string | null;
   creator?: PersonRef | null;

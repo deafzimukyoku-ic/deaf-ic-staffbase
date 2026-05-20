@@ -79,7 +79,12 @@ export async function GET(req: NextRequest) {
      compliance/training/announcement/manual すべて 036 / 091 で同じ列構成 + 034 で category_id 追加済。
      並び順は admin/{category} ページと揃える: sort_order ASC（NULL は末尾）→ created_at ASC。
      target_position_ids は ReportMatrix の audienceFor (isItemInAudience) で position フィルタに使う。 */
-  const itemsSel = `id, ${cfg.titleField}, target_type, target_facility_ids, target_position_ids, category_id, sort_order, created_at`;
+  /* version_at: 旧版/現版 判定の基準列 (content-version-tracking, migration 188/189)。
+     training は recert_at (admin が「再受講を求める」を選んだときだけ前進)、
+     compliance/announcement/manual は updated_at (全編集で前進)。
+     レスポンスでは version_at に正規化して返す。 */
+  const versionCol = category === 'training' ? 'recert_at' : 'updated_at';
+  const itemsSel = `id, ${cfg.titleField}, target_type, target_facility_ids, target_position_ids, category_id, sort_order, created_at, ${versionCol}`;
   const { data: itemsData, error: itemsErr } = await supabase
     .from(cfg.itemsTable)
     .select(itemsSel)
@@ -210,6 +215,8 @@ export async function GET(req: NextRequest) {
       target_position_ids: it.target_position_ids ?? null,
       category_id: it.category_id,
       created_at: it.created_at,
+      /* 版基準日時。ReportMatrix が viewed_at と比較して現版/旧版を判定する。 */
+      version_at: it[versionCol] ?? it.created_at,
     })),
     categories: categoriesData || [],
     employees: (employeesData || []).map((e) => ({

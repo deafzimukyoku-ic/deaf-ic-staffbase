@@ -19,6 +19,9 @@ export default function EditTrainingPage({ params }: { params: Promise<{ id: str
   const [form, setForm] = useState({ title: '', pdf_storage_path: '', youtube_url: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  /* ON にすると recert_at を進めて全受講者に再受講を要求する
+     (content-version-tracking)。既定 OFF。 */
+  const [requireRecert, setRequireRecert] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -44,13 +47,17 @@ export default function EditTrainingPage({ params }: { params: Promise<{ id: str
     if (!form.title.trim()) return;
     setSaving(true);
 
+    /* requireRecert=ON のときだけ recert_at を進め、過去の合格を旧版化して
+       再受講を促す (content-version-tracking)。OFF なら据え置く。 */
+    const updatePayload: Record<string, unknown> = {
+      title: form.title.trim(),
+      pdf_storage_path: form.pdf_storage_path.trim() || null,
+      youtube_url: form.youtube_url.trim() || null,
+    };
+    if (requireRecert) updatePayload.recert_at = new Date().toISOString();
     const { error } = await supabase
       .from('trainings')
-      .update({
-        title: form.title.trim(),
-        pdf_storage_path: form.pdf_storage_path.trim() || null,
-        youtube_url: form.youtube_url.trim() || null,
-      })
+      .update(updatePayload)
       .eq('id', id);
 
     if (error) {
@@ -99,6 +106,24 @@ export default function EditTrainingPage({ params }: { params: Promise<{ id: str
               placeholder="trainings/safety.pdf"
             />
           </div>
+
+          {/* 再受講要求チェック。研修の内容を大きく変えたときに ON にする。
+             content-version-tracking — ON で recert_at を進め過去の合格を旧版化。 */}
+          <label className="flex items-start gap-2 rounded-md border border-brand-gray/15 bg-brand-beige/30 p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={requireRecert}
+              onChange={(e) => setRequireRecert(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            <span className="text-sm">
+              <span className="font-bold">この変更で再受講を求める</span>
+              <span className="block text-xs text-brand-gray-light mt-0.5">
+                ON にすると、これまで合格した社員も「再受講が必要」扱いになり、閲覧レポート・
+                ダッシュボードで未達成に戻ります。誤字修正など軽微な編集では OFF のままにしてください。
+              </span>
+            </span>
+          </label>
 
           <div className="flex justify-end pt-2">
             <Button onClick={handleSave} disabled={saving || !form.title.trim()}>
