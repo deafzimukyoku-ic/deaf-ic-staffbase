@@ -613,4 +613,22 @@
   - どちらの画面を「正」とするか仕様判断が割れる修正は、実装前にユーザーへ確認する
 
 ---
+## 招待受諾ページで「パスワード設定に失敗しました / Auth session missing!」が間欠発生
+
+- **発生日**: 2026-05-21
+- **発生箇所**: `app/(auth)/invite/accept/page.tsx` `handleSetPassword` → `supabase.auth.updateUser({ password })`。真因は `lib/supabase/client.ts`
+- **フェーズ**: 運用中バグ修正（staffbase で顕在化 → deaf-ic も同一構造のため予防同期）
+- **エラー内容**: 招待リンクから初回パスワード設定フォームに到達し、パスワードを入力して送信すると `updateUser` が `AuthSessionMissingError: Auth session missing!` を返す。`handleAuth` の `setSession` 成功・フォーム表示までは正常で、送信時に**間欠的**に失敗する（再現で fail / pass の両方を観測）。
+- **原因**:
+  - `@supabase/ssr` の `createBrowserClient` は `flowType` を `'pkce'` に**固定**する（`createBrowserClient.js` で `flowType:"pkce"` をハード代入。オプションでは変更不可）。
+  - 招待 / 再設定リンクは `admin.generateLink({ type:'recovery' })` 由来。Supabase の `/auth/v1/verify` は PKCE challenge を持たないこのリンクを **implicit grant のハッシュ**（`#access_token=...&refresh_token=...&type=recovery`）でリダイレクトする（`?code=` ではない）。
+  - クライアントの `detectSessionInUrl`（`createBrowserClient` 既定 true）が有効なため、初期化時に SDK が `_getSessionFromURL` でこのハッシュを処理しようとし、`flowType==='pkce'` と implicit URL の不一致を検出して例外を throw する（`@supabase/auth-js` `GoTrueClient`）。SDK 側のセッション確立は失敗する。
+  - ページ側は `handleAuth` で手動 `setSession`（ハッシュ）/ `exchangeCodeForSession`（code）するフォールバックを持つが、**SDK の（壊れた）自動検出機構と手動ハンドラが同一クライアント上で競合**し、`updateUser` 時にセッションを読めず "Auth session missing!" が間欠発生する。**真因は「flowType:pkce 固定」と「implicit ハッシュ招待リンク」の不整合 + 二重処理の競合**。
+- **解決方法**: `lib/supabase/client.ts` の `createBrowserClient` に `{ auth: { detectSessionInUrl: false } }` を渡し、SDK の URL 自動検出を無効化（`createBrowserClient.js` は `detectSessionInUrl` を `options?.auth?.detectSessionInUrl ?? isBrowser()` で読むため、`false` 指定が確実に効く）。callback ページ（`invite/accept`, `reset-password/confirm`）は元から URL を自前解析して `setSession` / `exchangeCodeForSession` する設計なので、自動検出を切れば手動ハンドラが唯一かつ決定的な経路になり競合が消える。`flowType` は上書き不可のため `detectSessionInUrl` 無効化が取り得る最小修正。
+- **再発防止**:
+  - `lib/supabase/client.ts` のコメントに理由を明記（「不要そう」と削除されると再発するため）。
+  - 招待 / 再設定リンクは `admin.generateLink` 由来 = 常に implicit ハッシュ。callback ページで URL を自前処理する設計を維持し、SDK の `detectSessionInUrl` を再有効化しないこと。
+  - deaf-ic は dev-name-mask 分岐があるため、`createClient` の両分岐（mask ON/OFF）に `auth` オプションが必ず入るよう `authOptions` を共通化して併合。
+
+---
 *(以降、新規エラーがあれば追記)*
