@@ -975,6 +975,7 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | app/(admin)/admin/trainings/page.tsx, app/(manager)/mgr/trainings/[id]/edit/page.tsx | 「再受講を求める」チェック → ON 時 `recert_at: now()` |
 | app/(employee)/my/announcements/page.tsx, app/(employee)/my/manuals/page.tsx | `isRead` を view_log の現版判定に |
 | app/(employee)/my/dashboard/page.tsx, app/(employee)/layout.tsx | 進捗カウント / サイドバー赤バッジを版考慮に |
+| app/(employee)/my/trainings/page.tsx | §9 追補: 現版合格 (`submitted_at >= recert_at`) 判定。合格状況 / カテゴリカード / 研修カード / モーダルを recert 反映 |
 | lib/types.ts | `Announcement.updated_at` / `Training.recert_at` |
 
 ---

@@ -38,6 +38,17 @@ const RESULT_COLOR: Record<string, string> = {
   resubmit: 'bg-brand-blue/[0.07] text-brand-blue',
 };
 
+/* 現版合格 / 旧版合格 の判定 (content-version-tracking §9)。
+   研修編集で admin/manager が「再受講を求める」を ON にすると trainings.recert_at が
+   前進する。合格提出でも submitted_at が recert_at より前なら「旧版合格」= 再受講が必要。
+   recert_at は trainings.select('*') で取得済み、submitted_at も既存列。 */
+function isCurrentPass(t: Training, s: TrainingSubmission | null): boolean {
+  return !!s && s.result === 'passed' && s.submitted_at >= t.recert_at;
+}
+function isStalePass(t: Training, s: TrainingSubmission | null): boolean {
+  return !!s && s.result === 'passed' && s.submitted_at < t.recert_at;
+}
+
 /* TrainingsGrid: 受講モーダルを含むカテゴリ別グリッド。
    親 MyTrainingsPage の nested function として定義すると、Textarea の onChange で
    親 state (summaryTexts) を更新するたびに親が再レンダー → React が新しい関数参照を
@@ -69,8 +80,11 @@ function TrainingsGrid({
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
         {items.map(({ training, submission }) => {
-          const passed = submission?.result === 'passed';
-          const label = submission ? RESULT_LABEL[submission.result] : '未受講';
+          /* 現版合格のみ「合格」表示。旧版合格 (編集後の再受講待ち) は未達成扱い + 再受講ラベル。 */
+          const passed = isCurrentPass(training, submission);
+          const label = isStalePass(training, submission)
+            ? '再受講が必要'
+            : submission ? RESULT_LABEL[submission.result] : '未受講';
           return (
             <ItemGridCard
               key={training.id}
@@ -108,14 +122,21 @@ function TrainingsGrid({
                       <NewBadge createdAt={training.created_at} />
                     </div>
                     {submission && (
-                      <Badge className={`${RESULT_COLOR[submission.result]} border-none`}>
-                        {RESULT_LABEL[submission.result]}
+                      <Badge className={`${isStalePass(training, submission) ? 'bg-amber-100 text-amber-800' : RESULT_COLOR[submission.result]} border-none`}>
+                        {isStalePass(training, submission) ? '再受講が必要' : RESULT_LABEL[submission.result]}
                       </Badge>
                     )}
                   </div>
                 </DialogHeader>
 
                 <div className="space-y-4 pt-2">
+                  {/* 旧版合格 (recert 後 未再受講) は再受講を促す注意書きを最上部に出す。 */}
+                  {isStalePass(training, submission) && (
+                    <div className="bg-amber-50 border border-amber-300 p-4 rounded-md text-sm flex gap-2 text-amber-800">
+                      <span className="font-bold shrink-0">⚠ 再受講のお願い</span>
+                      <span>この研修は内容が更新されました。お手数ですが、もう一度受講して感想を提出してください。</span>
+                    </div>
+                  )}
                   {(training as any).body && (
                     <p className="text-sm text-brand-ink/80 leading-relaxed">{(training as any).body}</p>
                   )}
@@ -374,19 +395,21 @@ export default function MyTrainingsPage() {
   if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-2 border-brand-blue border-t-transparent rounded-full" /><span className="ml-3 text-sm text-brand-gray">読み込み中...</span></div>;
 
   const totalCount = items.length;
-  const passedCount = items.filter((i) => i.submission?.result === 'passed').length;
+  /* 現版合格のみカウント (content-version-tracking §9)。recert で旧版化した合格は除外。 */
+  const passedCount = items.filter((i) => isCurrentPass(i.training, i.submission)).length;
   const unfinishedCount = totalCount - passedCount;
   const progressPercent = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
 
   // カテゴリごとの統計
+  /* 未着手 / 要再提出 / 旧版合格(再受講が必要) を「未完了」に算入 (content-version-tracking §9) */
   const catStats = categories.map(cat => {
     const catItems = items.filter(i => i.training.category_id === cat.id);
-    const unfinished = catItems.filter(i => !i.submission || i.submission.result === 'resubmit').length;
+    const unfinished = catItems.filter(i => !i.submission || i.submission.result === 'resubmit' || isStalePass(i.training, i.submission)).length;
     return { ...cat, unfinished, total: catItems.length };
   });
 
   const uncategorizedItems = items.filter(i => !i.training.category_id);
-  const uncategorizedUnfinished = uncategorizedItems.filter(i => !i.submission || i.submission.result === 'resubmit').length;
+  const uncategorizedUnfinished = uncategorizedItems.filter(i => !i.submission || i.submission.result === 'resubmit' || isStalePass(i.training, i.submission)).length;
 
   if (!selectedCategory) {
     return (
@@ -425,7 +448,7 @@ export default function MyTrainingsPage() {
           {catStats.map((cat) => {
             const catItems = items.filter(i => i.training.category_id === cat.id);
             const catTotal = catItems.length;
-            const catDone = catItems.filter(i => i.submission?.result === 'passed').length;
+            const catDone = catItems.filter(i => isCurrentPass(i.training, i.submission)).length;
             const catPct = catTotal > 0 ? Math.round((catDone / catTotal) * 100) : 0;
 
             return (
