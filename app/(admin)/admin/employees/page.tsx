@@ -57,6 +57,8 @@ export default function EmployeesPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return employees.filter((e) => {
+      // シフト統括 (shift_manager) は別セクション表示。通常社員テーブルからは除外
+      if (e.role === 'shift_manager') return false;
       // 施設
       if (facilityFilter === '__none__') {
         if (e.facility_id) return false;
@@ -79,13 +81,31 @@ export default function EmployeesPage() {
     });
   }, [employees, search, facilityFilter, roleFilter, statusFilter]);
 
+  /* シフト統括 (shift_manager) 専用アカウント: 通常社員テーブルとは別セクションで表示。
+     検索ボックスと在籍状況フィルタのみ適用 (施設・ロールフィルタは通常社員テーブル専用)。 */
+  const shiftManagerList = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return employees.filter((e) => {
+      if (e.role !== 'shift_manager') return false;
+      if (statusFilter !== 'all' && e.status !== statusFilter) return false;
+      if (q) {
+        const hay = `${e.last_name}${e.first_name}${e.last_name_kana || ''}${e.first_name_kana || ''}${e.employee_number}${e.email}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [employees, search, statusFilter]);
+
+  /* 「社員数」分母: shift_manager を除いた通常社員の総数 */
+  const normalTotal = useMemo(() => employees.filter((e) => e.role !== 'shift_manager').length, [employees]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold whitespace-nowrap">社員管理</h1>
           <p className="text-sm text-brand-gray mt-1">
-            {loading ? '読み込み中...' : `${filtered.length} / ${employees.length}名`}
+            {loading ? '読み込み中...' : `${filtered.length} / ${normalTotal}名`}
           </p>
         </div>
         <div className="flex items-center flex-wrap gap-2">
@@ -158,6 +178,17 @@ export default function EmployeesPage() {
       )}
 
       {!loading && <EmployeeTable employees={filtered} facilityMap={facilityMap} />}
+
+      {/* シフト統括アカウント: 通常社員と別エリア。shift_manager が 1 件以上のときのみ表示。 */}
+      {!loading && shiftManagerList.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-bold">シフト統括アカウント</h2>
+          <p className="text-sm text-brand-gray mt-1 mb-3">
+            シフト・送迎専用のアカウントです。社員数には含まれません。
+          </p>
+          <EmployeeTable employees={shiftManagerList} facilityMap={facilityMap} />
+        </div>
+      )}
     </div>
   );
 }

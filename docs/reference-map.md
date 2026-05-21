@@ -976,3 +976,25 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | app/(employee)/my/announcements/page.tsx, app/(employee)/my/manuals/page.tsx | `isRead` を view_log の現版判定に |
 | app/(employee)/my/dashboard/page.tsx, app/(employee)/layout.tsx | 進捗カウント / サイドバー赤バッジを版考慮に |
 | lib/types.ts | `Announcement.updated_at` / `Training.recert_at` |
+
+---
+
+## 17. シフト統括アカウントの社員一覧分離（shift-manager-account-separation, 2026-05-20）
+
+詳細仕様: `docs/features/shift-manager-account-separation.md`
+
+`role='shift_manager'`（migration 140）は社員管理の対象外という運用。社員管理一覧
+（`/admin/employees`）でのみ通常社員に混在＋社員数に算入されていたのを是正。
+
+| ファイル | 参照内容 |
+|---|---|
+| app/(admin)/admin/employees/page.tsx | `filtered` から `shift_manager` 除外 / 「社員数」分母を `normalTotal` に / `shiftManagerList` useMemo + 別セクション描画 |
+| components/admin/EmployeeTable.tsx | 無変更（通常社員・shift_manager 両セクションで再利用） |
+
+### 「社員数」と shift_manager 除外の現状（参照台帳）
+| 箇所 | shift_manager 除外 |
+|---|---|
+| `/admin/employees` 社員数 | 本機能で除外（`normalTotal`） |
+| mgr ダッシュボード「社員数」 | `get_my_subordinate_progress` RPC（migration 171）で除外済み |
+| admin ダッシュボード | employees 取得が `.neq('role','shift_manager')`（171 以降）で除外済み |
+| 閲覧レポート ReportMatrix「社員数」 | `/api/reports` が `.neq('role','shift_manager')` で除外済み |
