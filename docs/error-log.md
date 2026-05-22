@@ -631,4 +631,59 @@
   - deaf-ic は dev-name-mask 分岐があるため、`createClient` の両分岐（mask ON/OFF）に `auth` オプションが必ず入るよう `authOptions` を共通化して併合。
 
 ---
+## 日次出力モバイルで送迎ブロックが1列縦積みにならず3列のまま（記録漏れ補完）
+
+- **発生日**: 2026-05-19
+- **発生箇所**: `components/shift/DailyOutputFull.tsx` の `@media screen and (max-width:1023px)` + `ThreeColGrid`
+- **フェーズ**: モバイル対応バグ修正
+- **エラー内容**: 日次出力ページをモバイル幅で見ると送迎ブロックが1列縦積みにならず3列レイアウトのまま見切れる。先行コミット 7ea9679 の mobile fix で直したつもりが直っていなかった。
+- **原因**: 7ea9679 で `@media(max-width:1023px)` に `.transport-three-col { grid-template-columns:1fr }` を入れたが、React 側で各ブロックに `style={{ gridColumn: pos.col, gridRow: pos.row }}` を **inline 指定**。inline style は CSS より優先されるため子は依然 col2/col3 を要求 → ブラウザが implicit column を生成し、結局3列のまま。CSS だけ直す mobile fix が不完全だった。
+- **解決方法**: モバイル media query に `.transport-three-col > div { grid-column:1 !important; grid-row:auto !important }` を追加し、inline 指定を `!important` で打ち消して真の1列縦積みに。
+- **再発防止**: CSS の `grid-template-columns` を変えても、子要素の inline `gridColumn`/`gridRow` が残っていると implicit column で打ち消される。レイアウトをレスポンシブに切り替えるなら**子の明示配置も一緒にリセット**する。
+
+---
+## モーダルが開いた瞬間に下端までスクロールした状態で表示される（記録漏れ補完）
+
+- **発生日**: 2026-05-19
+- **発生箇所**: `components/ui/dialog.tsx` の `DialogContent`（base-ui Dialog Popup）
+- **フェーズ**: UX 改善（モーダル初期表示位置）
+- **エラー内容**: 長いモーダル（遵守事項詳細など）を開くと、最上部でなく下端付近にスクロールした状態で表示される。
+- **原因**: base-ui Dialog Popup の `initialFocus` default が「最初の tabbable element」。長いモーダルで内部ボタン（✓確認しました等）が最初の tabbable になると、ブラウザ標準の `scrollIntoView` でそのボタン位置までスクロールされ「開いた瞬間に下端表示」になる。
+- **解決方法**: `initialFocus={popupRef}` で popup 自身（最上部・常に viewport 内）に focus を向ける。focus 対象が viewport 内なら `scrollIntoView` が発火しない。`useEffect` で scrollTop=0 を後追いで当てる場当たり対応は不安定なため撤廃し、focus を最初から正しい場所へ向ける根本対応に切替。
+- **再発防止**: base-ui Popup の `initialFocus` default は first tabbable。長いモーダルでは内部要素への auto-focus が `scrollIntoView` を誘発する。`initialFocus` を popup ref に固定する。
+
+---
+## 研修モバイルで Drive 動画が見切れ + タップ無反応（記録漏れ補完）
+
+- **発生日**: 2026-05-19
+- **発生箇所**: `components/admin/BlockRenderer.tsx` の Drive 動画ブロック / `app/(employee)/my/trainings/page.tsx`
+- **フェーズ**: モバイル対応バグ修正
+- **エラー内容**: 研修のモバイル表示で Google Drive 動画が見切れる + タップしても反応しない。
+- **原因**: Drive `/preview` iframe はモバイルで Drive 側 UI バーが画面を占有 + cross-origin player の touch event 伝播が不安定。サイズ調整だけでは解決不可。
+- **解決方法**: 動画を `<video>` ネイティブ要素 + 自前 streaming proxy（`app/api/drive-video/[fileId]/route.ts` で drive.usercontent から Range ヘッダをフォワード + 206 Partial Content）で再生。iframe を廃止。`aspect-ratio` 16:9 + `object-contain`。
+- **再発防止**: cross-origin の埋め込み player はモバイルで touch / レイアウトが不安定。動画は可能な限りネイティブ `<video>` + 自前 proxy で配信する。
+
+---
+## 非公開保存なのに「2時間後にメール通知されます」toast が出る（記録漏れ補完）
+
+- **発生日**: 2026-05-19
+- **発生箇所**: `app/(admin)/admin/{announcements,compliance,manuals}/page.tsx` の `handleSave` edit 分岐
+- **フェーズ**: 本番運用中バグ修正
+- **エラー内容**: 4機能を「非公開」で保存しても「2時間後に対象社員へメール通知されます」toast が表示される。実メールは dispatcher 側で `is_published=false` を見て cancel するため送信はされないが、UX 上の嘘 + 無駄な queue 行作成があった。
+- **原因**: admin 各ページの `handleSave` edit 分岐が `is_published` を無視して常に `enqueueNotification` +「送信されます」toast を実行していた。
+- **解決方法**: `lib/notifications/queue.ts` に `enqueueOrCancelByPublished` helper を追加（`is_published=true` → enqueue / `false` → cancel）。3 admin ページの edit 分岐を helper 経由に。toast 文言も `is_published` で分岐（公開時のみ「通知されます」）。
+- **再発防止**: 通知を伴う保存は `is_published` を必ず判定。enqueue/toast を「公開状態ゲートのヘルパー1本」に集約し、ページごとの分岐コピペを排除する。
+
+---
+## /my/manuals がビルド時に useSearchParams CSR bailout エラー（記録漏れ補完）
+
+- **発生日**: 2026-05-18 頃
+- **発生箇所**: `app/(employee)/my/manuals/page.tsx`
+- **フェーズ**: ビルドエラー修正
+- **エラー内容**: 本番ビルドで `useSearchParams()` の CSR bailout エラーにより `/my/manuals` のプリレンダーが失敗。
+- **原因**: `useSearchParams()` を使うコンポーネントを `Suspense` でラップしていなかった。Next.js App Router は `useSearchParams` をクライアント境界として `Suspense` boundary を要求する。
+- **解決方法**: `/my/manuals` を `Suspense` でラップ。
+- **再発防止**: `useSearchParams()` を使うページ/コンポーネントは必ず `Suspense` boundary で包む。ビルド（`npm run build`）を push 前に通す運用で早期検出する。
+
+---
 *(以降、新規エラーがあれば追記)*
