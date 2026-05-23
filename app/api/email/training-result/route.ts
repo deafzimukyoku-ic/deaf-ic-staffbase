@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { resend, FROM_EMAIL } from '@/lib/resend';
+import { sendWebPushToEmployees } from '@/lib/push/server';
 
 const RESULT_LABELS: Record<string, string> = {
   passed: '合格',
@@ -81,6 +82,26 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: 'メール送信に失敗しました', detail: error.message }, { status: 500 });
+  }
+
+  /* Web Push 並行配信。呼び出し元は employeeEmail のみ持つので tenant スコープで逆引き。
+     メール本体は既に成功しているので失敗してもユーザーには通知しない */
+  try {
+    const { data: target } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('tenant_id', me.tenant_id)
+      .eq('email', employeeEmail)
+      .maybeSingle();
+    if (target?.id) {
+      await sendWebPushToEmployees(supabase, [target.id as string], {
+        title: `研修「${trainingTitle}」の判定結果`,
+        body: resultLabel + (comment ? ` ・ ${comment}` : ''),
+        url: '/my/trainings',
+      });
+    }
+  } catch (e) {
+    console.error('[training-result] push 配信に失敗 (本処理は成功)', e);
   }
 
   return NextResponse.json({ success: true });

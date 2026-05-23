@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProfileSection1Basic } from '@/components/employee/ProfileSection1Basic';
 import { ProfileSectionCommute } from '@/components/employee/ProfileSectionCommute';
 import { ProfileSectionContacts } from '@/components/employee/ProfileSectionContacts';
+import { PushSubscriptionSection } from '@/components/profile/PushSubscriptionSection';
 import { toast } from 'sonner';
 import type { Employee, CustomEmployeeField } from '@/lib/types';
 
@@ -88,6 +89,8 @@ export default function ProfilePage() {
           {saving ? '保存中...' : '保存する'}
         </Button>
       </div>
+
+      <PushSubscriptionSection />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex w-full overflow-x-auto no-scrollbar">

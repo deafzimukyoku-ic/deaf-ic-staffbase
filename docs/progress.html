@@ -47,7 +47,54 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-20（content-version-tracking 実装） / 全体完了率: 約 97%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-23（PWA Push 通知 + サイドバーログアウト移設 実装完了 / 本番 env 投入 + 実機検証待ち） / 全体完了率: 約 98%</p>
+
+<!-- 2026-05-23 計画 #9: PWA Push 通知 + サイドバーログアウト移設 -->
+<div class="phase">
+  <h2>PWA Push 通知 + サイドバーログアウト移設 (2026-05-23 機能完了 / Vercel env + 実機検証 待ち) <span class="phase-pct">95%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>(1) スマートフォンに「ホーム画面追加 → PWA 起動 → プッシュ通知受信」できる基盤を導入し、既存メール送信と<strong>完全同件数</strong>で Web Push を並行配信する。 (2) ヘッダー右上の「ログアウト」を撤去し、サイドバー最下部に常設してヘッダーを整理する。 (3) スマホホーム画面アイコンを <code>phone_logo.jpg</code> (手話「ろう」「みみ」モチーフ) に差し替える。仕様: <code>docs/features/pwa-push-notifications.md</code> / <code>docs/features/sidebar-logout-relocation.md</code></td><td class="files">—</td><td><span class="status block">承認待ち</span></td><td class="pct">0%</td><td>3 質問すべて承認済 (iOS ホーム画面案内 OK / /my/profile 配置 OK / phone_logo.jpg コピー OK)</td></tr>
+
+      <tr><td>P-0</td><td>進捗表 (本表) + 仕様書 2 本の作成・承認</td><td class="files">docs/progress.html, docs/features/pwa-push-notifications.md, docs/features/sidebar-logout-relocation.md</td><td><span class="status doing">進行中</span></td><td class="pct">90%</td><td>ドラフト解除済。本表ユーザー承認待ち</td></tr>
+
+      <tr><td>P-1</td><td>worktree の phone_logo.jpg を <code>public/phone_logo.jpg</code> にコピー + sharp で 5 サイズ生成 (icon-192.png / icon-512.png / icon-maskable-512.png / icon-180-apple.png / favicon-32.png)。生成スクリプトは scripts/generate-pwa-icons.mjs に置く (一度走らせて成果物 commit。実行時依存にしない)</td><td class="files">public/phone_logo.jpg (新規), public/icons/*.png (新規 5 枚), scripts/generate-pwa-icons.mjs (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>sharp は Next.js 内部依存で既に node_modules に存在 (確認済)</td></tr>
+
+      <tr><td>P-2</td><td>manifest.webmanifest 新設 + app/layout.tsx の Metadata に <code>manifest</code> / <code>appleWebApp</code> / <code>icons.apple</code> を追加。<code>theme_color</code> = brand-ink (#1a1a1a 相当)、<code>background_color</code> = brand-beige、<code>display</code>=standalone、<code>start_url</code>=/my/dashboard</td><td class="files">public/manifest.webmanifest (新規), app/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>P-3</td><td>Service Worker (public/sw.js) 新規。<code>push</code> / <code>notificationclick</code> / <code>pushsubscriptionchange</code> を実装 (push 専用最小 SW、オフラインキャッシュなし)。<code>components/PushSWRegister.tsx</code> で navigator.serviceWorker.register('/sw.js') を起動し layout.tsx に mount</td><td class="files">public/sw.js (新規), components/PushSWRegister.tsx (新規), app/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>サポート外ブラウザは silent skip</td></tr>
+
+      <tr><td>P-4</td><td>migration 200: <code>push_subscriptions</code> テーブル (employee_id / endpoint UNIQUE / p256dh / auth / user_agent / created_at / last_used_at / last_failed_at) + RLS (本人のみ SELECT/INSERT/DELETE)。<code>NotifyPgrst</code> + Vault 設定なし。pooler 経由で適用</td><td class="files">supabase/migrations/200_push_subscriptions.sql (新規), scripts/apply-migration-200.mjs (新規), lib/types.ts (PushSubscription 型追加)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>reference-map.md §0 に追記</td></tr>
+
+      <tr><td>P-5</td><td>POST <code>/api/push/subscribe</code> + DELETE <code>/api/push/unsubscribe</code> 実装。endpoint で UPSERT、本人 employee_id を auth から付与。VAPID 公開鍵を返す GET <code>/api/push/public-key</code> も用意</td><td class="files">app/api/push/subscribe/route.ts (新規), app/api/push/unsubscribe/route.ts (新規), app/api/push/public-key/route.ts (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>P-6</td><td><code>lib/push/server.ts</code> に <code>sendWebPushToEmployees(employeeIds, payload)</code>。web-push (新規 npm dep) で配信。Promise.allSettled で 25 件並列 chunk、410 Gone 等で <code>last_failed_at</code> 記録 + 失効 row 削除。VAPID 鍵未設定なら warn + noop</td><td class="files">lib/push/server.ts (新規), package.json (web-push + @types/web-push 追加)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>P-7</td><td><code>components/profile/PushSubscriptionSection.tsx</code> 新設 → /my/profile (基本情報タブ) 最上部に配置。画像参考レイアウトと同一: 「スマホ通知」タイトル + 説明文「お知らせ・遵守事項・研修・業務マニュアルが公開されたときに通知します。」+ 状態テキスト + 「オンにする」/「オフにする」ボタン</td><td class="files">components/profile/PushSubscriptionSection.tsx (新規), app/(employee)/my/profile/page.tsx (または対応する基本情報セクションの親)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>iOS Safari standalone 外検出 → 黄色アラート「ホーム画面に追加してから許可してください」</td></tr>
+
+      <tr><td>P-8</td><td>cron <code>send-notifications</code> に Push 並行送信を追加。<code>processTenantDigest</code>: itemsByEmployee の社員ごとに sendWebPushToEmployees(employeeId 1件, digest payload)。<code>processShiftRow</code>: 受信者の id+email を取るよう SELECT 拡張 + 一括 push 配信</td><td class="files">app/api/cron/send-notifications/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>resend.batch.send と並列 (Promise.allSettled) で互いに失敗しても他方は進む</td></tr>
+
+      <tr><td>P-9</td><td>残 4 系統に push 並行追加: <code>issue-helper</code> (書類発行) / <code>manager-action</code> (個別連絡 manager アクション) / <code>training-result</code> (研修結果) / 個別連絡メッセージ本流 (要 grep: app/api/messages/*)</td><td class="files">lib/issued-documents/issue-helper.ts, app/api/notifications/manager-action/route.ts, app/api/email/training-result/route.ts, app/api/messages/**</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>招待メールは subscription 未登録ゆえ自然除外 (コード変更不要)</td></tr>
+
+      <tr><td>L-1</td><td>サイドバー最下部にログアウト常設: <code>app/(admin)/layout.tsx</code> の SidebarContent に border-top 区切りで氏名 + ログアウト Button を flex-col の最後に固定 (スクロール領域外)</td><td class="files">app/(admin)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>L-2</td><td>同パターンを manager に適用: <code>app/(manager)/layout.tsx</code></td><td class="files">app/(manager)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>L-3</td><td>admin / manager の mobile + desktop ヘッダーからログアウト Button を削除。挨拶・事業所セレクタ・通知ベル・社員画面リンクは残置。employee layout (タブ UI) は<strong>変更しない</strong> (ヘッダー右上のログアウトを維持)</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>V-1</td><td>.env.example に <code>VAPID_PUBLIC_KEY=</code> / <code>VAPID_PRIVATE_KEY=</code> / <code>VAPID_SUBJECT=mailto:...</code> / <code>NEXT_PUBLIC_VAPID_PUBLIC_KEY=</code> を追記。実値は <code>npx web-push generate-vapid-keys</code> で生成し <code>.env.local</code> + Vercel env に投入</td><td class="files">.env.example</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>V-2</td><td>reference-map.md §0 マイグレーション表に 200 追加 + push_subscriptions 解説節を新設</td><td class="files">docs/reference-map.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr><td>V-3</td><td><code>npm run dev</code> 動作確認: PC Chrome で /my/profile 画像レイアウト一致 + subscribe → 別 admin から お知らせ投稿 → 2h 短縮テストで push 受信 + メール受信が同件数</td><td class="files">—</td><td><span class="status doing">進行中</span></td><td class="pct">50%</td><td>サーバー起動 + manifest/sw/icons/public-key の HTTP smoke test 通過済。実機ブラウザ subscribe → push 受信のユーザーテストは Vercel env 投入後</td></tr>
+
+      <tr><td>V-4</td><td><code>npm run build</code> がエラーなく通る + tsc 0 エラー</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>—</td></tr>
+
+      <tr class="check"><td colspan="2">別視点確認</td><td colspan="4">① PC Chrome / Android Chrome / iOS Safari (ホーム画面追加後) の 3 環境で push 受信できる ② iOS Safari ホーム画面追加なしでは黄色アラートが出て subscribe ボタンが disabled ③ メール送信件数 = Push 配信件数 (digest / shift / 書類発行 / 個別連絡 / 研修結果) が完全一致する ④ subscription を 410 Gone で失効した row は次回 cron で自動削除され、再 subscribe で復活する ⑤ VAPID 鍵が未設定でも既存メール送信は通常通り続行 (Push のみ noop) ⑥ admin / manager / shift_manager のサイドバー底にログアウトが常時可視 (スクロール領域外で固定) ⑦ admin / manager のヘッダー右にログアウトボタンが<strong>残っていない</strong> ⑧ employee 画面 (/my/*) はヘッダー右上のログアウトが<strong>従来通り維持</strong>されている ⑨ phone_logo.jpg をホーム画面追加で見える形でアイコン採用 (iOS は apple-touch-icon-180、Android は icon-192/512 + maskable-512) ⑩ shift_manager (admin layout 流用) でもサイドバー底のログアウトに自動追従 ⑪ Vercel Hobby 60s 上限内に cron が収まる (25 件並列 × 配信時間〜500ms = 100 件 = 2s、200 件でも 4s 程度) ⑫ アクセシビリティ: 通知 payload に音声指定なし (ろう者向け仕様、視覚 + 振動のみ)</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-05-20 計画 #8: content-version-tracking (閲覧レポート + ダッシュボードの版整合) -->
 <div class="phase">

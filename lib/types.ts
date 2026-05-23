@@ -991,3 +991,16 @@ export interface EmployeeProgress {
   announcements_read: number;
   manuals_read: number;
 }
+
+// migration 200: PWA Web Push の subscription を端末ごとに保存
+export interface PushSubscriptionRow {
+  id: string;
+  employee_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  last_failed_at: string | null;
+}

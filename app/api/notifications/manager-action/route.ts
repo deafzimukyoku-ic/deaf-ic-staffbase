@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { resend, FROM_EMAIL } from '@/lib/resend';
+import { sendWebPushToEmployees } from '@/lib/push/server';
 
 export async function POST(req: NextRequest) {
     // 1. 認証チェック (呼び出し元がログインしているか)
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const { data: admins } = await adminClient
         .from('employees')
-        .select('email')
+        .select('id, email')
         .eq('tenant_id', tenant_id)
         .in('role', ['admin'])
         .eq('status', 'active')
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     const emails = admins.map(a => a.email!);
+    const adminIds = admins.map(a => a.id as string);
 
     // 4. テナント情報の取得
     const { data: tenant } = await adminClient
@@ -81,14 +83,22 @@ export async function POST(req: NextRequest) {
     </div>
   `;
 
-    // 5. メール送信
+    // 5. メール送信 + Web Push 並行配信
     try {
-        await resend.emails.send({
-            from: FROM_EMAIL,
-            to: emails,
-            subject,
-            html,
-        });
+        const [emailRes] = await Promise.allSettled([
+            resend.emails.send({
+                from: FROM_EMAIL,
+                to: emails,
+                subject,
+                html,
+            }),
+            sendWebPushToEmployees(adminClient, adminIds, {
+                title: subject,
+                body: `${manager_name} さん: ${action_type}`,
+                url: '/admin/dashboard',
+            }),
+        ]);
+        if (emailRes.status === 'rejected') throw emailRes.reason;
         return NextResponse.json({ ok: true });
     } catch (err) {
         console.error('[manager-action/notification] Email failed', err);

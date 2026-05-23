@@ -145,7 +145,8 @@ export const config = {
   matcher: [
     /* /public 以下の静的ファイル（logo.jpg / favicon / 画像 / フォント等）と _next / api を
        middleware の対象から外す。これらは認証チェック不要で、未ログインでも配信される必要がある
-       （ログイン画面のロゴ等）。  */
-    '/((?!_next/static|_next/image|api/|.*\\.(?:jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf|css|js|map)$).*)',
+       （ログイン画面のロゴ等）。
+       webmanifest は PWA 起動時 (未ログイン状態でも) ブラウザが取得するので除外に追加。 */
+    '/((?!_next/static|_next/image|api/|.*\\.(?:jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf|css|js|map|webmanifest)$).*)',
   ],
 };

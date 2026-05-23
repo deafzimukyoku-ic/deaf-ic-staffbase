@@ -9,6 +9,7 @@ import { renderMergedPdf } from '@/lib/pdf/generate-pdf';
 import { buildPlacementData } from '@/lib/pdf/resolve-pdf-values';
 import { resend, FROM_EMAIL } from '@/lib/resend';
 import { buildIssuedDocumentEmail } from '@/lib/email/issued-document-email';
+import { sendWebPushToEmployees } from '@/lib/push/server';
 import type { PdfTag, PdfTagPlacement } from '@/lib/types';
 
 export interface IssueDocumentInput {
@@ -229,6 +230,18 @@ export async function issueDocument(
       event_target_id: inserted.id,
       event_target_title: template.name,
     });
+  }
+
+  /* Web Push 並行配信 (in_app 在籍社員はベル + Push、email_only 退職社員はメール + Push)。
+     subscription が無ければ noop。失敗してもメール/通知本体は成立済みなので throw しない */
+  try {
+    await sendWebPushToEmployees(admin, [employeeId], {
+      title: '新しい書類が届いています',
+      body: template.name,
+      url: '/my/documents',
+    });
+  } catch (e) {
+    console.error('[issue-helper] push 配信に失敗 (本処理は成功)', e);
   }
 
   return {

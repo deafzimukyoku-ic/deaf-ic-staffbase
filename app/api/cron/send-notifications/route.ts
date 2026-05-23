@@ -6,10 +6,39 @@ import {
   buildShiftPublishEmail,
   buildShiftReadyEmail,
 } from '@/lib/email/shift-notification-email';
+import { sendWebPushToEmployees } from '@/lib/push/server';
 import type {
   NotificationContentType,
   LegacyNotificationContentType,
 } from '@/lib/types';
+
+/* Web Push の件名/本文/遷移先 (digest メールと並行配信)。
+   メール側 buildDigestEmail と同じ items 配列を入力にして「件名 + N件まとめ」表記にする */
+function buildDigestPushPayload(items: DigestItem[]): { title: string; body: string; url: string } {
+  const TYPE_LABEL: Record<LegacyNotificationContentType, string> = {
+    announcement: 'お知らせ',
+    compliance: '遵守事項',
+    training: '研修',
+    manual: '業務マニュアル',
+  };
+  if (items.length === 1) {
+    const it = items[0];
+    return {
+      title: `新しい${TYPE_LABEL[it.contentType]}があります`,
+      body: it.title,
+      url: '/my/dashboard',
+    };
+  }
+  /* 複数件: タイプ別に集計 (digest メールと同じ粒度) */
+  const counts: Record<string, number> = {};
+  for (const it of items) counts[TYPE_LABEL[it.contentType]] = (counts[TYPE_LABEL[it.contentType]] ?? 0) + 1;
+  const summary = Object.entries(counts).map(([k, v]) => `${k} ${v}件`).join(' / ');
+  return {
+    title: `${items.length}件の新着があります`,
+    body: summary,
+    url: '/my/dashboard',
+  };
+}
 
 // Vercel Cron: */10 * * * * から呼ばれる
 // 認証: Authorization: Bearer ${CRON_SECRET}
@@ -334,14 +363,29 @@ async function processTenantDigest(
     emails.push({ from: FROM_EMAIL, to: [email], subject, html, text });
   }
 
-  for (let i = 0; i < emails.length; i += RESEND_BATCH_SIZE) {
-    const chunk = emails.slice(i, i + RESEND_BATCH_SIZE);
-    if (chunk.length === 0) continue;
-    const res = await resend.batch.send(chunk);
-    if (res.error) {
-      console.error('[cron/digest] resend batch failed', { tenantId, error: res.error });
-      throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+  /* メール送信 (resend.batch.send) と Web Push 配信を並行実行 (Promise.allSettled)。
+     どちらかが失敗してもお互いは止めない。push は employee_id 単位で件数を一致させる。 */
+  const sendEmails = async () => {
+    for (let i = 0; i < emails.length; i += RESEND_BATCH_SIZE) {
+      const chunk = emails.slice(i, i + RESEND_BATCH_SIZE);
+      if (chunk.length === 0) continue;
+      const res = await resend.batch.send(chunk);
+      if (res.error) {
+        console.error('[cron/digest] resend batch failed', { tenantId, error: res.error });
+        throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+      }
     }
+  };
+  const sendPushes = async () => {
+    /* 1 通の digest メール = 1 件の push (社員ごとに 1 通)。
+       社員に複数端末があれば lib/push/server.ts が端末分配信する */
+    for (const [employeeId, { items }] of itemsByEmployee.entries()) {
+      await sendWebPushToEmployees(supabase, [employeeId], buildDigestPushPayload(items));
+    }
+  };
+  const [emailRes] = await Promise.allSettled([sendEmails(), sendPushes()]);
+  if (emailRes.status === 'rejected') {
+    throw emailRes.reason;
   }
 
   /* 一括マーク */
@@ -398,8 +442,8 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       '管理者';
   }
 
-  // 宛先の決定
-  let recipients: { email: string }[] = [];
+  // 宛先の決定 (id も取って Web Push 並行配信に使う)
+  let recipients: { id: string; email: string }[] = [];
   if (row.content_type === 'shift_publish') {
     // NPO 全 active admin
     const { data: admins } = await supabase
@@ -409,7 +453,7 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       .eq('role', 'admin')
       .eq('status', 'active')
       .not('email', 'is', null);
-    recipients = (admins ?? []).filter((a: { email: string | null }) => isValidEmail(a.email)) as { email: string }[];
+    recipients = (admins ?? []).filter((a: { id: string; email: string | null }) => isValidEmail(a.email)) as { id: string; email: string }[];
   } else {
     // shift_ready: 該当 facility の active employee 全員
     const { data: emps } = await supabase
@@ -420,7 +464,7 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       .eq('role', 'employee')
       .eq('status', 'active')
       .not('email', 'is', null);
-    recipients = (emps ?? []).filter((e: { email: string | null }) => isValidEmail(e.email)) as { email: string }[];
+    recipients = (emps ?? []).filter((e: { id: string; email: string | null }) => isValidEmail(e.email)) as { id: string; email: string }[];
   }
 
   if (recipients.length === 0) {
@@ -441,20 +485,35 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       ? buildShiftPublishEmail(emailArgs)
       : buildShiftReadyEmail(emailArgs);
 
-  for (let i = 0; i < recipients.length; i += RESEND_BATCH_SIZE) {
-    const chunk = recipients.slice(i, i + RESEND_BATCH_SIZE);
-    const emails = chunk.map((r) => ({
-      from: FROM_EMAIL,
-      to: [r.email],
-      subject,
-      html,
-      text,
-    }));
-    const res = await resend.batch.send(emails);
-    if (res.error) {
-      console.error('[cron/shift] resend batch failed', { id: row.id, error: res.error });
-      throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+  /* メール送信 + Push 配信を並行 (Promise.allSettled) */
+  const sendShiftEmails = async () => {
+    for (let i = 0; i < recipients.length; i += RESEND_BATCH_SIZE) {
+      const chunk = recipients.slice(i, i + RESEND_BATCH_SIZE);
+      const emails = chunk.map((r) => ({
+        from: FROM_EMAIL,
+        to: [r.email],
+        subject,
+        html,
+        text,
+      }));
+      const res = await resend.batch.send(emails);
+      if (res.error) {
+        console.error('[cron/shift] resend batch failed', { id: row.id, error: res.error });
+        throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+      }
     }
+  };
+  const sendShiftPushes = async () => {
+    const pushUrl = row.content_type === 'shift_publish' ? '/admin/shifts' : '/my/requests';
+    await sendWebPushToEmployees(
+      supabase,
+      recipients.map((r) => r.id),
+      { title: subject, body: `${facility.name} (${year}年${month}月)`, url: pushUrl },
+    );
+  };
+  const [emailRes] = await Promise.allSettled([sendShiftEmails(), sendShiftPushes()]);
+  if (emailRes.status === 'rejected') {
+    throw emailRes.reason;
   }
 
   await supabase.from('notification_queue').update({ sent_at: new Date().toISOString() }).eq('id', row.id);

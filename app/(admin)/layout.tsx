@@ -240,12 +240,16 @@ function SidebarContent({
   onNavigate,
   transportEnabled,
   shiftOnlyMode,
+  userName,
+  onLogout,
 }: {
   pathname: string;
   mode: Mode;
   onNavigate?: () => void;
   transportEnabled: boolean;
   shiftOnlyMode: boolean;
+  userName: string;
+  onLogout: () => void | Promise<void>;
 }) {
   const homeHref = mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard';
   return (
@@ -267,6 +271,25 @@ function SidebarContent({
           transportEnabled={transportEnabled}
           shiftOnlyMode={shiftOnlyMode}
         />
+      </div>
+      {/* sidebar-logout-relocation: ヘッダーからログアウトを撤去し、サイドバー底に常設。
+         flex の最後の子としてスクロール領域 (flex-1) の外に置いているため、項目過多時でも常時可視 */}
+      <div className="shrink-0 border-t border-brand-gray/10 px-4 py-3">
+        {userName && (
+          <p className="mb-1.5 text-[11px] text-brand-gray-light truncate" title={userName}>{userName}</p>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-sm text-brand-gray hover:text-brand-ink hover:bg-brand-beige"
+          onClick={async () => {
+            if (onNavigate) onNavigate();
+            await onLogout();
+          }}
+          aria-label="ログアウト"
+        >
+          <span className="mr-2">↩️</span>ログアウト
+        </Button>
       </div>
     </div>
   );
@@ -428,7 +451,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex h-screen bg-brand-beige">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col border-r border-brand-gray/10 w-64">
-        <SidebarContent pathname={pathname} mode={mode} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
+        <SidebarContent
+          pathname={pathname}
+          mode={mode}
+          transportEnabled={transportEnabled}
+          shiftOnlyMode={shiftOnlyMode}
+          userName={greeting.userName}
+          onLogout={handleLogout}
+        />
       </aside>
 
       {/* Main area */}
@@ -442,7 +472,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </svg>
             </SheetTrigger>
             <SheetContent side="left" className="w-[260px] p-0" style={{ height: '100dvh' }}>
-              <SidebarContent pathname={pathname} mode={mode} onNavigate={() => setMobileOpen(false)} transportEnabled={transportEnabled} shiftOnlyMode={shiftOnlyMode} />
+              <SidebarContent
+                pathname={pathname}
+                mode={mode}
+                onNavigate={() => setMobileOpen(false)}
+                transportEnabled={transportEnabled}
+                shiftOnlyMode={shiftOnlyMode}
+                userName={greeting.userName}
+                onLogout={handleLogout}
+              />
             </SheetContent>
           </Sheet>
           <Link href={mode === 'staff' ? '/admin/dashboard' : '/admin/shifts/dashboard'} className="flex items-center min-w-0 shrink">
@@ -463,9 +501,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors whitespace-nowrap shrink-0">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-brand-gray hover:text-brand-ink whitespace-nowrap shrink-0" onClick={handleLogout}>
-              ログアウト
-            </Button>
           </div>
         </header>
 
@@ -500,9 +535,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors">
               社員画面
             </Link>
-            <Button variant="ghost" size="sm" className="text-xs text-brand-gray hover:text-brand-ink" onClick={handleLogout}>
-              ログアウト
-            </Button>
           </div>
         </header>
 
