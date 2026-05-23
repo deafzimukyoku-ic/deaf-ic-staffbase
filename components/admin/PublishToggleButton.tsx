@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { enqueueNotification, cancelNotification, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
-import type { NotificationContentType } from '@/lib/types';
+import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
+import type { LegacyNotificationContentType } from '@/lib/types';
 
 /**
  * 公開/非公開トグルスイッチ（migration 141）
@@ -19,7 +20,7 @@ import type { NotificationContentType } from '@/lib/types';
  */
 type Table = 'announcements' | 'compliance_documents' | 'trainings' | 'manuals';
 
-const TABLE_TO_CONTENT_TYPE: Record<Table, NotificationContentType> = {
+const TABLE_TO_CONTENT_TYPE: Record<Table, LegacyNotificationContentType> = {
   announcements: 'announcement',
   compliance_documents: 'compliance',
   trainings: 'training',
@@ -67,11 +68,14 @@ export function PublishToggleButton({
       return;
     }
     onChanged?.(next);
-    /* 公開 → メール通知キュー化 (2h 後) / 非公開 → 未送信キュー取り消し */
+    /* 公開 → メール通知キュー化 (2h 後) + スマホ push 即時 / 非公開 → 未送信キュー取り消し */
     const contentType = TABLE_TO_CONTENT_TYPE[table];
     if (next) {
-      await enqueueNotification(contentType, id);
-      toast.success(`公開しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
+      await Promise.allSettled([
+        enqueueNotification(contentType, id),
+        notifyPushOnPublish(contentType, id, 'publish'),
+      ]);
+      toast.success(`公開しました。スマホ通知を送信、2時間後 (${QUIET_HOURS_LABEL}) にメール通知されます。`);
     } else {
       await cancelNotification(contentType, id);
       toast.success('非公開にしました(未送信のメール通知はキャンセルされました)');

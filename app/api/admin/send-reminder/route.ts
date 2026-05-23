@@ -3,8 +3,10 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { resend, FROM_EMAIL } from '@/lib/resend';
 import { buildReminderEmail, type ReminderCategory } from '@/lib/email/reminder-email';
+import { notifyUnreadReminderManual } from '@/lib/notifications/dispatcher';
 
-const VALID_CATEGORIES: ReminderCategory[] = ['documents', 'compliance', 'training', 'announcements'];
+/* v2: manuals も追加（既存 reminder-email.ts は対応済の前提） */
+const VALID_CATEGORIES: ReminderCategory[] = ['documents', 'compliance', 'training', 'announcements', 'manuals'];
 
 // POST /api/admin/send-reminder
 // Body: { category: ReminderCategory, employee_ids: string[] }
@@ -82,5 +84,18 @@ export async function POST(req: NextRequest) {
     await resend.batch.send(emails.slice(i, i + 100));
   }
 
-  return NextResponse.json({ ok: true, sent: employees.length });
+  /* v2: スマホ push も並行送信 */
+  let pushSent = 0;
+  try {
+    const pushResult = await notifyUnreadReminderManual({
+      tenantId: me.tenant_id,
+      employeeIds: employees.map((e) => e.id),
+      category,
+    });
+    pushSent = pushResult.delivered;
+  } catch (e) {
+    console.warn('[send-reminder] push 送信に失敗しました', e);
+  }
+
+  return NextResponse.json({ ok: true, sent: employees.length, pushSent });
 }

@@ -27,8 +27,10 @@ import { nextSortOrder } from '@/lib/sort-helpers';
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
+import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
+import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
 import type { Category, Facility, TargetType, Position, ComplianceDoc } from '@/lib/types';
 
@@ -42,6 +44,7 @@ export default function AdminCompliancePage() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importantUpdateTarget, setImportantUpdateTarget] = useState<{ id: string; title: string } | null>(null);
 
   // 編集ダイアログ
   const [editOpen, setEditOpen] = useState(false);
@@ -181,12 +184,18 @@ export default function AdminCompliancePage() {
       if (error) { toast.error('保存に失敗しました'); setSaving(false); return; }
       /* 非公開なら enqueue せず cancel + 「メール通知しません」toast に切替 (旧 UX 嘘問題の修正) */
       const isPublished = editDoc.is_published !== false;
-      const { willNotify } = await enqueueOrCancelByPublished('compliance', editDoc.id, isPublished);
+      const editedId = editDoc.id;
+      const editedTitle = editTitle;
+      const { willNotify } = await enqueueOrCancelByPublished('compliance', editedId, isPublished);
       toast.success(
         willNotify
           ? `保存しました。社員は再確認が必要になります。2時間後 (${QUIET_HOURS_LABEL}) にメール通知されます。`
           : '非公開で保存しました(メール通知は行いません)。',
       );
+      /* v2: 公開中のアイテムを編集 → 重要更新確認モーダル */
+      if (isPublished) {
+        setImportantUpdateTarget({ id: editedId, title: editedTitle });
+      }
     } else {
       // 新規作成（sort_order は migration 092 適用後のみ付与）
       const nextOrder = await nextSortOrder(supabase, 'compliance_documents', tenantId);
@@ -211,8 +220,13 @@ export default function AdminCompliancePage() {
         .single();
 
       if (error) { toast.error('作成に失敗しました'); setSaving(false); return; }
-      if (inserted) await enqueueNotification('compliance', inserted.id);
-      toast.success(`遵守事項を作成しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
+      if (inserted) {
+        await Promise.allSettled([
+          enqueueNotification('compliance', inserted.id),
+          notifyPushOnPublish('compliance', inserted.id, 'publish'),
+        ]);
+      }
+      toast.success(`遵守事項を作成しました。スマホ通知を送信、2時間後 (${QUIET_HOURS_LABEL}) にメール通知されます。`);
     }
 
     setSaving(false);
@@ -517,6 +531,15 @@ export default function AdminCompliancePage() {
           </div>
         </DialogContent>
       </Dialog>
+      {importantUpdateTarget && (
+        <ImportantUpdateConfirmModal
+          open={true}
+          contentType="compliance"
+          itemId={importantUpdateTarget.id}
+          itemTitle={importantUpdateTarget.title}
+          onClose={() => setImportantUpdateTarget(null)}
+        />
+      )}
     </div>
   );
 }

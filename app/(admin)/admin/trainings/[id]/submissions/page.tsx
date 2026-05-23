@@ -94,6 +94,7 @@ export default function TrainingSubmissionsPage({ params }: { params: Promise<{ 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              submission_id: reviewTarget.id,
               employeeEmail: empData.email,
               employeeName: `${reviewTarget.employees.last_name} ${reviewTarget.employees.first_name}`,
               trainingTitle,

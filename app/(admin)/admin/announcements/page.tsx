@@ -21,7 +21,9 @@ import { FacilityScopeSelector, TargetScopeBadge } from '@/components/admin/Faci
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
+import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
 import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
+import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
 import type { Announcement, Category, Facility, TargetType, Position } from '@/lib/types';
 
@@ -44,6 +46,7 @@ export default function AdminAnnouncementsPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [importantUpdateTarget, setImportantUpdateTarget] = useState<{ id: string; title: string } | null>(null);
   const supabase = createClient();
 
   /* カテゴリだけ再 fetch（CategoryManagerModal でカテゴリ追加・編集・削除されたとき用） */
@@ -133,7 +136,9 @@ export default function AdminAnnouncementsPage() {
       /* 非公開なら enqueue せず cancel。toast も is_published 状態に合わせて切替。
          旧コードは is_published 無視で常に enqueue + 「送信される」toast を出して UX 誤誘導していた。 */
       const isPublished = editingAnnouncement.is_published !== false;
-      const { willNotify } = await enqueueOrCancelByPublished('announcement', editingAnnouncement.id, isPublished);
+      const editedId = editingAnnouncement.id;
+      const editedTitle = form.title.trim();
+      const { willNotify } = await enqueueOrCancelByPublished('announcement', editedId, isPublished);
       await reloadAnnouncements(tenantId);
       setDialogOpen(false);
       setEditingAnnouncement(null);
@@ -144,6 +149,10 @@ export default function AdminAnnouncementsPage() {
           ? `お知らせを更新しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`
           : 'お知らせを非公開で更新しました(メール通知は行いません)。',
       );
+      /* v2: 公開中のアイテムを編集 → 重要更新確認モーダル */
+      if (isPublished) {
+        setImportantUpdateTarget({ id: editedId, title: editedTitle });
+      }
       setSaving(false);
       return;
     }
@@ -175,9 +184,12 @@ export default function AdminAnnouncementsPage() {
     setForm({ title: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
     setBlocks([]);
     /* 新規作成は is_published=true がデフォルト (migration 141) なので必ず enqueue。
-       quiet hours は enqueue API 側で scheduled_at を翌朝 07:00 に shift する。 */
-    await enqueueNotification('announcement', (data as Announcement).id);
-    toast.success(`お知らせを投稿しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
+       v2: スマホ push 即時送信 + 2h 後メール digest */
+    await Promise.allSettled([
+      enqueueNotification('announcement', (data as Announcement).id),
+      notifyPushOnPublish('announcement', (data as Announcement).id, 'publish'),
+    ]);
+    toast.success(`お知らせを投稿しました。スマホ通知を送信、2時間後 (${QUIET_HOURS_LABEL}) にメール通知されます。`);
     setSaving(false);
   }
 
@@ -392,6 +404,15 @@ export default function AdminAnnouncementsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {importantUpdateTarget && (
+        <ImportantUpdateConfirmModal
+          open={true}
+          contentType="announcement"
+          itemId={importantUpdateTarget.id}
+          itemTitle={importantUpdateTarget.title}
+          onClose={() => setImportantUpdateTarget(null)}
+        />
+      )}
     </div>
   );
 }

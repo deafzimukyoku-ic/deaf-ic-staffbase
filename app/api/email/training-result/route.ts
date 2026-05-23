@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { resend, FROM_EMAIL } from '@/lib/resend';
-import { sendWebPushToEmployees } from '@/lib/push/server';
+import { notifyTrainingResult } from '@/lib/notifications/dispatcher';
+import type { TrainingResultValue } from '@/lib/notifications/event-codes';
 
 const RESULT_LABELS: Record<string, string> = {
   passed: '合格',
@@ -29,7 +30,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { employeeEmail, employeeName, trainingTitle, result, comment } = body as {
+  const { submission_id, employeeEmail, employeeName, trainingTitle, result, comment } = body as {
+    submission_id?: string;
     employeeEmail: string;
     employeeName: string;
     trainingTitle: string;
@@ -84,24 +86,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'メール送信に失敗しました', detail: error.message }, { status: 500 });
   }
 
-  /* Web Push 並行配信。呼び出し元は employeeEmail のみ持つので tenant スコープで逆引き。
-     メール本体は既に成功しているので失敗してもユーザーには通知しない */
-  try {
-    const { data: target } = await supabase
-      .from('employees')
-      .select('id')
-      .eq('tenant_id', me.tenant_id)
-      .eq('email', employeeEmail)
-      .maybeSingle();
-    if (target?.id) {
-      await sendWebPushToEmployees(supabase, [target.id as string], {
-        title: `研修「${trainingTitle}」の判定結果`,
-        body: resultLabel + (comment ? ` ・ ${comment}` : ''),
-        url: '/my/trainings',
-      });
+  /* v2: Web Push 並行配信を dispatcher 経由に統合（文言・tag・notification_log 統一）。
+     submission_id があれば dispatcher.notifyTrainingResult を使い、なければ
+     後方互換で email 逆引きで sendWebPushToEmployees を直叩き。 */
+  if (submission_id && (result === 'passed' || result === 'failed' || result === 'resubmit')) {
+    try {
+      await notifyTrainingResult(submission_id, result as TrainingResultValue, comment);
+    } catch (e) {
+      console.error('[training-result] push 配信に失敗 (本処理は成功)', e);
     }
-  } catch (e) {
-    console.error('[training-result] push 配信に失敗 (本処理は成功)', e);
+  } else {
+    /* 後方互換: 旧クライアントが submission_id を送らない場合の fallback */
+    try {
+      const { sendWebPushToEmployees } = await import('@/lib/push/server');
+      const { data: target } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('tenant_id', me.tenant_id)
+        .eq('email', employeeEmail)
+        .maybeSingle();
+      if (target?.id) {
+        await sendWebPushToEmployees(supabase, [target.id as string], {
+          title: `研修『${trainingTitle}』の判定結果`,
+          body: resultLabel + (comment ? ` ・ ${comment}` : ''),
+          url: '/my/trainings',
+        });
+      }
+    } catch (e) {
+      console.error('[training-result] push fallback 失敗', e);
+    }
   }
 
   return NextResponse.json({ success: true });

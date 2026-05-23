@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
-import type { NotificationContentType } from '@/lib/types';
+import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
+import type { LegacyNotificationContentType } from '@/lib/types';
 
-const TABLE_TO_CONTENT_TYPE: Record<'announcements' | 'compliance_documents' | 'trainings' | 'manuals', NotificationContentType> = {
+const TABLE_TO_CONTENT_TYPE: Record<'announcements' | 'compliance_documents' | 'trainings' | 'manuals', LegacyNotificationContentType> = {
   announcements: 'announcement',
   compliance_documents: 'compliance',
   trainings: 'training',
@@ -82,12 +83,19 @@ export function BulkPublishButtons({ table, items, onChanged, scopeLabel, restri
       toast.error(`一括${word}に失敗しました`, { description: error.message });
       return;
     }
-    /* 各 item ごとに enqueue / cancel を流す。失敗は queue 側で warn ログのみで握る */
+    /* 各 item ごとに enqueue + push 即時 / cancel を流す。失敗は queue 側で warn ログのみで握る */
     const contentType = TABLE_TO_CONTENT_TYPE[table];
-    await Promise.all(
-      items.map((i) => (next ? enqueueNotification(contentType, i.id) : cancelNotification(contentType, i.id)))
-    );
-    toast.success(next ? `${total}件 を公開しました。2時間後に対象社員へメール通知されます。` : `${total}件 を非公開にしました`);
+    if (next) {
+      await Promise.all(
+        items.flatMap((i) => [
+          enqueueNotification(contentType, i.id),
+          notifyPushOnPublish(contentType, i.id, 'publish'),
+        ]),
+      );
+    } else {
+      await Promise.all(items.map((i) => cancelNotification(contentType, i.id)));
+    }
+    toast.success(next ? `${total}件 を公開しました。スマホ通知を送信、2時間後にメール通知されます。` : `${total}件 を非公開にしました`);
     onChanged?.();
   };
 

@@ -21,6 +21,8 @@ import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
+import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
+import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
 import { toast } from 'sonner';
 import type { Training, Category, Facility, TargetType, Position } from '@/lib/types';
 
@@ -46,6 +48,7 @@ export default function AdminTrainingsPage() {
   }>({ title: '', body: '', pdf_storage_path: '', youtube_url: '', category_id: null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [editingTraining, setEditingTraining] = useState<Training | null>(null);
+  const [importantUpdateTarget, setImportantUpdateTarget] = useState<{ id: string; title: string } | null>(null);
   /* 編集時のみ: ON にすると recert_at を進めて全受講者に再受講を要求する
      (content-version-tracking)。編集ダイアログを開くたび既定 OFF。 */
   const [requireRecert, setRequireRecert] = useState(false);
@@ -149,6 +152,10 @@ export default function AdminTrainingsPage() {
       // リストを再取得して creator/editor を最新に
       await reloadTrainings(tenantId);
       toast.success('研修を更新しました');
+      /* v2: 公開中の研修を編集 → 重要更新確認モーダル（training_submissions 保護） */
+      if (editingTraining.is_published !== false) {
+        setImportantUpdateTarget({ id: editingTraining.id, title: form.title.trim() });
+      }
     } else {
       // 新規作成: created_by と updated_by 両方セット（初回は同じ employee）
       const nextOrder = await nextSortOrder(supabase, 'trainings', tenantId);
@@ -171,8 +178,11 @@ export default function AdminTrainingsPage() {
       }
 
       setTrainings((prev) => [data as Training, ...prev]);
-      await enqueueNotification('training', (data as Training).id);
-      toast.success(`研修を登録しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`);
+      await Promise.allSettled([
+        enqueueNotification('training', (data as Training).id),
+        notifyPushOnPublish('training', (data as Training).id, 'publish'),
+      ]);
+      toast.success(`研修を登録しました。スマホ通知を送信、2時間後 (${QUIET_HOURS_LABEL}) にメール通知されます。`);
     }
 
     setDialogOpen(false);
@@ -420,6 +430,15 @@ export default function AdminTrainingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {importantUpdateTarget && (
+        <ImportantUpdateConfirmModal
+          open={true}
+          contentType="training"
+          itemId={importantUpdateTarget.id}
+          itemTitle={importantUpdateTarget.title}
+          onClose={() => setImportantUpdateTarget(null)}
+        />
+      )}
     </div >
   );
 }

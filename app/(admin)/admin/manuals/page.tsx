@@ -21,6 +21,8 @@ import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/adm
 import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
+import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
+import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
 import type { Manual, Category, Facility, Position } from '@/lib/types';
 
@@ -38,6 +40,7 @@ export default function AdminManualsPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [editingManual, setEditingManual] = useState<Manual | null>(null);
+  const [importantUpdateTarget, setImportantUpdateTarget] = useState<{ id: string; title: string } | null>(null);
   const [form, setForm] = useState<{
     title: string;
     category_id: string | null;
@@ -133,7 +136,9 @@ export default function AdminManualsPage() {
       }
       /* 非公開なら enqueue せず cancel + toast 切替 (旧 UX 嘘問題の修正) */
       const isPublished = editingManual.is_published !== false;
-      const { willNotify } = await enqueueOrCancelByPublished('manual', editingManual.id, isPublished);
+      const editedId = editingManual.id;
+      const editedTitle = form.title.trim();
+      const { willNotify } = await enqueueOrCancelByPublished('manual', editedId, isPublished);
       await reloadManuals(tenantId);
       setDialogOpen(false);
       setEditingManual(null);
@@ -144,6 +149,10 @@ export default function AdminManualsPage() {
           ? `業務マニュアルを更新しました。2時間後 (${QUIET_HOURS_LABEL}) に対象社員へメール通知されます。`
           : '業務マニュアルを非公開で更新しました(メール通知は行いません)。',
       );
+      /* v2: 公開中のアイテムを編集 → 重要更新確認モーダル */
+      if (isPublished) {
+        setImportantUpdateTarget({ id: editedId, title: editedTitle });
+      }
       setSaving(false);
       return;
     }
@@ -174,7 +183,10 @@ export default function AdminManualsPage() {
     }
 
     if (inserted?.id) {
-      await enqueueNotification('manual', inserted.id);
+      await Promise.allSettled([
+        enqueueNotification('manual', inserted.id),
+        notifyPushOnPublish('manual', inserted.id, 'publish'),
+      ]);
     }
 
     await reloadManuals(tenantId);
@@ -396,6 +408,15 @@ export default function AdminManualsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {importantUpdateTarget && (
+        <ImportantUpdateConfirmModal
+          open={true}
+          contentType="manual"
+          itemId={importantUpdateTarget.id}
+          itemTitle={importantUpdateTarget.title}
+          onClose={() => setImportantUpdateTarget(null)}
+        />
+      )}
     </div>
   );
 }
