@@ -23,6 +23,54 @@
 
 ---
 
+## §0 BlockEditor: 日本語ファイル名で画像アップロード失敗 (Supabase Storage "Invalid key")
+
+- **発生日**: 2026-05-23
+- **発生箇所**:
+  - `lib/upload-helpers.ts` (`sanitizeFilename`)
+  - 結果として `components/admin/BlockEditor.tsx` の画像アップロード + マニュアル PDF アップロードが影響
+- **エラー内容**:
+  - UI: 「画像アップロードに失敗しました」(汎用 toast)
+  - 実体: Supabase Storage が object name に非 ASCII (日本語・絵文字・全角記号) を含むキーを `Invalid key` で拒否
+  - 旧 BlockEditor 実装が `error.message` を捨てていたため真因が見えなかった (= エラー握りつぶし)
+- **原因**:
+  - `sanitizeFilename` のヘッダコメントが「Supabase Storage は Unicode パスを許可する」と **誤った前提** を宣言していて、実装も非 ASCII をそのまま残していた
+  - 一方 Supabase Storage の現実の制約は ASCII セーフ (`[a-zA-Z0-9._-/]`) のみ。Unicode object key は `400 Invalid key` で拒否
+  - ファイル名が完全英数字のときだけ動いていたため気付かれず本番運用に乗っていた
+- **解決方法**:
+  - `sanitizeFilename` を ASCII セーフ文字のみ残す仕様に変更 (`a-zA-Z0-9._-`、それ以外は `_` 置換)
+  - 拡張子は分離してから sanitize し、base が完全に非 ASCII で潰れた場合は `'file'` フォールバック (例: `あいう.png` → `file.png`)
+  - 一意性は呼び出し元 `buildStoragePath` の `${timestamp}_${random}_` 前置で保証されるので、人間可読性は捨てて配信成功を取る
+  - `BlockEditor.handleImageUpload` の `error` を握り潰さず `toast.error` の description に `error.message` を出すよう改善 + `console.error` ログ追加
+- **再発防止**:
+  - `sanitizeFilename` のコメントを「Unicode 許可」→「ASCII セーフのみ」に書き換え + 過去の本番事故を明記
+  - 真因特定が遅れた原因 = エラー握り潰し。新規 Supabase Storage / 外部 API 呼び出しでは `error.message` を必ずユーザーに見せる (UX 上 description 行に出す) ことを規約化
+  - `Array.from(s).map(...)` でサロゲートペア (絵文字) も安全に処理
+- **動作確認用 (sanitizeFilename 入出力)**:
+  - `"あいうえお.png"` → `"file.png"`
+  - `"画像 (1).png"` → `"1.png"`
+  - `"hello world.jpg"` → `"hello_world.jpg"`
+  - `"社内資料_最新版.pdf"` → `"file.pdf"`
+  - `"😀.png"` → `"file.png"`
+  - `"a/b.png"` → `"a_b.png"` (path traversal 防止)
+  - `"foo.png"` → `"foo.png"` (英数はそのまま)
+  - `"file.PNG"` → `"file.PNG"` (大文字保持)
+- **副次的に直る経路**: `app/(manager)/mgr/manuals/page.tsx` の PDF アップロードも `buildStoragePath` を経由しているので、`sanitizeFilename` 修正で同時に解消（個別修正不要）
+
+---
+
+## manifest.webmanifest が middleware で 307 リダイレクトされる
+
+- **発生日**: 2026-05-23
+- **発生箇所**: `middleware.ts:149` (matcher 正規表現)
+- **フェーズ**: PWA Push 通知導入 (P-2 → V-3 動作確認時に検出)
+- **エラー内容**: `curl http://localhost:6001/manifest.webmanifest` が 307 Temporary Redirect を返し、未ログイン状態だと `/login` に飛ばされる。ブラウザがホーム画面追加時に manifest を取得できず PWA 化が失敗する
+- **原因**: middleware の matcher 除外パターンに `webmanifest` 拡張子が含まれていなかった。既存の除外は `jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf|css|js|map` で、新しく追加した `manifest.webmanifest` が対象外として漏れていた。**Service Worker (`/sw.js`) は `.js` 拡張子のため自動除外されており発覚せず**
+- **解決方法**: matcher の除外リストに `|webmanifest` を追加。`'/((?!_next/static|_next/image|api/|.*\\.(?:jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf|css|js|map|webmanifest)$).*)'`。修正後 `curl /manifest.webmanifest` が 200 を返すことを確認
+- **再発防止**: 新しい静的ファイル拡張子を `public/` に追加する際は、認証チェック不要なら middleware matcher の除外リストにも追加するルールを徹底。PWA 関連は特にログイン前にも取得される (manifest / icons / sw)
+
+---
+
 ## 通知メールが集約されず 1 通ずつ送られる
 
 - **発生日**: 〜2026-05-18

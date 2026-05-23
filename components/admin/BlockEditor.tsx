@@ -71,13 +71,18 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
         contentType: file.type || 'image/jpeg',
       });
       if (error) {
-        toast.error('画像アップロードに失敗しました');
+        /* error を握りつぶさない: Supabase の StorageError は message に詳細が入る。
+           「Bucket not found」「new row violates row-level security policy」等を
+           ユーザーに表示することで、管理者が原因を即特定できる。 */
+        console.error('[BlockEditor] image upload failed', { path, error });
+        toast.error('画像アップロードに失敗しました', { description: error.message });
         return;
       }
       // 署名付きURL取得（長期のため10年設定）
-      const { data: signed } = await supabase.storage.from('documents').createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
-      if (!signed?.signedUrl) {
-        toast.error('画像URLの取得に失敗しました');
+      const { data: signed, error: signErr } = await supabase.storage.from('documents').createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+      if (signErr || !signed?.signedUrl) {
+        console.error('[BlockEditor] signed url failed', { path, signErr });
+        toast.error('画像URLの取得に失敗しました', { description: signErr?.message });
         return;
       }
       updateBlock(index, { url: signed.signedUrl } as any);
