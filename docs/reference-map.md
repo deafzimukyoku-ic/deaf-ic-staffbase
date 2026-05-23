@@ -999,3 +999,25 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | mgr ダッシュボード「社員数」 | `get_my_subordinate_progress` RPC（migration 171）で除外済み |
 | admin ダッシュボード | employees 取得が `.neq('role','shift_manager')`（171 以降）で除外済み |
 | 閲覧レポート ReportMatrix「社員数」 | `/api/reports` が `.neq('role','shift_manager')` で除外済み |
+
+---
+
+## 18. ダッシュボード分子の audience フィルタ化（progress-audience-aware, migration 190, 2026-05-23）
+
+189 まで分子が audience 非考慮だったため「3/2」等の分母超えが発生 (🎨パレットの 3 名で確認)。190 で audience フィルタを追加し、ダッシュボード分子・分母・閲覧レポートを同基準に揃えた。
+
+| ファイル | 役割 |
+|---|---|
+| **supabase/migrations/190_progress_audience_aware.sql（新規）** | `item_in_audience(text, uuid[], uuid[], uuid[], uuid)` SQL 関数追加 + `employee_progress` view + `get_my_subordinate_progress` RPC を audience フィルタ込みに再定義。RETURNS TABLE / 列構造不変・UI 変更不要 |
+
+### audience 判定 (`item_in_audience` = `lib/multi-facility.ts::isItemInAudience` と同義)
+- `target_type='all'` または `target_facility_ids` が社員所属（`employees.facility_id` + `employee_facilities`）と交差
+- かつ `target_position_ids` 空 または 社員 `position_id` が含まれる
+- 判定は SQL 関数 1 本に集約：view / RPC の 8 サブクエリ + 4 last_*_at がすべて同関数を呼ぶ。`lib/multi-facility.ts` と常に同義に保つ。
+
+### 参照ファイル
+| ファイル | 参照内容 |
+|---|---|
+| lib/multi-facility.ts::isItemInAudience | SQL `item_in_audience` と同一ロジック |
+| app/(manager)/mgr/dashboard/page.tsx, components/admin/ProgressDashboard.tsx | RPC/view 値を ProgressBadge に表示 |
+| app/api/reports/route.ts, components/admin/ReportMatrix.tsx | 同 audience 基準で閲覧レポート集計 |

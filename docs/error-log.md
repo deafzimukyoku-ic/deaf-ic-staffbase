@@ -686,4 +686,15 @@
 - **再発防止**: `useSearchParams()` を使うページ/コンポーネントは必ず `Suspense` boundary で包む。ビルド（`npm run build`）を push 前に通す運用で早期検出する。
 
 ---
+## ダッシュボード社員進捗バッジが「3/2」(分子>分母) を表示する (audience 非対称)
+
+- **発生日**: 2026-05-23
+- **発生箇所**: `supabase/migrations/189_progress_version_aware.sql` の `employee_progress` view + `get_my_subordinate_progress` RPC の 4 カテゴリ count サブクエリ / 表示側は `app/(manager)/mgr/dashboard/page.tsx:398` と `components/admin/ProgressDashboard.tsx:259` の `<ProgressBadge current={r.announcements_read} total={rowTotals.announcements}/>`
+- **フェーズ**: 本番運用中バグ修正 (root-cause-fix)
+- **エラー内容**: 事業所「🎨パレット」の 3 名 (岸部敬子・禹浩鉉・鈴木巳鈴) で、お知らせ既読バッジが `3/2` (分子 3 が分母 2 を超過)。閲覧レポートでは同社員が「2 件・各 1 回既読」と正しく表示されており、ダッシュボードだけが食い違っていた。
+- **原因 (真因)**: ダッシュボード分子 (migration 189 の view + RPC の `announcements_read` / `manuals_read` / `trainings_passed` / `compliance_done`) が **`is_published + tenant 一致 + 版/合格条件` だけで数え、社員ごとの配信対象 (audience: `target_type / target_facility_ids / target_position_ids`) を見ていなかった**。一方、ダッシュボード分母 (`publishedTotalsByEmployee`) と閲覧レポート (`ReportMatrix` / `/api/reports`) は `lib/multi-facility.ts::isItemInAudience` で audience フィルタ済み。この非対称により、社員が「配信対象外だが過去に閲覧した」アイテム (例: 別事業所宛のお知らせを過去閲覧) を持つと分子 > 分母 になる。実データ: 「おもちゃの消毒」(`target_type='facility'`, 対象=パレット以外の別事業所) の view_log が 3 名分残っており、それを分子だけが拾っていた。187 が塞いだ「非公開化」「旧版」由来の分母超えとは**別軸 (audience 軸)** の同パターン。
+- **解決方法**: migration 190 (`190_progress_audience_aware.sql`) で `employee_progress` view + `get_my_subordinate_progress` RPC の 4 カテゴリ count + `last_*_at` 全てに audience フィルタを追加。判定は新規 SQL 関数 `public.item_in_audience(target_type, target_facility_ids, target_position_ids, emp_facility_ids, emp_position_id)` に集約 (`lib/multi-facility.ts::isItemInAudience` と同一ロジック)。RETURNS TABLE / view 列構造は不変なので UI ファイル変更なし。両 DB (deaf-ic / staffbase) に適用。deaf-ic で 3 名が `3/2 → 2/2` に修正されたことを実データ確認、staffbase は影響社員 0 で preventive 適用。
+- **再発防止**: audience 判定を SQL 関数 `item_in_audience` 1 本に集約 (view / RPC の 8 サブクエリ + 4 last_*_at が全て同関数を呼ぶ。インラインコピー禁止)。`lib/multi-facility.ts::isItemInAudience` と SQL `item_in_audience` は**常に同義に保つ** (どちらか変えたら他方も変える)。**「ダッシュボード分子と分母・閲覧レポートが構造的に一致しているか」を新集計追加時のチェックポイントにし、audience 軸を最初に揃える。**
+
+---
 *(以降、新規エラーがあれば追記)*
