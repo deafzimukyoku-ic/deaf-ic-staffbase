@@ -255,17 +255,7 @@ function SidebarContent({
           shiftOnlyMode={shiftOnlyMode}
         />
       </div>
-      <div className="border-t border-brand-gray/10 bg-brand-beige p-3 space-y-1">
-        <p className="text-[10px] text-brand-gray-light px-1 mb-1">切り替え</p>
-        <Link
-          href="/my/dashboard"
-          onClick={onNavigate}
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-brand-gray hover:bg-white hover:text-brand-ink transition-colors"
-        >
-          <span>👤</span>
-          <span>社員画面</span>
-        </Link>
-      </div>
+      {/* 「切り替え > 社員画面」セクションは削除済（ヘッダーに同じリンクがあるため冗長） */}
       {/* sidebar-logout-relocation: ヘッダーからログアウトを撤去し、サイドバー底に常設 */}
       <div className="shrink-0 border-t border-brand-gray/10 px-4 py-3">
         {userName && (
