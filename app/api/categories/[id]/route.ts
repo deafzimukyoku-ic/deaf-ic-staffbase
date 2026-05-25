@@ -28,8 +28,14 @@ export async function PATCH(
     return NextResponse.json({ error: '管理者権限が必要です' }, { status: 403 });
   }
 
-  const body = await req.json() as { name?: string; color?: string; icon?: string };
-  const patch: Record<string, string> = {};
+  const body = await req.json() as {
+    name?: string;
+    color?: string;
+    icon?: string;
+    target_type?: 'all' | 'facility';
+    target_facility_ids?: string[];
+  };
+  const patch: Record<string, unknown> = {};
 
   if (typeof body.name === 'string') {
     const name = body.name.trim();
@@ -43,6 +49,34 @@ export async function PATCH(
   }
   if (typeof body.color === 'string') patch.color = body.color;
   if (typeof body.icon === 'string') patch.icon = body.icon;
+
+  /* v2 (205): audience 更新 */
+  if (body.target_type !== undefined || body.target_facility_ids !== undefined) {
+    const targetType: 'all' | 'facility' = body.target_type ?? 'all';
+    const targetFacilityIds = Array.isArray(body.target_facility_ids) ? body.target_facility_ids : [];
+
+    if (!['all', 'facility'].includes(targetType)) {
+      return NextResponse.json({ error: 'target_type が不正です' }, { status: 400 });
+    }
+    if (targetType === 'facility' && targetFacilityIds.length === 0) {
+      return NextResponse.json({ error: 'target_type=facility のとき target_facility_ids は必須です' }, { status: 400 });
+    }
+
+    if (me.role === 'manager') {
+      if (targetType !== 'facility') {
+        return NextResponse.json({ error: 'マネージャーは「全社共通」に変更できません' }, { status: 403 });
+      }
+      const { data: myFacs } = await supabase.rpc('get_my_facility_ids');
+      const myFacIds = new Set(((myFacs as Array<string> | null) ?? []).map(String));
+      const allIn = targetFacilityIds.every((id) => myFacIds.has(id));
+      if (!allIn) {
+        return NextResponse.json({ error: 'あなたが管理していない事業所が含まれています' }, { status: 403 });
+      }
+    }
+
+    patch.target_type = targetType;
+    patch.target_facility_ids = targetFacilityIds;
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: '更新内容がありません' }, { status: 400 });

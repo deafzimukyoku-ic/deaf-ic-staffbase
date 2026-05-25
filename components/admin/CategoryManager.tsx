@@ -26,7 +26,8 @@ import {
 } from '@/lib/category-presets';
 import { createClient } from '@/lib/supabase/client';
 import { CategoryImportModal } from './CategoryImportModal';
-import type { Category, CategoryType } from '@/lib/types';
+import { FacilityScopeSelector, TargetScopeBadge } from './FacilityScopeSelector';
+import type { Category, CategoryType, Facility, TargetType } from '@/lib/types';
 
 // CategoryType → 対応するコンテンツテーブル名
 const CONTENT_TABLE: Record<CategoryType, string> = {
@@ -38,7 +39,11 @@ const CONTENT_TABLE: Record<CategoryType, string> = {
 
 interface Props {
   type: CategoryType;
-  /** カテゴリが追加・編集・削除・並び替えされたら呼ぶ。親画面で categories 再 fetch してリストやフィルタに即反映するために使う */
+  /**
+   * カテゴリの作成・更新・削除・並び替えが成功したあとに親に通知するコールバック。
+   * モーダルから起動する親ページがカテゴリ列・フィルタを軽量に再取得するために使う。
+   * （CategoryImportModal の onImported と同じパターン）
+   */
   onChanged?: () => void | Promise<void>;
 }
 
@@ -53,10 +58,17 @@ export function CategoryManager({ type, onChanged }: Props) {
   const [importOpen, setImportOpen] = useState(false);
   const supabase = createClient();
 
+  /* 225: tenant / role / facility audience 用の context */
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [myRole, setMyRole] = useState<string>('employee');
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+
   // 追加フォーム
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState(DEFAULT_CATEGORY_COLOR);
   const [newIcon, setNewIcon] = useState(DEFAULT_CATEGORY_ICON);
+  const [newTargetType, setNewTargetType] = useState<TargetType>('all');
+  const [newTargetFacilityIds, setNewTargetFacilityIds] = useState<string[]>([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -96,9 +108,45 @@ export function CategoryManager({ type, onChanged }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
+  /* 225: tenant_id / role / facilities を取得（FacilityScopeSelector / TargetScopeBadge 用） */
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: me } = await supabase
+        .from('employees')
+        .select('tenant_id, role')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      if (!me) return;
+      setTenantId(me.tenant_id as string);
+      setMyRole((me.role as string) ?? 'employee');
+      /* manager の場合は新規作成時に target_type='facility' をデフォルトに */
+      if (me.role === 'manager') setNewTargetType('facility');
+
+      const { data: facs } = await supabase
+        .from('facilities')
+        .select('id, name')
+        .eq('tenant_id', me.tenant_id)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
+      setFacilities((facs as Facility[]) ?? []);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleCreate() {
     if (!newName.trim()) {
       setErrorMsg('カテゴリ名を入力してください');
+      return;
+    }
+    /* 225: facility audience バリデーション */
+    if (newTargetType === 'facility' && newTargetFacilityIds.length === 0) {
+      setErrorMsg('配信対象の施設を1つ以上選択してください');
+      return;
+    }
+    if (myRole === 'manager' && newTargetType === 'all') {
+      setErrorMsg('マネージャーは「全社共通」カテゴリを作成できません');
       return;
     }
     setCreating(true);
@@ -106,7 +154,14 @@ export function CategoryManager({ type, onChanged }: Props) {
     const res = await fetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, name: newName.trim(), color: newColor, icon: newIcon || DEFAULT_CATEGORY_ICON }),
+      body: JSON.stringify({
+        type,
+        name: newName.trim(),
+        color: newColor,
+        icon: newIcon || DEFAULT_CATEGORY_ICON,
+        target_type: newTargetType,
+        target_facility_ids: newTargetType === 'facility' ? newTargetFacilityIds : [],
+      }),
     });
     setCreating(false);
     if (!res.ok) {
@@ -117,11 +172,14 @@ export function CategoryManager({ type, onChanged }: Props) {
     setNewName('');
     setNewColor(DEFAULT_CATEGORY_COLOR);
     setNewIcon(DEFAULT_CATEGORY_ICON);
+    /* manager は 'facility' 固定、admin は 'all' に戻す */
+    setNewTargetType(myRole === 'manager' ? 'facility' : 'all');
+    setNewTargetFacilityIds([]);
     await load();
-    onChanged?.();
+    await onChanged?.();
   }
 
-  async function handleUpdate(id: string, patch: Partial<Pick<Category, 'name' | 'color' | 'icon'>>) {
+  async function handleUpdate(id: string, patch: Partial<Pick<Category, 'name' | 'color' | 'icon' | 'target_type' | 'target_facility_ids'>>) {
     setErrorMsg(null);
     const res = await fetch(`/api/categories/${id}`, {
       method: 'PATCH',
@@ -134,7 +192,7 @@ export function CategoryManager({ type, onChanged }: Props) {
       return false;
     }
     await load();
-    onChanged?.();
+    await onChanged?.();
     return true;
   }
 
@@ -148,7 +206,7 @@ export function CategoryManager({ type, onChanged }: Props) {
       return;
     }
     await load();
-    onChanged?.();
+    await onChanged?.();
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -173,7 +231,7 @@ export function CategoryManager({ type, onChanged }: Props) {
       await load(); // 失敗時はサーバー状態に戻す
       return;
     }
-    onChanged?.();
+    await onChanged?.();
   }
 
   return (
@@ -248,6 +306,19 @@ export function CategoryManager({ type, onChanged }: Props) {
             {creating ? '追加中...' : '追加'}
           </Button>
         </div>
+        {/* 225: 配信対象 (facility audience) */}
+        <FacilityScopeSelector
+          tenantId={tenantId}
+          targetType={newTargetType}
+          targetFacilityIds={newTargetFacilityIds}
+          onChange={(next) => {
+            /* manager は 'all' に変更不可 */
+            if (myRole === 'manager' && next.target_type === 'all') return;
+            setNewTargetType(next.target_type);
+            setNewTargetFacilityIds(next.target_facility_ids);
+          }}
+          label="このカテゴリの配信対象"
+        />
         <p className="text-[10px] text-brand-gray-light">
           💡 絵文字入力: Win <kbd className="bg-gray-100 px-1 rounded">⊞ + .</kbd> / Mac <kbd className="bg-gray-100 px-1 rounded">⌘⌃Space</kbd>
         </p>
@@ -293,6 +364,9 @@ export function CategoryManager({ type, onChanged }: Props) {
                       if (ok) setEditingId(null);
                     }}
                     onDelete={() => handleDelete(cat.id, cat.name)}
+                    tenantId={tenantId}
+                    facilities={facilities}
+                    myRole={myRole}
                   />
                 ))}
               </ul>
@@ -313,7 +387,10 @@ export function CategoryManager({ type, onChanged }: Props) {
         destinationType={type}
         isOpen={importOpen}
         onClose={() => setImportOpen(false)}
-        onImported={async () => { await load(); onChanged?.(); }}
+        onImported={async () => {
+          await load();
+          await onChanged?.();
+        }}
       />
     </div>
   );
@@ -344,11 +421,15 @@ interface RowProps {
   editing: boolean;
   onStartEdit: () => void;
   onCancelEdit: () => void;
-  onSave: (patch: { name?: string; color?: string; icon?: string }) => void | Promise<void>;
+  onSave: (patch: { name?: string; color?: string; icon?: string; target_type?: TargetType; target_facility_ids?: string[] }) => void | Promise<void>;
   onDelete: () => void;
+  /* 225: audience 編集 + バッジ表示用 */
+  tenantId: string | null;
+  facilities: Facility[];
+  myRole: string;
 }
 
-function SortableRow({ category, itemCount, editing, onStartEdit, onCancelEdit, onSave, onDelete }: RowProps) {
+function SortableRow({ category, itemCount, editing, onStartEdit, onCancelEdit, onSave, onDelete, tenantId, facilities, myRole }: RowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: category.id });
   const style: React.CSSProperties = {
@@ -360,26 +441,53 @@ function SortableRow({ category, itemCount, editing, onStartEdit, onCancelEdit, 
   const [name, setName] = useState(category.name);
   const [color, setColor] = useState(category.color);
   const [icon, setIcon] = useState(category.icon);
+  /* 225: audience 編集 state */
+  const [targetType, setTargetType] = useState<TargetType>((category.target_type ?? 'all') as TargetType);
+  const [targetFacilityIds, setTargetFacilityIds] = useState<string[]>(category.target_facility_ids ?? []);
 
   useEffect(() => {
     if (editing) {
       setName(category.name);
       setColor(category.color);
       setIcon(category.icon);
+      setTargetType((category.target_type ?? 'all') as TargetType);
+      setTargetFacilityIds(category.target_facility_ids ?? []);
     }
   }, [editing, category]);
 
   if (editing) {
     return (
-      <li ref={setNodeRef} style={style} className="flex flex-wrap items-center gap-2 p-3 bg-brand-beige/40">
-        <Input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} className="w-16 text-center text-lg" />
-        <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} className="flex-1 min-w-[160px]" />
-        <ColorPicker value={color} onChange={setColor} />
-        <div className="flex gap-1 ml-auto">
-          <Button size="sm" onClick={() => onSave({ name: name.trim(), color, icon: icon || '📁' })}>
+      <li ref={setNodeRef} style={style} className="p-3 bg-brand-beige/40 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} className="w-16 text-center text-lg" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} className="flex-1 min-w-[160px]" />
+          <ColorPicker value={color} onChange={setColor} />
+        </div>
+        <FacilityScopeSelector
+          tenantId={tenantId}
+          targetType={targetType}
+          targetFacilityIds={targetFacilityIds}
+          onChange={(next) => {
+            if (myRole === 'manager' && next.target_type === 'all') return;
+            setTargetType(next.target_type);
+            setTargetFacilityIds(next.target_facility_ids);
+          }}
+          label="このカテゴリの配信対象"
+        />
+        <div className="flex gap-1 justify-end">
+          <Button size="sm" variant="ghost" onClick={onCancelEdit}>キャンセル</Button>
+          <Button
+            size="sm"
+            onClick={() => onSave({
+              name: name.trim(),
+              color,
+              icon: icon || '📁',
+              target_type: targetType,
+              target_facility_ids: targetType === 'facility' ? targetFacilityIds : [],
+            })}
+          >
             保存
           </Button>
-          <Button size="sm" variant="ghost" onClick={onCancelEdit}>キャンセル</Button>
         </div>
       </li>
     );
@@ -402,7 +510,15 @@ function SortableRow({ category, itemCount, editing, onStartEdit, onCancelEdit, 
         className="inline-block h-3 w-3 rounded-full shrink-0"
         style={{ backgroundColor: category.color }}
       />
-      <span className="text-sm font-medium text-brand-ink flex-1">{category.name}</span>
+      <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium text-brand-ink">{category.name}</span>
+        {/* 225: audience バッジ */}
+        <TargetScopeBadge
+          targetType={(category.target_type ?? 'all') as TargetType}
+          targetFacilityIds={category.target_facility_ids ?? []}
+          facilities={facilities}
+        />
+      </div>
       <span className="text-xs text-brand-gray-light tabular-nums shrink-0 mr-2">
         {itemCount} 項目
       </span>

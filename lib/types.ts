@@ -627,6 +627,11 @@ export interface Category {
   icon: string;
   sort_order: number;
   created_at: string;
+  /* 205: facility audience */
+  target_type: 'all' | 'facility';
+  target_facility_ids: string[];
+  /* 205: 作成者 */
+  created_by: string | null;
 }
 
 // --- Target Scope ---
