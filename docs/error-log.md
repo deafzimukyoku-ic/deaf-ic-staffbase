@@ -23,6 +23,46 @@
 
 ---
 
+## BlockEditor / mgr-manuals: 画像アップロードが「new row violates row-level security policy」で全件失敗
+
+- **発生日**: 2026-05-25
+- **発生箇所**:
+  - `components/admin/BlockEditor.tsx` の画像アップロード経路
+  - `app/(manager)/mgr/manuals/page.tsx` の PDF / 画像アップロード経路
+  - 共通 utility: `lib/upload-helpers.ts` の `buildStoragePath` (`<prefix>/<tenant_id>/<file>` 形式)
+  - 該当 RLS: `storage.objects` の `documents` バケット policy
+- **エラー内容**:
+  - クライアント側 UI: 「画像アップロードに失敗しました」
+  - Supabase 実エラー: `new row violates row-level security policy for table "objects"` (status 403)
+- **原因 (真因)**:
+  - `migration 118` が「authenticated 全員 manage 可」の policy を定義していたが、これは**本番 DB に適用されていなかった**
+  - 本番 DB には別途 Supabase Dashboard で手動設定された **厳格 policy** が居座っていた:
+    - `"documents: admin can manage"` [ALL] — `role='admin'` 限定 + `folder[1]=tenant_id` 期待
+    - `"documents: tenant members can read"` [SELECT] — `folder[1]=tenant_id` 期待
+  - しかしクライアントの `buildStoragePath` は `<prefix>/<tenant_id>/<file>` 形式 (例 `manuals/<uuid>/123_xyz.jpg`) を生成するため、`folder[1]` は常に prefix (`manuals` / `announcements` / ...) になり `tenant_id` と**永続的に不一致**。さらに manager は `role` チェックで弾かれる
+  - 結果として **本番 DB では BlockEditor 経由の画像アップロードが過去一度も成功していなかった** (`storage.objects` の時系列を全件追って 0 件であることを確認済)
+  - 過去アップ済の 9 件は全て API route (service role) 経由かつ `<tenant_id>/<file>.pdf` 形式 (folder[1]=tenant_id が一致) で、これは RLS をすり抜けて動いていた
+  - 「以前はできていた」というユーザー記憶は、API route 経由の PDF 雛形アップロードと混同していた
+- **解決方法**:
+  - `migration 207_storage_documents_rls_fix.sql` で policy を path 形式と manager 許可に合わせて再定義:
+    - 読み (`documents: tenant members can read` SELECT): `folder[1]=tenant_id` または `folder[2]=tenant_id` のどちらかに一致すれば OK (新形式 + 旧形式両対応)
+    - 書き (`documents: admin or manager can manage` ALL): 上記 path 条件 + `role IN ('admin','manager')`
+  - audience (facility) チェックは本体テーブル (`announcements` / `manuals` / 他) の RLS に任せて二重チェックは外す
+  - クライアント側 (`buildStoragePath` / `BlockEditor` / `mgr/manuals/page.tsx`) は **一切変更しない**
+  - 本番 DB に適用済 + admin/manager で実 upload が通ることをユーザーが検証済
+- **再発防止**:
+  - **migration ファイルが書かれている = 本番 DB に適用済、とは限らない**。`supabase_migrations.schema_migrations` がないプロジェクトでは適用履歴が追跡できない。今後は `docs/migration-applied.md` に手動で記録する
+  - **Supabase Dashboard での policy / RLS / function 直接編集を禁止**。Dashboard で編集すると migration ファイルとの整合性が崩れ、本件のような「ファイルでは fix 済なのに実 DB は別物」事故が起きる
+  - RLS 系を変更する**前後で必ず** `scripts/snapshot-storage-policies.mjs` を実行し、`docs/storage-policy-snapshot.json` の diff を commit に同梱する
+  - ユーザーの「以前できていた」記憶を主観のまま信じない。`storage.objects` / 投稿テーブルの created_at を**実 DB に問い合わせて事実確認**する (`scripts/probe-*.mjs` 系)
+- **影響範囲確認 (本対応で復活する経路)**:
+  - admin/manager による画像 (お知らせ / 遵守事項 / 研修 / 業務マニュアル) アップロード
+  - `mgr/manuals/page.tsx` の PDF / 画像添付
+  - 既存 `<tenant_id>/<file>.pdf` 形式 (API route 経由 PDF テンプレート 9 件) も引き続き読める (旧 path も継続対応のため)
+  - employee は read のみ可 (もともと write 不要)
+
+---
+
 ## §0 BlockEditor: 日本語ファイル名で画像アップロード失敗 (Supabase Storage "Invalid key")
 
 - **発生日**: 2026-05-23

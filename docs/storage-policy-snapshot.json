@@ -1,0 +1,119 @@
+{
+  "snapshot_at": "2026-05-25T11:58:46.325Z",
+  "note": "本番 DB の storage.* RLS 現状。migration ファイルとの差分検知用。Dashboard での手動編集を検出する目的。",
+  "storage_objects_rls": {
+    "rls_enabled": true,
+    "rls_forced": false
+  },
+  "buckets": [
+    {
+      "id": "documents",
+      "name": "documents",
+      "public": false,
+      "file_size_limit": "20971520",
+      "allowed_mime_types": [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+        "image/gif",
+        "video/mp4"
+      ]
+    },
+    {
+      "id": "employee-images",
+      "name": "employee-images",
+      "public": true,
+      "file_size_limit": "10485760",
+      "allowed_mime_types": [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic"
+      ]
+    },
+    {
+      "id": "issued-documents",
+      "name": "issued-documents",
+      "public": false,
+      "file_size_limit": "20971520",
+      "allowed_mime_types": [
+        "application/pdf"
+      ]
+    },
+    {
+      "id": "message-attachments",
+      "name": "message-attachments",
+      "public": false,
+      "file_size_limit": "10485760",
+      "allowed_mime_types": [
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/heic",
+        "application/pdf"
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "polname": "documents: admin or manager can manage",
+      "cmd": "ALL",
+      "roles": "authenticated",
+      "using": "((bucket_id = 'documents'::text) AND (((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)) OR ((storage.foldername(name))[2] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1))) AND (( SELECT employees.role\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1) = ANY (ARRAY['admin'::text, 'manager'::text])))",
+      "with_check": "((bucket_id = 'documents'::text) AND (((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)) OR ((storage.foldername(name))[2] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1))) AND (( SELECT employees.role\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1) = ANY (ARRAY['admin'::text, 'manager'::text])))"
+    },
+    {
+      "polname": "documents: tenant members can read",
+      "cmd": "SELECT",
+      "roles": "authenticated",
+      "using": "((bucket_id = 'documents'::text) AND (((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)) OR ((storage.foldername(name))[2] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1))))",
+      "with_check": null
+    },
+    {
+      "polname": "employee-images: admin can manage",
+      "cmd": "ALL",
+      "roles": "authenticated",
+      "using": "((bucket_id = 'employee-images'::text) AND ((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)))",
+      "with_check": "((bucket_id = 'employee-images'::text) AND ((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)))"
+    },
+    {
+      "polname": "employee-images: tenant members can read",
+      "cmd": "SELECT",
+      "roles": "authenticated",
+      "using": "(bucket_id = 'employee-images'::text)",
+      "with_check": null
+    },
+    {
+      "polname": "issued-docs select",
+      "cmd": "SELECT",
+      "roles": "",
+      "using": "((bucket_id = 'issued-documents'::text) AND (EXISTS ( SELECT 1\n   FROM issued_documents id_rec\n  WHERE ((id_rec.generated_pdf_path = objects.name) AND (is_own_issued_document(id_rec.employee_id) OR can_admin_view_issued_document(id_rec.facility_id, id_rec.tenant_id))))))",
+      "with_check": null
+    },
+    {
+      "polname": "msg-attach delete",
+      "cmd": "DELETE",
+      "roles": "",
+      "using": "((bucket_id = 'message-attachments'::text) AND (EXISTS ( SELECT 1\n   FROM (message_attachments a\n     JOIN messages m ON ((m.id = a.message_id)))\n  WHERE ((a.storage_path = objects.name) AND (m.sender_employee_id = ( SELECT employees.id\n           FROM employees\n          WHERE (employees.auth_user_id = auth.uid())\n         LIMIT 1))))))",
+      "with_check": null
+    },
+    {
+      "polname": "msg-attach insert",
+      "cmd": "INSERT",
+      "roles": "",
+      "using": null,
+      "with_check": "((bucket_id = 'message-attachments'::text) AND (auth.uid() IS NOT NULL))"
+    },
+    {
+      "polname": "msg-attach select",
+      "cmd": "SELECT",
+      "roles": "",
+      "using": "((bucket_id = 'message-attachments'::text) AND (EXISTS ( SELECT 1\n   FROM (message_attachments a\n     JOIN messages m ON ((m.id = a.message_id)))\n  WHERE ((a.storage_path = objects.name) AND (is_message_thread_member(m.thread_id) OR can_admin_view_thread(m.thread_id))))))",
+      "with_check": null
+    }
+  ]
+}

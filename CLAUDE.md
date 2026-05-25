@@ -412,3 +412,37 @@ shift-maker 由来:
 3. ユーザー指摘で発覚したエラーも記録
 4. 未解決も「未解決」として記録しユーザー報告
 5. 記録忘れ = 作業未完了
+
+---
+
+## 16. Supabase Dashboard 直接編集の禁止 / 再発防止フレーム
+
+2026-05-25 の `storage.objects` documents バケット事故 (BlockEditor 画像アップロード全件失敗) を踏まえた永続ルール。
+詳細経緯は `docs/error-log.md` の該当エントリと `docs/migration-applied.md` の「既知の不整合」表参照。
+
+### 16-1. Dashboard 直接編集の禁止
+- **Supabase Dashboard で policy / RLS / function / trigger / 列を直接編集・追加・削除しない**
+- 全ての DB 変更は `supabase/migrations/NNN_*.sql` + 対応する `scripts/apply-migration-NNN.mjs` 経由で行う
+- Dashboard 編集が必要に見えた場合は、まずユーザーに報告して migration ファイル経由に切り替える
+- これは deaf-ic / origami-staffbase / diletto-new-staffbase の 3 リポ共通ルール
+
+### 16-2. 適用済 migration の追跡
+- 本リポジトリには `supabase_migrations.schema_migrations` のような自動追跡テーブルが存在しない
+- そのため migration ファイルがあっても本番 DB に流れているとは限らない (118 番の事故が実例)
+- 200 番以降は `docs/migration-applied.md` に手動記録する。書いたら必ず流す、流したら必ず記録する
+- バグ調査で「migration には fix があるのに直っていない」状況に遭遇したら、まず `scripts/probe-*.mjs` で実 DB の現状を引いて事実確認する。ユーザーの「以前はできていた」記憶を主観のまま信じない
+
+### 16-3. Storage policy 変更前後の snapshot 義務
+- RLS / storage policy を変更する**前**に `node scripts/snapshot-storage-policies.mjs` を実行し `docs/storage-policy-snapshot.json` を更新
+- 変更**後**にもう一度実行して再度 snapshot を上書き、`git diff docs/storage-policy-snapshot.json` を当該 commit に同梱する
+- これにより「いつ・何が・どう変わったか」が PR / commit 単位で追跡可能になる
+- snapshot は単一の真の状態 (最新本番) を表す。意図しない diff が出たら Dashboard 手動編集を疑う
+
+### 16-4. RLS 変更時の最小手順
+1. `scripts/probe-storage-rls.mjs` (または該当 schema 用の probe) で**現状の policy / RLS を実 DB から取得**
+2. `scripts/snapshot-storage-policies.mjs` 実行 → snapshot を git に commit (変更前の状態を残す)
+3. migration ファイル作成 (`supabase/migrations/NNN_*.sql`)
+4. `scripts/apply-migration-NNN.mjs` 作成 + 実行
+5. `scripts/snapshot-storage-policies.mjs` を再実行 → snapshot 更新
+6. `docs/migration-applied.md` に行追加
+7. 上記すべてを 1 commit で push
