@@ -5,6 +5,35 @@
 
 ---
 
+## 「manager 投稿の push 通知が届かない」報告 → 真因はバグでなく push v2 の集約設計仕様 (3 リポ共通教訓)
+
+- **発生日**: 2026-05-25 (diletto で報告、deaf-ic / ORIGAMI も同じ push v2 設計のため共通教訓として記録)
+- **発生箇所**: push v2 仕様 (`lib/notifications/queue.ts` / `app/api/notifications/enqueue/route.ts` / `app/api/cron/send-notifications/route.ts`)
+- **エラー内容**: 「manager 投稿の push 通知が来ない」報告。iPhone Safari で確認していた。
+- **真因**: push v2 は次の設計仕様により、報告時点では送信時刻がまだ来ていなかった (バグではない):
+  1. 投稿時 enqueue で `scheduled_at = now + 2h` (`DELAY_HOURS=2`)
+  2. quiet hours (JST 23:00-07:00) に該当すれば翌朝 07:00 JST に push back
+  3. 同テナントの他の未送信行も新 `scheduled_at` に揃える (ローリングウィンドウ集約)
+  4. `MAX_DELAY_HOURS=6` で最古 first_scheduled_at + 6h 後には強制送信
+  5. cron `dispatch_notification_queue` (`*/10 * * * *`) は dispatcher 側でも quiet 帯スキップ + scheduled_at <= now() を batch=50 処理
+- **解決方法**: コード変更なし。「**バグでなく仕様**」と確認。
+- **再発防止**:
+  - 「届かない」報告を受けたら **まず実 DB の `notification_queue` を確認**
+  - `scheduled_at` が未来 / `sent_at = null` なら**仕様通りの送信待ち**、ユーザーに「JST 07:00 に届く」と説明
+  - `scheduled_at` 過去 + `sent_at = null` が続くなら本物のバグ → 別途調査
+  - `sent_at` 記録あり + ユーザーに届いていない場合は subscription / APN / VAPID 問題 → `push_subscriptions` 確認
+  - diletto に `scripts/probe-push-notification-flow.mjs` 雛形あり、deaf-ic / ORIGAMI でも流用可能
+- **同種報告時の SQL クイックチェック**:
+  ```sql
+  SELECT count(*) FROM public.push_subscriptions WHERE employee_id = '<id>';
+  SELECT id, content_type, scheduled_at, sent_at, cancelled_at, first_scheduled_at
+    FROM public.notification_queue ORDER BY created_at DESC LIMIT 20;
+  SELECT jobname, status, return_message, start_time
+    FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
+  ```
+
+---
+
 ## 記録フォーマット
 
 ```
