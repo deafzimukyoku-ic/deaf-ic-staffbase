@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
+import { categoryAudienceToItem } from '@/lib/category-audience-prefill';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
@@ -20,6 +21,7 @@ import { BlockEditor, type ContentBlock } from '@/components/admin/BlockEditor';
 import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
+import { TargetScopeBadge } from '@/components/admin/FacilityScopeSelector';
 import { enqueueNotification, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
@@ -259,6 +261,14 @@ export default function AdminTrainingsPage() {
                 <div className="relative">
                   <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
                   <span className="text-[10px] text-brand-gray">{catDocs.length} 項目</span>
+                  {/* 205: カテゴリ audience バッジ */}
+                  <div className="mt-1">
+                    <TargetScopeBadge
+                      targetType={cat.target_type ?? 'all'}
+                      targetFacilityIds={cat.target_facility_ids ?? []}
+                      facilities={facilities}
+                    />
+                  </div>
                 </div>
               </button>
             );
@@ -309,7 +319,17 @@ export default function AdminTrainingsPage() {
           <Button onClick={() => {
             setEditingTraining(null);
             setRequireRecert(false);
-            setBlocks([]); setForm({ title: '', body: '', pdf_storage_path: '', youtube_url: '', category_id: selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
+            setBlocks([]);
+            /* v2 (205): カテゴリ別ビューから新規追加時、そのカテゴリの audience も初期値に */
+            { const cat = selectedCategory && selectedCategory.id !== 'none' ? selectedCategory : null;
+              const aud = categoryAudienceToItem(cat as Category | null);
+              setForm({ title: '', body: '', pdf_storage_path: '', youtube_url: '',
+                category_id: cat ? cat.id : null,
+                target_type: aud.target_type,
+                target_facility_ids: aud.target_facility_ids,
+                target_position_ids: [],
+              });
+            }
             setDialogOpen(true);
           }}>+ 研修を追加</Button>
         </div>
@@ -399,7 +419,16 @@ export default function AdminTrainingsPage() {
             <CategorySelect
               type="training"
               value={form.category_id}
-              onChange={(id) => setForm({ ...form, category_id: id })}
+              onChange={(id, cat) => {
+                /* v2 (205): カテゴリ選択時、audience prefill */
+                const aud = categoryAudienceToItem(cat ?? null);
+                setForm({
+                  ...form,
+                  category_id: id,
+                  target_type: aud.target_type,
+                  target_facility_ids: aud.target_facility_ids,
+                });
+              }}
               label="カテゴリ（任意）"
             />
             {/* 再受講要求チェック: 編集時のみ表示。研修の内容を大きく変えたときに ON にする。

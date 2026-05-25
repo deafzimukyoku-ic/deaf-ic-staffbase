@@ -19,6 +19,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
+import { categoryAudienceToItem } from '@/lib/category-audience-prefill';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
@@ -29,6 +30,7 @@ import { PublishToggleButton } from '@/components/admin/PublishToggleButton';
 import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
 import { AttributeTargetSelector, TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
+import { TargetScopeBadge } from '@/components/admin/FacilityScopeSelector';
 import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
@@ -125,10 +127,14 @@ export default function AdminCompliancePage() {
     setEditContent('');
     setEditBlocks([]);
     setEditComment('');
-    // カテゴリ詳細から新規作成した場合はそのカテゴリをデフォルト選択
-    setEditCategoryId(selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null);
-    setEditTargetType('all');
-    setEditTargetFacilityIds([]);
+    /* v2 (205): カテゴリ詳細から新規作成時、そのカテゴリと audience を初期値に */
+    {
+      const cat = selectedCategory && selectedCategory.id !== 'none' ? selectedCategory : null;
+      const aud = categoryAudienceToItem(cat as Category | null);
+      setEditCategoryId(cat ? cat.id : null);
+      setEditTargetType(aud.target_type);
+      setEditTargetFacilityIds(aud.target_facility_ids);
+    }
     setEditTargetPositionIds([]);
     setEditOpen(true);
   }
@@ -316,6 +322,14 @@ export default function AdminCompliancePage() {
                 <div className="relative">
                   <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
                   <span className="text-[10px] text-brand-gray">{catDocs.length} 項目</span>
+                  {/* 205: カテゴリ audience バッジ */}
+                  <div className="mt-1">
+                    <TargetScopeBadge
+                      targetType={cat.target_type ?? 'all'}
+                      targetFacilityIds={cat.target_facility_ids ?? []}
+                      facilities={facilities}
+                    />
+                  </div>
                 </div>
               </button>
             );
@@ -485,7 +499,13 @@ export default function AdminCompliancePage() {
             <CategorySelect
               type="compliance"
               value={editCategoryId}
-              onChange={setEditCategoryId}
+              onChange={(id, cat) => {
+                /* v2 (205): カテゴリ選択時、audience prefill */
+                setEditCategoryId(id);
+                const aud = categoryAudienceToItem(cat ?? null);
+                setEditTargetType(aud.target_type);
+                setEditTargetFacilityIds(aud.target_facility_ids);
+              }}
               label="カテゴリ（任意）"
             />
             <div className="space-y-2">

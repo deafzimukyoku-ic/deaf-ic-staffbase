@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
+import { categoryAudienceToItem } from '@/lib/category-audience-prefill';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
@@ -257,6 +258,14 @@ export default function AdminAnnouncementsPage() {
                 <div className="relative">
                   <span className="text-sm font-bold text-brand-ink block truncate mb-1">{cat.name}</span>
                   <span className="text-[10px] text-brand-gray">{catDocs.length} 項目</span>
+                  {/* 205: カテゴリ audience バッジ */}
+                  <div className="mt-1">
+                    <TargetScopeBadge
+                      targetType={cat.target_type ?? 'all'}
+                      targetFacilityIds={cat.target_facility_ids ?? []}
+                      facilities={facilities}
+                    />
+                  </div>
                 </div>
               </button>
             );
@@ -306,7 +315,16 @@ export default function AdminAnnouncementsPage() {
           />
           <Button onClick={() => {
             setEditingAnnouncement(null);
-            setForm({ title: '', category_id: selectedCategory && selectedCategory.id !== 'none' ? selectedCategory.id : null, target_type: 'all', target_facility_ids: [], target_position_ids: [] });
+            /* v2 (205): カテゴリ別ビューから新規追加時、そのカテゴリの audience も初期値に */
+            { const cat = selectedCategory && selectedCategory.id !== 'none' ? selectedCategory : null;
+              const aud = categoryAudienceToItem(cat as Category | null);
+              setForm({ title: '',
+                category_id: cat ? cat.id : null,
+                target_type: aud.target_type,
+                target_facility_ids: aud.target_facility_ids,
+                target_position_ids: [],
+              });
+            }
             setBlocks([]);
             setDialogOpen(true);
           }}>+ 投稿する</Button>
@@ -392,7 +410,16 @@ export default function AdminAnnouncementsPage() {
             <CategorySelect
               type="announcement"
               value={form.category_id}
-              onChange={(id) => setForm({ ...form, category_id: id })}
+              onChange={(id, cat) => {
+                /* v2 (205): カテゴリ選択時、audience prefill */
+                const aud = categoryAudienceToItem(cat ?? null);
+                setForm({
+                  ...form,
+                  category_id: id,
+                  target_type: aud.target_type,
+                  target_facility_ids: aud.target_facility_ids,
+                });
+              }}
               label="カテゴリ（任意）"
             />
           </div>

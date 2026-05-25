@@ -6,7 +6,9 @@ import type { Category, CategoryType } from '@/lib/types';
 interface Props {
   type: CategoryType;
   value: string | null;
-  onChange: (id: string | null) => void;
+  /* 225: 第二引数で選択されたカテゴリ全体を渡す（呼び出し側で audience prefill 等に使用可）。
+     既存呼び出しは第二引数を無視できるので後方互換あり。 */
+  onChange: (id: string | null, category?: Category | null) => void;
   includeAllOption?: boolean; // フィルタ用「すべて」選択肢
   label?: string;
   className?: string;
@@ -62,9 +64,12 @@ export function CategorySelect({
           value={value ?? (includeAllOption ? '__all__' : '')}
           onChange={(e) => {
             const v = e.target.value;
-            if (v === '__all__') onChange(null);
-            else if (v === '') onChange(null);
-            else onChange(v);
+            if (v === '__all__') onChange(null, null);
+            else if (v === '') onChange(null, null);
+            else {
+              const selected = cats.find((c) => c.id === v) ?? null;
+              onChange(v, selected);
+            }
           }}
           disabled={loading}
           className="flex-1 rounded-md border border-brand-gray/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
