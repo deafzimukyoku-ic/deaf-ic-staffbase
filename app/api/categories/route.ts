@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       .eq('auth_user_id', user.id)
       .single();
     myEmployeeId = meFull?.id ?? null;
-    const { data: myFacs } = await supabase.rpc('get_my_facility_ids');
+    const { data: myFacs } = await supabase.rpc('get_my_managed_facility_ids');
     const myFacIds = new Set(((myFacs as Array<string> | null) ?? []).map(String));
     const allIn = targetFacilityIds.every((id) => myFacIds.has(id));
     if (!allIn) {

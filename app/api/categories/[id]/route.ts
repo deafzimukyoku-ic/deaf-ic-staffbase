@@ -66,7 +66,7 @@ export async function PATCH(
       if (targetType !== 'facility') {
         return NextResponse.json({ error: 'マネージャーは「全社共通」に変更できません' }, { status: 403 });
       }
-      const { data: myFacs } = await supabase.rpc('get_my_facility_ids');
+      const { data: myFacs } = await supabase.rpc('get_my_managed_facility_ids');
       const myFacIds = new Set(((myFacs as Array<string> | null) ?? []).map(String));
       const allIn = targetFacilityIds.every((id) => myFacIds.has(id));
       if (!allIn) {
