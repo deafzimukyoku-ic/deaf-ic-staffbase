@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getDaysInMonth, getDay } from 'date-fns';
+import { useSearchParams } from 'next/navigation';
+import { addMonths, format, getDaysInMonth, getDay, subMonths } from 'date-fns';
+import MonthStepper from '@/components/shift/MonthStepper';
 import { createClient } from '@/lib/supabase/client';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
 import { todayStr } from '@/lib/date/isToday';
@@ -9,11 +11,12 @@ import { fetchMyFacilityIds } from '@/lib/multi-facility';
 import type { ShiftAssignmentType } from '@/lib/types';
 
 /**
- * 社員: 自分の所属 facility (主所属 + 兼任先) の今月 published シフトを表で表示。
+ * 社員: 自分の所属 facility (主所属 + 兼任先) の published シフトを表で表示。
  *
  * - /my/requests ページの「施設のシフト」タブ用 (休み希望と同居)
- * - 今月固定 (today 換算)。月セレクタは無し
- * - 表形式: 行 = 同 facility の active 社員、列 = 日付 (今月)
+ * - URL ?month=YYYY-MM で対象月を制御 (facility-shift-month-navigation 仕様)
+ * - 月送り範囲: 現在月 ± 1 ヶ月 (前月/今月/翌月) のみ。範囲外 URL は今月にフォールバック
+ * - 表形式: 行 = 同 facility の active 社員、列 = 日付 (対象月)
  * - セル = 出勤時刻 or 公休/希望休/有給/休み のラベル (色分け)
  * - 読み取り専用。published のみ (RLS で migration 160 が許可)
  *
@@ -21,6 +24,16 @@ import type { ShiftAssignmentType } from '@/lib/types';
  *   - get_my_facility_ids() に含まれる facility の
  *   - publish_status='published' の shift_assignments を全社員分 SELECT 可能
  */
+
+function thisMonthStr(): string {
+  return format(new Date(), 'yyyy-MM');
+}
+function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1, 1);
+  const next = delta > 0 ? addMonths(d, delta) : subMonths(d, -delta);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+}
 
 interface ShiftRow {
   employee_id: string;
@@ -62,11 +75,19 @@ interface Props {
 
 export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }: Props) {
   const supabase = useMemo(() => createClient(), []);
-  /* 今月固定 (today 換算)。月セレクタなし */
-  const { year, month } = useMemo(() => {
-    const d = new Date();
-    return { year: d.getFullYear(), month: d.getMonth() + 1 };
-  }, []);
+  const searchParams = useSearchParams();
+  /* URL ?month=YYYY-MM 駆動。範囲外 / 不正値は今月にフォールバック */
+  const { year, month, thisMonth, prevMonth, nextMonth } = useMemo(() => {
+    const thisMonth = thisMonthStr();
+    const prevMonth = shiftMonth(thisMonth, -1);
+    const nextMonth = shiftMonth(thisMonth, +1);
+    const allowed = [prevMonth, thisMonth, nextMonth];
+    const urlMonth = searchParams.get('month');
+    const isValidFmt = !!urlMonth && /^\d{4}-\d{2}$/.test(urlMonth);
+    const target = isValidFmt && allowed.includes(urlMonth!) ? urlMonth! : thisMonth;
+    const [y, m] = target.split('-').map(Number);
+    return { year: y, month: m, thisMonth, prevMonth, nextMonth };
+  }, [searchParams]);
 
   const [loading, setLoading] = useState(true);
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
@@ -144,27 +165,29 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
 
   const facNameById = useMemo(() => new Map(facilities.map((f) => [f.id, f.name])), [facilities]);
 
-  if (loading) {
-    return (
-      <div className="h-64 flex items-center justify-center text-sm text-brand-gray">読み込み中...</div>
-    );
-  }
+  /* 月送りはどの状態でも常に表示するため、ローディング / 空 / 未公開状態は inline で描画 (return しない) */
+  const stateBlock = loading ? (
+    <div className="h-64 flex items-center justify-center text-sm text-brand-gray">読み込み中...</div>
+  ) : employees.length === 0 ? (
+    <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
+      <p className="text-sm text-brand-gray">対象社員が見つかりません。</p>
+    </div>
+  ) : shifts.length === 0 ? (
+    <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
+      <p className="text-sm text-brand-gray">
+        {year}年{month}月の {myFacilityIds.length === 1 ? facilities[0]?.name : '所属事業所'} のシフトはまだ公開されていません。
+      </p>
+    </div>
+  ) : null;
 
-  if (employees.length === 0) {
+  /* state がある時 (loading / 空 / 未公開) は MonthStepper + 状態ブロック だけ表示。それ以外は表本体まで描画 */
+  if (stateBlock) {
     return (
-      <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
-        <p className="text-sm text-brand-gray">対象社員が見つかりません。</p>
-      </div>
-    );
-  }
-
-  /* 同 facility にシフトが 1 件も無い場合 (= まだ未公開) */
-  if (shifts.length === 0) {
-    return (
-      <div className="rounded-md bg-white border border-brand-gray/10 p-8 text-center">
-        <p className="text-sm text-brand-gray">
-          {year}年{month}月の {myFacilityIds.length === 1 ? facilities[0]?.name : '所属事業所'} のシフトはまだ公開されていません。
-        </p>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <MonthStepper minMonth={prevMonth} maxMonth={nextMonth} />
+        </div>
+        {stateBlock}
       </div>
     );
   }
@@ -191,6 +214,11 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
           {year}年{month}月 — {myFacilityIds.length === 1 ? facilities[0]?.name : `所属事業所のシフト (${facilities.length} 施設)`}
         </h2>
         <span className="text-[10px] text-brand-gray">公開済みのみ表示 / 表は読み取り専用</span>
+      </div>
+
+      {/* 月送り (現在月 ± 1 ヶ月制限) */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <MonthStepper minMonth={prevMonth} maxMonth={nextMonth} />
       </div>
 
       {/* 凡例 */}

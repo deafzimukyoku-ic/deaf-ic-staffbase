@@ -19,9 +19,14 @@ const STORAGE_KEY = 'deaf-ic.shift.current-month';
 interface MonthStepperProps {
   showYearJump?: boolean;
   defaultMonth?: string;
+  /* 月送り範囲制限 (任意)。'YYYY-MM' 形式。
+     facility-shift-month-navigation 仕様で MyFacilityShiftView に ±1 ヶ月制限を入れるため追加。
+     未指定なら無制限 (ShiftFull / MyRequestsView は従来通り)。 */
+  minMonth?: string;
+  maxMonth?: string;
 }
 
-export default function MonthStepper({ showYearJump = false, defaultMonth }: MonthStepperProps = {}) {
+export default function MonthStepper({ showYearJump = false, defaultMonth, minMonth, maxMonth }: MonthStepperProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -31,6 +36,11 @@ export default function MonthStepper({ showYearJump = false, defaultMonth }: Mon
   const thisMonth = thisMonthStr();
   const current = isValid ? urlMonth : (defaultMonth || thisMonth);
   const isCurrentMonth = current === thisMonth;
+  /* 範囲端の判定 (props 未指定時は false 固定 = 制限なし) */
+  const atMin = !!minMonth && current <= minMonth;
+  const atMax = !!maxMonth && current >= maxMonth;
+  /* 「今月へ」ジャンプは今月が範囲内のときのみ有効 */
+  const todayInRange = (!minMonth || thisMonth >= minMonth) && (!maxMonth || thisMonth <= maxMonth);
 
   const setMonth = (next: string) => {
     try {
@@ -68,8 +78,9 @@ export default function MonthStepper({ showYearJump = false, defaultMonth }: Mon
           <button
             type="button"
             onClick={() => setMonth(shift(current, -12))}
+            disabled={atMin}
             className={chevronBtn}
-            style={btnBase}
+            style={atMin ? { ...btnBase, opacity: 0.35, cursor: 'not-allowed' } : btnBase}
             aria-label="前の年"
             title="前の年"
           >
@@ -79,8 +90,9 @@ export default function MonthStepper({ showYearJump = false, defaultMonth }: Mon
         <button
           type="button"
           onClick={() => setMonth(shift(current, -1))}
+          disabled={atMin}
           className={chevronBtn}
-          style={btnBase}
+          style={atMin ? { ...btnBase, opacity: 0.35, cursor: 'not-allowed' } : btnBase}
           aria-label="前の月"
           title="前の月"
         >
@@ -121,8 +133,9 @@ export default function MonthStepper({ showYearJump = false, defaultMonth }: Mon
         <button
           type="button"
           onClick={() => setMonth(shift(current, 1))}
+          disabled={atMax}
           className={chevronBtn}
-          style={btnBase}
+          style={atMax ? { ...btnBase, opacity: 0.35, cursor: 'not-allowed' } : btnBase}
           aria-label="次の月"
           title="次の月"
         >
@@ -132,8 +145,9 @@ export default function MonthStepper({ showYearJump = false, defaultMonth }: Mon
           <button
             type="button"
             onClick={() => setMonth(shift(current, 12))}
+            disabled={atMax}
             className={chevronBtn}
-            style={btnBase}
+            style={atMax ? { ...btnBase, opacity: 0.35, cursor: 'not-allowed' } : btnBase}
             aria-label="次の年"
             title="次の年"
           >
@@ -142,7 +156,7 @@ export default function MonthStepper({ showYearJump = false, defaultMonth }: Mon
         )}
       </div>
 
-      {!isCurrentMonth && (
+      {!isCurrentMonth && todayInRange && (
         <button
           type="button"
           onClick={() => setMonth(thisMonth)}

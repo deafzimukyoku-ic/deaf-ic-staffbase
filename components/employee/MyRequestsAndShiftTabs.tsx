@@ -51,13 +51,13 @@ export default function MyRequestsAndShiftTabs({ employeeId, tenantId, facilityI
           value="requests"
           className="px-3 sm:px-4 text-sm font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:font-bold"
         >
-          休み希望（来月）
+          休み希望
         </TabsTrigger>
         <TabsTrigger
           value="facility-shift"
           className="px-3 sm:px-4 text-sm font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:font-bold"
         >
-          施設のシフト（今月）
+          施設のシフト
         </TabsTrigger>
       </TabsList>
 
