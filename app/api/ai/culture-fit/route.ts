@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { runDiagnosis } from '@/lib/ai-client';
 import { AI_PROMPTS } from '@/lib/ai-prompts';
 import { DIAGNOSIS_FIELDS } from '@/lib/ai-diagnosis-fields';
+import { buildAiInputData } from '@/lib/diagnosis-data';
 import { MAX_AI_DIAGNOSIS_PER_MONTH } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
@@ -21,10 +22,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `月間上限（${MAX_AI_DIAGNOSIS_PER_MONTH}回）に達しました` }, { status: 429 });
   }
 
-  const empData: Record<string, unknown> = {};
-  for (const field of DIAGNOSIS_FIELDS.cultureFit) {
-    empData[field] = (employee as Record<string, unknown>)[field] ?? null;
-  }
+  // enum カラムは日本語ラベルに変換 (lib/diagnosis-data.ts)
+  const empData = buildAiInputData(employee as Record<string, unknown>, DIAGNOSIS_FIELDS.cultureFit);
 
   const tenantValues = {
     company_philosophy: tenant.company_philosophy,

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { runDiagnosis } from '@/lib/ai-client';
 import { AI_PROMPTS } from '@/lib/ai-prompts';
 import { DIAGNOSIS_FIELDS } from '@/lib/ai-diagnosis-fields';
+import { buildAiInputData } from '@/lib/diagnosis-data';
 import { MAX_AI_DIAGNOSIS_PER_MONTH } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
@@ -25,13 +26,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `月間上限（${MAX_AI_DIAGNOSIS_PER_MONTH}回）に達しました` }, { status: 429 });
   }
 
-  const teamData = employees.map((emp) => {
-    const data: Record<string, unknown> = {};
-    for (const field of DIAGNOSIS_FIELDS.teamCompat) {
-      data[field] = (emp as Record<string, unknown>)[field] ?? null;
-    }
-    return data;
-  });
+  /* enum カラム ('context' / 'organized' 等) は profileOptionLabel で日本語化してから渡す。
+     詳細: 本リポ docs/error-log.md (ORIGAMI で 2026-05-26 に発覚し本家系にも移植) */
+  const teamData = employees.map((emp) =>
+    buildAiInputData(emp as Record<string, unknown>, DIAGNOSIS_FIELDS.teamCompat),
+  );
 
   const userPrompt = AI_PROMPTS.teamCompat.user.replace('[ここに回答データを貼る]', JSON.stringify(teamData, null, 2));
 

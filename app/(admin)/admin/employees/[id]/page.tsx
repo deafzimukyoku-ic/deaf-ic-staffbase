@@ -937,6 +937,30 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
 
+              {/* 社員側 (ProfileSection2Intro.tsx) で入力できる 3 項目だが、管理者画面 (このタブ) に
+                  表示漏れていた。値が空でも「未入力」表示で社員が記入する余地があることを管理者に示す。
+                  ORIGAMI で 2026-05-26 発覚し本家系にも移植。 */}
+              <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-3">
+                <div>
+                  <Label className="text-xs text-brand-gray-light font-bold mb-2 block">力を入れてきたこと</Label>
+                  <div className="p-3 rounded-lg bg-brand-gray/5 border border-brand-gray/5 text-sm whitespace-pre-wrap leading-relaxed">
+                    {employee.efforts_focused_on || <span className="text-brand-gray-light italic">未入力</span>}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-brand-gray-light font-bold mb-2 block">周囲からどのような人と言われるか</Label>
+                  <div className="p-3 rounded-lg bg-brand-gray/5 border border-brand-gray/5 text-sm whitespace-pre-wrap leading-relaxed">
+                    {employee.how_others_describe || <span className="text-brand-gray-light italic">未入力</span>}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-brand-gray-light font-bold mb-2 block">仕事をするうえで大切にしていること</Label>
+                  <div className="p-3 rounded-lg bg-brand-gray/5 border border-brand-gray/5 text-sm whitespace-pre-wrap leading-relaxed">
+                    {employee.values_and_motivation || <span className="text-brand-gray-light italic">未入力</span>}
+                  </div>
+                </div>
+              </div>
+
               <Separator className="opacity-50" />
 
               <div className="grid gap-8 sm:grid-cols-3">

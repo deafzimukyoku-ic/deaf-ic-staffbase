@@ -1022,3 +1022,18 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | lib/multi-facility.ts::isItemInAudience | SQL `item_in_audience` と同一ロジック |
 | app/(manager)/mgr/dashboard/page.tsx, components/admin/ProgressDashboard.tsx | RPC/view 値を ProgressBadge に表示 |
 | app/api/reports/route.ts, components/admin/ReportMatrix.tsx | 同 audience 基準で閲覧レポート集計 |
+
+---
+
+## 自己紹介3項目の管理者表示 + AI 診断日本語化（2026-05-26 / ORIGAMI から移植）
+
+事案: ORIGAMI-GRP-staffbase で発覚した 2 つの構造的バグが deaf-ic にも存在。`docs/error-log.md` の同日エントリ参照。
+
+| 変更 | 内容 / ファイル |
+|---|---|
+| 自己紹介3項目追加 | [app/(admin)/admin/employees/[id]/page.tsx](../app/%28admin%29/admin/employees/%5Bid%5D/page.tsx) の自己紹介タブに `efforts_focused_on` / `how_others_describe` / `values_and_motivation` 表示 (`brand-*` クラス名で適用) |
+| AI 診断データ変換ヘルパー新設 | [lib/diagnosis-data.ts](../lib/diagnosis-data.ts) — `buildAiInputData()` で enum カラムを日本語化してから AI に渡す |
+| 4 AI ルート修正 | [team-compat](../app/api/ai/team-compat/route.ts) / [personality](../app/api/ai/personality/route.ts) / [strengths](../app/api/ai/strengths/route.ts) / [culture-fit](../app/api/ai/culture-fit/route.ts) で `buildAiInputData` 適用 |
+| 既存共通関数 (変更なし) | [lib/profile-options.ts](../lib/profile-options.ts) の `profileOptionLabel` が単一の真実源として再利用される |
+
+教訓: DB の enum 値を外部 (AI / メール / Webhook 等) に渡す前は必ず `profile-options.ts` のラベル変換を通す。社員側フォームの新規追加時は管理者画面・マネージャー画面・AI 診断の 3 経路すべてを横断確認。

@@ -814,4 +814,26 @@
 - **再発防止**: audience 判定を SQL 関数 `item_in_audience` 1 本に集約 (view / RPC の 8 サブクエリ + 4 last_*_at が全て同関数を呼ぶ。インラインコピー禁止)。`lib/multi-facility.ts::isItemInAudience` と SQL `item_in_audience` は**常に同義に保つ** (どちらか変えたら他方も変える)。**「ダッシュボード分子と分母・閲覧レポートが構造的に一致しているか」を新集計追加時のチェックポイントにし、audience 軸を最初に揃える。**
 
 ---
+## 管理者「自己紹介・働き方」タブに 3 項目表示漏れ + AI 診断に英語 enum 値混入
+
+- **発生日**: 2026-05-26 (ORIGAMI-GRP-staffbase で発覚、本家系の deaf-ic にも同根バグありで移植)
+- **発生箇所**:
+  - 表示漏れ: `app/(admin)/admin/employees/[id]/page.tsx` の自己紹介タブ
+  - AI 英語: `app/api/ai/{team-compat,personality,strengths,culture-fit}/route.ts`
+- **エラー内容**:
+  1. 社員側 `ProfileSection2Intro.tsx` で入力できる `efforts_focused_on` / `how_others_describe` / `values_and_motivation` の 3 項目が **管理者の社員詳細「自己紹介・働き方」タブで表示されない** (社員は入力できる、DB には保存される、マネージャー側 `SubordinateDetail.tsx` では表示済)。
+  2. AI 診断の出力テキストに英語の enum 値 (「context重視・organized相談」「conclusion重視」等) がそのまま混入していた。
+- **原因**:
+  1. **表示漏れ**: 管理者画面の自己紹介タブで current_duties / past_duties までしか JSX に書かれておらず、3 項目分の `<div>` がそもそも存在しなかった。社員側フォームとマネージャー側表示には反映されたが管理者側だけ漏れた初期実装の取りこぼし。
+  2. **AI 英語混入**: 4 つの AI 診断 API ルートが employees 行の enum カラム (`comm_conclusion_vs_context = 'context'`, `comm_consult_timing = 'organized'`, `work_style_clear_vs_autonomy = 'autonomy'` 等) を `JSON.stringify` で**生のまま AI に渡していた**。AI は受け取った英語値をそのまま文章に転記するため、出力テキスト全体に英語が混じる。既存の `profileOptionLabel` (lib/profile-options.ts) は画面表示には使っていたが、AI 渡し側では使われていなかった。
+- **解決方法**:
+  1. `app/(admin)/admin/employees/[id]/page.tsx` 自己紹介タブの current_duties / past_duties セクションの直後に 3 項目表示の `<div>` を追加 (deaf-ic は `brand-*` クラス名で適用)。
+  2. **`lib/diagnosis-data.ts` を新規追加** — `buildAiInputData(employee, fields)` ヘルパーが enum カラムだけ `profileOptionLabel` 経由で日本語ラベルに変換 + その他 text カラムはそのまま渡す。4 ルートすべてで `buildAiInputData` を呼ぶように置換。
+  3. 既存保存済 `ai_diagnoses` 行 (英語混じり) は**そのまま** (再診断時に上書き)。
+- **再発防止**:
+  - DB の enum 値を**外部に渡す前は必ずラベル変換**を通す。`profile-options.ts` のラベル定義が「単一の真実源」なので、画面側だけでなく AI / メール / Webhook 等の出力側でも使う。
+  - 社員側フォームに新フィールドを追加したら、**管理者画面・マネージャー画面・AI 診断 (DIAGNOSIS_FIELDS) の 4 経路を必ず横断確認**。今回は 1 経路 (管理者画面) が漏れていた。
+  - 3 リポ (本家 diletto / ORIGAMI / deaf-ic) 共通の構造的バグ。ORIGAMI で先に発覚した経緯なので、本家系でも同じ修正を移植済。
+- **関連**: docs/reference-map.md 末尾 / lib/diagnosis-data.ts (新規) / lib/profile-options.ts (既存)
+---
 *(以降、新規エラーがあれば追記)*
