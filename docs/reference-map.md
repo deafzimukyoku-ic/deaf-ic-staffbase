@@ -1037,3 +1037,16 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | 既存共通関数 (変更なし) | [lib/profile-options.ts](../lib/profile-options.ts) の `profileOptionLabel` が単一の真実源として再利用される |
 
 教訓: DB の enum 値を外部 (AI / メール / Webhook 等) に渡す前は必ず `profile-options.ts` のラベル変換を通す。社員側フォームの新規追加時は管理者画面・マネージャー画面・AI 診断の 3 経路すべてを横断確認。
+
+---
+
+## manager 個別送信スレッド作成 RLS 違反 (diletto 由来 / 観測コード予防移植)（2026-05-26）
+
+事案: diletto で manager が「+ 新規」→ 受信者選択 → 送信で RLS 違反エラー (詳細は diletto repo の同日 error-log)。deaf-ic は同一コードベースのため同根再発の可能性あり、観測コードを予防的に移植。
+
+| 変更 | 内容 / ファイル |
+|---|---|
+| 観測ログ | [components/messages/MessagesView.tsx](../components/messages/MessagesView.tsx) `NewThreadDialog.submit` に diletto と同等の `console.info`/`console.error` 追加 |
+| 予防記録 | [docs/error-log.md](./error-log.md) 同日エントリ — diletto 側との関連 + 次回再現時のチェック手順 |
+
+教訓: 共通コードベースの他リポでバグ報告が出たら、同根再発の予防として観測コードだけ先回り移植 (修正は再現時の真因確定後)。

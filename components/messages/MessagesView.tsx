@@ -815,6 +815,32 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
     if (!body.trim() && attachments.length === 0 && links.length === 0) { setErr('本文または添付を入力してください'); return; }
     setSubmitting(true);
     setErr('');
+
+    /* 観測ログ: docs/error-log.md 「manager 個別送信スレッド作成で RLS 違反 (未解決)」事案
+       (2026-05-26 / ORIGAMI 経由で diletto に発覚し deaf-ic にも観測コード移植)
+       の再現時に F12 console で真因を特定するため、各 step で
+       supabase エラーの code/details/hint と me/auth セッション状態を出力する。
+       「new row violates row-level security policy」が再発したら、ここの出力
+       (特に authUid が null / me.tenant_id が undefined) から真因を逆引きする。 */
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    const debugCtx = {
+      scope,
+      authUid: authUser?.id ?? null,
+      meId: me?.id,
+      meTenantId: me?.tenant_id,
+      meRole: me?.role,
+      recipients: selectedIds,
+      attachCount: attachments.length,
+      linkCount: links.length,
+    };
+    console.info('[messages submit] start', debugCtx);
+    if (!authUser?.id) {
+      console.error('[messages submit] FATAL: authUser is null (セッション失効疑い)', debugCtx);
+    }
+    if (!me?.tenant_id) {
+      console.error('[messages submit] FATAL: me.tenant_id is empty', debugCtx);
+    }
+
     try {
       /* 1. スレッド作成
          ⚠ INSERT 後の .select().single() は PostgreSQL の RETURNING 仕様で
@@ -825,19 +851,28 @@ function NewThreadDialog({ me, scope, presetRecipientId, onCancel, onCreated }: 
       const { error: tErr } = await supabase
         .from('message_threads')
         .insert({ id: threadId, tenant_id: me.tenant_id });
-      if (tErr) throw new Error(tErr.message);
+      if (tErr) {
+        console.error('[messages submit] step1 message_threads INSERT failed', { ...debugCtx, threadId, error: tErr });
+        throw new Error(tErr.message);
+      }
 
       /* 2. 参加者: 自分 + 受信者 */
       const memberRows = [me.id, ...selectedIds].map((eid) => ({ thread_id: threadId, employee_id: eid }));
       const { error: mErr } = await supabase.from('message_thread_members').insert(memberRows);
-      if (mErr) throw new Error(mErr.message);
+      if (mErr) {
+        console.error('[messages submit] step2 message_thread_members INSERT failed', { ...debugCtx, threadId, memberRows, error: mErr });
+        throw new Error(mErr.message);
+      }
 
       /* 3. 最初のメッセージ。同じ理由で UUID を事前生成 (message_id 後段で使う) */
       const messageId = crypto.randomUUID();
       const { error: msgErr } = await supabase
         .from('messages')
         .insert({ id: messageId, thread_id: threadId, sender_employee_id: me.id, body: body.trim() });
-      if (msgErr) throw new Error(msgErr.message);
+      if (msgErr) {
+        console.error('[messages submit] step3 messages INSERT failed', { ...debugCtx, threadId, messageId, error: msgErr });
+        throw new Error(msgErr.message);
+      }
 
       /* 4a. ファイル添付。Storage キーは ASCII safe (UUID + 拡張子) で生成 */
       for (const file of attachments) {

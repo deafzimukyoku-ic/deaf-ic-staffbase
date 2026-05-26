@@ -836,4 +836,28 @@
   - 3 リポ (本家 diletto / ORIGAMI / deaf-ic) 共通の構造的バグ。ORIGAMI で先に発覚した経緯なので、本家系でも同じ修正を移植済。
 - **関連**: docs/reference-map.md 末尾 / lib/diagnosis-data.ts (新規) / lib/profile-options.ts (既存)
 ---
+## manager「個別送信メッセージ」新規スレッド作成で RLS 違反 (diletto で発覚 / 観測コードを deaf-ic にも移植)
+
+- **発生日**: 2026-05-26 (diletto で報告、deaf-ic は同一コードベースのため予防的に観測コード移植)
+- **発生箇所**: `components/messages/MessagesView.tsx` の `NewThreadDialog.submit()` step 1 (`message_threads.insert`)
+- **状態**: **deaf-ic では未報告 / diletto で未解決**。両リポは同じ messaging 実装なので deaf-ic でも同根が再現する可能性ありとして観測コードを先回り移植。
+- **diletto 側の事実関係 (詳細は diletto repo の同日 error-log 参照)**:
+  - migration 176/177/178 (message_threads_insert / thread_members_insert / attachments link_url) は本番 DB に適用済
+  - `message_threads_insert` policy は `tenant_id` 一致だけの単純チェック → manager でも通る構造
+  - エラーは「`new row violates row-level security policy for table "message_threads"`」(報告された画面表示の前後)
+  - 真因は未確定 (`me.tenant_id` undefined / `auth.uid()` セッション失効 / cache 残存 のいずれか)
+- **暫定対処 (本コミットで実施)**:
+  - `MessagesView.submit()` の各 step に**観測ログを追加** (diletto と同内容): 開始時に `[messages submit] start` で `{authUid, meId, meTenantId, meRole, recipients}` を `console.info`、各 step 失敗時に `console.error` でエラー code/message/details/hint をフル出力
+  - 次回再現時に F12 Console をコピペすれば真因をほぼ確定できる
+- **次回再現時のチェック手順**:
+  1. F12 → Console
+  2. 新規スレッド作成 → 送信
+  3. `[messages submit] start` の object → authUid が null → 再ログイン / `me.tenant_id` 空 → loadMe 調査
+  4. `[messages submit] step1 ... failed` の error フィールド → policy 評価詳細
+  5. Network タブで `POST /rest/v1/message_threads` の Request/Response body
+- **再発防止**:
+  - 観測コードを残し、再現時の真因確定後に修正
+  - root-cause-fix「再現できていないのに修正を書かない」原則を遵守
+- **関連**: docs/reference-map.md 末尾 / components/messages/MessagesView.tsx (観測コード)
+---
 *(以降、新規エラーがあれば追記)*
