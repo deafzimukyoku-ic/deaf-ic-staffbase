@@ -26,6 +26,7 @@ import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
+import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
 import type { Manual, Category, Facility, Position } from '@/lib/types';
 
 type TargetType = 'all' | 'facility';
@@ -214,11 +215,18 @@ export default function AdminManualsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('この業務マニュアルを削除しますか？')) return;
-    const { error } = await supabase.from('manuals').delete().eq('id', id);
-    if (error) { toast.error('削除に失敗しました', { description: error.message }); return; }
+    const result = await deleteRowWithMediaCleanup(supabase, 'manuals', id);
+    if (!result.deleted) {
+      toast.error('削除に失敗しました', { description: result.error });
+      return;
+    }
     await cancelNotification('manual', id);
     if (tenantId) await reloadManuals(tenantId);
-    toast.success('業務マニュアルを削除しました');
+    if (result.storageFailed > 0) {
+      toast.success(`業務マニュアルを削除しました（Storage 残 ${result.storageFailed} 件は後続クリーンアップ）`);
+    } else {
+      toast.success('業務マニュアルを削除しました');
+    }
   }
 
   const catMap = new Map(categories.map(c => [c.id, c]));

@@ -1,5 +1,5 @@
 {
-  "snapshot_at": "2026-05-25T11:58:46.325Z",
+  "snapshot_at": "2026-05-26T14:29:54.340Z",
   "note": "本番 DB の storage.* RLS 現状。migration ファイルとの差分検知用。Dashboard での手動編集を検出する目的。",
   "storage_objects_rls": {
     "rls_enabled": true,
@@ -10,7 +10,7 @@
       "id": "documents",
       "name": "documents",
       "public": false,
-      "file_size_limit": "20971520",
+      "file_size_limit": "209715200",
       "allowed_mime_types": [
         "application/pdf",
         "image/jpeg",
@@ -63,14 +63,14 @@
       "polname": "documents: admin or manager can manage",
       "cmd": "ALL",
       "roles": "authenticated",
-      "using": "((bucket_id = 'documents'::text) AND (((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)) OR ((storage.foldername(name))[2] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1))) AND (( SELECT employees.role\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1) = ANY (ARRAY['admin'::text, 'manager'::text])))",
-      "with_check": "((bucket_id = 'documents'::text) AND (((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)) OR ((storage.foldername(name))[2] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1))) AND (( SELECT employees.role\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1) = ANY (ARRAY['admin'::text, 'manager'::text])))"
+      "using": "((bucket_id = 'documents'::text) AND (EXISTS ( SELECT 1\n   FROM employees\n  WHERE ((employees.auth_user_id = auth.uid()) AND (employees.status = 'active'::text) AND (employees.role = ANY (ARRAY['admin'::text, 'manager'::text])) AND (((employees.tenant_id)::text = (storage.foldername(objects.name))[1]) OR ((employees.tenant_id)::text = (storage.foldername(objects.name))[2]))))))",
+      "with_check": "((bucket_id = 'documents'::text) AND (EXISTS ( SELECT 1\n   FROM employees\n  WHERE ((employees.auth_user_id = auth.uid()) AND (employees.status = 'active'::text) AND (employees.role = ANY (ARRAY['admin'::text, 'manager'::text])) AND (((employees.tenant_id)::text = (storage.foldername(objects.name))[1]) OR ((employees.tenant_id)::text = (storage.foldername(objects.name))[2]))))))"
     },
     {
       "polname": "documents: tenant members can read",
       "cmd": "SELECT",
       "roles": "authenticated",
-      "using": "((bucket_id = 'documents'::text) AND (((storage.foldername(name))[1] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1)) OR ((storage.foldername(name))[2] = ( SELECT (employees.tenant_id)::text AS tenant_id\n   FROM employees\n  WHERE (employees.auth_user_id = auth.uid())\n LIMIT 1))))",
+      "using": "((bucket_id = 'documents'::text) AND (EXISTS ( SELECT 1\n   FROM employees\n  WHERE ((employees.auth_user_id = auth.uid()) AND (employees.status = 'active'::text) AND (((employees.tenant_id)::text = (storage.foldername(objects.name))[1]) OR ((employees.tenant_id)::text = (storage.foldername(objects.name))[2]))))))",
       "with_check": null
     },
     {

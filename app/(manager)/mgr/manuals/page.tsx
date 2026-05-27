@@ -23,6 +23,7 @@ import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { buildStoragePath } from '@/lib/upload-helpers';
 import { toast } from 'sonner';
+import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
 import type { Manual, Category, Position } from '@/lib/types';
 
 interface MeRow {
@@ -230,9 +231,16 @@ export default function ManagerManualsPage() {
 
     async function handleDelete(id: string) {
         if (!confirm('この業務マニュアルを削除しますか？')) return;
-        const { error } = await supabase.from('manuals').delete().eq('id', id);
-        if (error) { toast.error('削除に失敗しました'); return; }
-        toast.success('削除しました');
+        const result = await deleteRowWithMediaCleanup(supabase, 'manuals', id);
+        if (!result.deleted) {
+          toast.error('削除に失敗しました', { description: result.error });
+          return;
+        }
+        if (result.storageFailed > 0) {
+          toast.success(`削除しました（Storage 残 ${result.storageFailed} 件は後続クリーンアップ）`);
+        } else {
+          toast.success('削除しました');
+        }
         if (me) await reloadManuals(me.tenant_id);
     }
 

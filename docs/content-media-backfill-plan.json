@@ -1,0 +1,19 @@
+{
+  "snapshot_at": "2026-05-26T15:21:41.439Z",
+  "plan": [
+    {
+      "table": "manuals",
+      "row_id": "c79e0543-e909-40be-a415-8fca3d934ca6",
+      "blockIndex": 1,
+      "storagePath": "manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709525990_qjnapb_S_19054617_0.jpg",
+      "oldUrl": "https://kzdhycvcdownaggiitay.supabase.co/storage/v1/object/sign/documents/manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709525990_qjnapb_S_19054617_0.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV84OWQ4MWE3Ni1hYTU3LTQyZDItYjJlYy1hODgyNjIyM2I3MjgiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJkb2N1bWVudHMvbWFudWFscy9hODk5YTc0NC1kZWViLTQxYjYtOWNhZC02OGQyN2JiNmZiYWMvMTc3OTcwOTUyNTk5MF9xam5hcGJfU18xOTA1NDYxN18wLmpwZyIsImlhdCI6MTc3OTcwOTUyNiwiZXhwIjoyMDk1MDY5NTI2fQ.xI1mpQ32THV_UHa4rUOEixcd-36VLV-d5naD3gYkM7k"
+    },
+    {
+      "table": "manuals",
+      "row_id": "c79e0543-e909-40be-a415-8fca3d934ca6",
+      "blockIndex": 3,
+      "storagePath": "manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709510336_a7shtw_S_19054620_0.jpg",
+      "oldUrl": "https://kzdhycvcdownaggiitay.supabase.co/storage/v1/object/sign/documents/manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709510336_a7shtw_S_19054620_0.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV84OWQ4MWE3Ni1hYTU3LTQyZDItYjJlYy1hODgyNjIyM2I3MjgiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJkb2N1bWVudHMvbWFudWFscy9hODk5YTc0NC1kZWViLTQxYjYtOWNhZC02OGQyN2JiNmZiYWMvMTc3OTcwOTUxMDMzNl9hN3NodHdfU18xOTA1NDYyMF8wLmpwZyIsImlhdCI6MTc3OTcwOTUxMSwiZXhwIjoyMDk1MDY5NTExfQ.sLvRUaczAayaFmmtUiYi1GBMJOrvSESb9MYfASAg9T8"
+    }
+  ]
+}

@@ -47,7 +47,30 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-23（PWA Push 通知 + サイドバーログアウト移設 実装完了 / 本番 env 投入 + 実機検証待ち） / 全体完了率: 約 98%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-26（Drive 動画 proxy 撤去 + constraints.md §1 新設 完了） / 全体完了率: 約 98%</p>
+
+<!-- 2026-05-26 計画 #10: Drive 動画 proxy 撤去（Fast Origin Transfer 直撃 + 再生開始 10秒+ の構造修正） -->
+<div class="phase">
+  <h2>Drive 動画 proxy 撤去 + constraints.md §1 新設 (2026-05-26 完了) <span class="phase-pct">100%</span></h2>
+  <table>
+    <thead><tr><th>#</th><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td>背景</td><td>4 機能（遵守事項 / 研修 / お知らせ / 業務マニュアル）に貼った Drive 動画が再生開始まで 10 秒+ で離脱増。真因は <code>&lt;video src="/api/drive-video/{id}"&gt;</code> の Vercel Function 経由 = cold start + redirect chain + Edge 非乗 + 並列発火 + Fast Origin Transfer 10 GB 直撃。2026-05-19 の Drive iframe モバイル不具合を <code>&lt;video&gt;</code>+proxy で塞いだ判断が構造的負債として残っていた。</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>承認済（constraints.md 新規作成 + 実装承認）</td></tr>
+
+      <tr><td>D-1</td><td><code>docs/constraints.md</code> を新規作成し §1「動画は Vercel Function を経由させない」を明文化（制約 / 根拠 / やってよい / やってはいけない / 破ったときの実害 / 関連 case）。今後の構造ガード資料。</td><td class="files">docs/constraints.md (新規)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>§2 (Supabase pooler) も同時に固定。§3 は将来追加用の空き枠</td></tr>
+
+      <tr><td>D-2</td><td><code>BlockRenderer.tsx</code> の Drive 動画分岐を ▶ サムネカード（<code>&lt;a target="_blank" href="drive.google.com/file/d/.../view"&gt;</code>）に置換。<code>googleDriveVideoUrl()</code> ヘルパ削除。<code>extractDriveFileId</code> は PDF 側で継続使用のため残す。色は brand-blue / brand-ink / brand-gray-light で統一。</td><td class="files">components/admin/BlockRenderer.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>YouTube ブロック / PDF ブロック / 旧 TrainingPlayer は無関係（影響なし）</td></tr>
+
+      <tr><td>D-3</td><td><code>app/api/drive-video/[fileId]/route.ts</code> + 親ディレクトリ <code>app/api/drive-video/</code> を完全削除。残骸を残さず grep で「やっていい例」として再導入されることを防ぐ。</td><td class="files">app/api/drive-video/ (削除)</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>事前 grep で参照は BlockRenderer.tsx と error-log.md のみであることを確認</td></tr>
+
+      <tr><td>D-4</td><td><code>docs/error-log.md</code> 冒頭に新エントリ追加（真因 = proxy 経路 / 解決 = サムネカード / 再発防止 = constraints.md §1）。さらに 2026-05-19 既存エントリの再発防止欄に「【2026-05-26 補足 — 本欄の方針は逆転した】」を追記し、過去エントリだけ読んだ AI が同じ間違いを繰り返さないようにした。</td><td class="files">docs/error-log.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>同ファイルの同分岐を 2 回直した事実を「症状の場所ではなく真因（経路）で考える」教訓として残す</td></tr>
+
+      <tr><td>D-5</td><td><code>npm run dev</code> で動作確認: Drive 動画ブロックが ▶ サムネカード表示 / クリックで Drive が新タブ起動 / 旧 <code>/api/drive-video/...</code> が 404 / YouTube + PDF ブロックは無変更。</td><td class="files">—</td><td><span class="status doing">進行中</span></td><td class="pct">50%</td><td>動作確認中</td></tr>
+
+      <tr class="check"><td>確</td><td colspan="5">別視点確認: (1) 既存 Drive 動画 URL を再投稿せずカード表示されるか / (2) PDF ブロック (Drive /preview iframe) は触らず動作するか / (3) constraints.md §1 を後続の AI が読めば再導入を防げる強度になっているか / (4) error-log の 2026-05-19 エントリだけ拾い読みされても誤実装を防げるか</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-05-23 計画 #9: PWA Push 通知 + サイドバーログアウト移設 -->
 <div class="phase">

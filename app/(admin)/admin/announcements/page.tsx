@@ -26,6 +26,7 @@ import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateC
 import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
+import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
 import type { Announcement, Category, Facility, TargetType, Position } from '@/lib/types';
 
 export default function AdminAnnouncementsPage() {
@@ -209,11 +210,18 @@ export default function AdminAnnouncementsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('このお知らせを削除しますか？')) return;
-    const { error } = await supabase.from('announcements').delete().eq('id', id);
-    if (error) { toast.error('削除に失敗しました', { description: error.message }); return; }
+    const result = await deleteRowWithMediaCleanup(supabase, 'announcements', id);
+    if (!result.deleted) {
+      toast.error('削除に失敗しました', { description: result.error });
+      return;
+    }
     await cancelNotification('announcement', id);
     if (tenantId) await reloadAnnouncements(tenantId);
-    toast.success('お知らせを削除しました');
+    if (result.storageFailed > 0) {
+      toast.success(`お知らせを削除しました（Storage 残 ${result.storageFailed} 件は後続クリーンアップ）`);
+    } else {
+      toast.success('お知らせを削除しました');
+    }
   }
 
   const catMap = new Map(categories.map(c => [c.id, c]));

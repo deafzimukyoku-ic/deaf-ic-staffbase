@@ -22,6 +22,7 @@ import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
+import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
 import type { Announcement, Category, Position } from '@/lib/types';
 
 interface MeRow {
@@ -221,10 +222,17 @@ export default function ManagerAnnouncementsPage() {
 
     async function handleDelete(id: string) {
         if (!confirm('このお知らせを削除しますか？')) return;
-        const { error } = await supabase.from('announcements').delete().eq('id', id);
-        if (error) { toast.error('削除に失敗しました'); return; }
+        const result = await deleteRowWithMediaCleanup(supabase, 'announcements', id);
+        if (!result.deleted) {
+          toast.error('削除に失敗しました', { description: result.error });
+          return;
+        }
         await cancelNotification('announcement', id);
-        toast.success('削除しました');
+        if (result.storageFailed > 0) {
+          toast.success(`削除しました（Storage 残 ${result.storageFailed} 件は後続クリーンアップ）`);
+        } else {
+          toast.success('削除しました');
+        }
         if (me) await reloadAnnouncements(me.tenant_id);
     }
 

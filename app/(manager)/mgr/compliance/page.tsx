@@ -19,6 +19,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
 import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
@@ -242,10 +243,17 @@ export default function ManagerCompliancePage() {
 
   async function handleDelete(docId: string) {
     if (!confirm('この遵守事項を削除しますか？')) return;
-    const { error } = await supabase.from('compliance_documents').delete().eq('id', docId);
-    if (error) { toast.error('削除に失敗しました'); return; }
+    const result = await deleteRowWithMediaCleanup(supabase, 'compliance_documents', docId);
+    if (!result.deleted) {
+      toast.error('削除に失敗しました', { description: result.error });
+      return;
+    }
     await cancelNotification('compliance', docId);
-    toast.success('削除しました');
+    if (result.storageFailed > 0) {
+      toast.success(`削除しました（Storage 残 ${result.storageFailed} 件は後続クリーンアップ）`);
+    } else {
+      toast.success('削除しました');
+    }
     if (me) await loadDocs(me.tenant_id);
   }
 

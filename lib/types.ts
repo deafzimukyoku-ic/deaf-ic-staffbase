@@ -582,11 +582,41 @@ export interface MatrixRow {
 // color はアプリ側プリセット10色のHEX文字列
 export type CategoryType = 'compliance' | 'training' | 'announcement' | 'manual';
 
+/* migration 210/211/212 (2026-05-26) で Supabase Storage + 短期 Signed URL に
+   全件移行。退職者の URL 直アクセス防止のため、storage_path ベースで保存し
+   表示時に都度 /api/storage/sign で発行する。
+
+   後方互換: 移行完了までは旧 `url` (Drive リンク / 10 年 Signed URL) と
+   新 `storage_path` を共存。BlockRenderer が片方を見て描画する。 */
 export type ContentBlockJson =
   | { type: 'text'; value: string }
-  | { type: 'image'; url: string; caption?: string }
-  | { type: 'video'; url: string; source: 'youtube' | 'google_drive' }
-  | { type: 'pdf'; url: string; label?: string };
+  | {
+      type: 'image';
+      // 新: documents バケット内 path (storage_path モデル)
+      storage_path?: string;
+      // 旧: 10 年 Signed URL を直保存していたケース (Phase 3 移行で消える)
+      url?: string;
+      caption?: string;
+    }
+  | {
+      type: 'video';
+      // 'youtube' | 'google_drive' (旧) | 'storage' (新)
+      source: 'youtube' | 'google_drive' | 'storage';
+      // 新: storage_path モデル (source='storage' のとき必須)
+      storage_path?: string;
+      // 旧: Drive 共有 URL / YouTube URL (source='youtube'/'google_drive' のとき)
+      url?: string;
+    }
+  | {
+      type: 'pdf';
+      // 旧データは source 欠落 (= 'google_drive' 扱い)
+      source?: 'google_drive' | 'storage';
+      // 新: storage_path モデル
+      storage_path?: string;
+      // 旧: Drive 共有 URL
+      url?: string;
+      label?: string;
+    };
 
 export interface Manual {
   id: string;

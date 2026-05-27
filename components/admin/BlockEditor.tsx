@@ -5,16 +5,13 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { buildStoragePath } from '@/lib/upload-helpers';
+import { SignedMediaImage } from '@/components/media/SignedMedia';
+import type { ContentBlockJson } from '@/lib/types';
 
-// ---- Block 型 ----
-export type ContentBlock =
-  | { type: 'text'; value: string }
-  | { type: 'image'; url: string; caption?: string }
-  | { type: 'video'; url: string; source: 'youtube' | 'google_drive' }
-  | { type: 'pdf'; url: string; label?: string };
+// 旧来の import 名 (8 ファイルで `import { type ContentBlock }` されているので維持)
+export type ContentBlock = ContentBlockJson;
 
 function detectVideoSource(url: string): 'youtube' | 'google_drive' {
   if (/(youtube\.com|youtu\.be)/.test(url)) return 'youtube';
@@ -34,7 +31,7 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
 
   function updateBlock(index: number, next: Partial<ContentBlock>) {
     const copy = [...blocks];
-    copy[index] = { ...copy[index], ...(next as any) };
+    copy[index] = { ...copy[index], ...(next as object) } as ContentBlock;
     onChange(copy);
   }
 
@@ -53,39 +50,74 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
   function addBlock(type: ContentBlock['type']) {
     const next: ContentBlock =
       type === 'text' ? { type: 'text', value: '' }
-      : type === 'image' ? { type: 'image', url: '', caption: '' }
-      : type === 'video' ? { type: 'video', url: '', source: 'youtube' }
-      : { type: 'pdf', url: '', label: '' };
+      : type === 'image' ? { type: 'image', caption: '' }
+      : type === 'video' ? { type: 'video', source: 'youtube', url: '' }
+      : { type: 'pdf', label: '' };
     onChange([...blocks, next]);
   }
 
-  async function handleImageUpload(index: number, file: File) {
+  async function uploadToStorage(
+    file: File,
+    contentType: string,
+    label: string,
+  ): Promise<string | null> {
     if (!tenantId) {
       toast.error('テナント情報が取得できていません');
-      return;
+      return null;
     }
+    const path = buildStoragePath(storagePrefix, tenantId, file.name);
+    const { error } = await supabase.storage.from('documents').upload(path, file, {
+      contentType,
+    });
+    if (error) {
+      /* error を握りつぶさない: Supabase の StorageError は message に詳細が入る。
+         「Bucket not found」「new row violates row-level security policy」
+         「Payload too large」(200MB 超) 等をユーザーに表示する。 */
+      console.error(`[BlockEditor] ${label} upload failed`, { path, error });
+      toast.error(`${label}アップロードに失敗しました`, { description: error.message });
+      return null;
+    }
+    return path;
+  }
+
+  async function handleImageUpload(index: number, file: File) {
     setUploading(index);
     try {
-      const path = buildStoragePath(storagePrefix, tenantId, file.name);
-      const { error } = await supabase.storage.from('documents').upload(path, file, {
-        contentType: file.type || 'image/jpeg',
-      });
-      if (error) {
-        /* error を握りつぶさない: Supabase の StorageError は message に詳細が入る。
-           「Bucket not found」「new row violates row-level security policy」等を
-           ユーザーに表示することで、管理者が原因を即特定できる。 */
-        console.error('[BlockEditor] image upload failed', { path, error });
-        toast.error('画像アップロードに失敗しました', { description: error.message });
-        return;
-      }
-      // 署名付きURL取得（長期のため10年設定）
-      const { data: signed, error: signErr } = await supabase.storage.from('documents').createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
-      if (signErr || !signed?.signedUrl) {
-        console.error('[BlockEditor] signed url failed', { path, signErr });
-        toast.error('画像URLの取得に失敗しました', { description: signErr?.message });
-        return;
-      }
-      updateBlock(index, { url: signed.signedUrl } as any);
+      const path = await uploadToStorage(file, file.type || 'image/jpeg', '画像');
+      if (!path) return;
+      // 旧仕様 (10 年 Signed URL 直保存) は退職対策の穴になるため廃止。
+      // storage_path のみ保存して BlockRenderer 側で都度発行する。
+      updateBlock(index, { storage_path: path, url: undefined } as Partial<ContentBlock>);
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function handleVideoUpload(index: number, file: File) {
+    setUploading(index);
+    try {
+      const path = await uploadToStorage(file, file.type || 'video/mp4', '動画');
+      if (!path) return;
+      updateBlock(index, {
+        source: 'storage',
+        storage_path: path,
+        url: undefined,
+      } as Partial<ContentBlock>);
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function handlePdfUpload(index: number, file: File) {
+    setUploading(index);
+    try {
+      const path = await uploadToStorage(file, file.type || 'application/pdf', 'PDF');
+      if (!path) return;
+      updateBlock(index, {
+        source: 'storage',
+        storage_path: path,
+        url: undefined,
+      } as Partial<ContentBlock>);
     } finally {
       setUploading(null);
     }
@@ -128,7 +160,7 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
             <Textarea
               rows={4}
               value={block.value}
-              onChange={(e) => updateBlock(i, { value: e.target.value } as any)}
+              onChange={(e) => updateBlock(i, { value: e.target.value } as Partial<ContentBlock>)}
               placeholder="文章を入力..."
               className="rounded-md text-sm"
             />
@@ -136,8 +168,10 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
 
           {block.type === 'image' && (
             <div className="space-y-2">
-              {block.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
+              {block.storage_path ? (
+                <SignedMediaImage storagePath={block.storage_path} caption={block.caption} />
+              ) : block.url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={block.url} alt={block.caption || ''} className="max-h-48 rounded-md border border-brand-gray/10" />
               ) : null}
               <Input
@@ -153,7 +187,7 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
               {uploading === i && <p className="text-xs text-brand-gray">アップロード中...</p>}
               <Input
                 value={block.caption || ''}
-                onChange={(e) => updateBlock(i, { caption: e.target.value } as any)}
+                onChange={(e) => updateBlock(i, { caption: e.target.value } as Partial<ContentBlock>)}
                 placeholder="キャプション（任意）"
                 className="rounded-md text-xs"
               />
@@ -162,29 +196,85 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
 
           {block.type === 'video' && (
             <div className="space-y-2">
-              <Input
-                value={block.url}
-                onChange={(e) => updateBlock(i, { url: e.target.value, source: detectVideoSource(e.target.value) } as any)}
-                placeholder="YouTube または Google Drive の動画URLを貼り付け"
-                className="rounded-md text-xs"
-              />
-              <p className="text-[10px] text-brand-gray-light">
-                自動判定: {block.source === 'youtube' ? '▶ YouTube' : '📁 Google Drive'}
-              </p>
+              {block.source === 'storage' && block.storage_path ? (
+                <div className="p-2 rounded bg-brand-blue/5 border border-brand-blue/10 text-xs space-y-1">
+                  <p className="text-brand-blue font-medium">📹 Storage 動画</p>
+                  <p className="font-mono text-brand-gray text-[10px] break-all">{block.storage_path}</p>
+                  <button
+                    type="button"
+                    onClick={() => updateBlock(i, { source: 'youtube', storage_path: undefined, url: '' } as Partial<ContentBlock>)}
+                    className="text-brand-red text-[10px] underline"
+                  >
+                    削除して別動画に変更
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    type="file"
+                    accept="video/mp4,video/webm,video/quicktime"
+                    disabled={uploading === i}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleVideoUpload(i, f);
+                    }}
+                    className="rounded-md text-xs"
+                  />
+                  {uploading === i && <p className="text-xs text-brand-gray">アップロード中...</p>}
+                  <p className="text-[10px] text-brand-gray-light">または YouTube URL を貼り付け↓</p>
+                  <Input
+                    value={block.url || ''}
+                    onChange={(e) => updateBlock(i, { url: e.target.value, source: detectVideoSource(e.target.value), storage_path: undefined } as Partial<ContentBlock>)}
+                    placeholder="YouTube URL（Google Drive は移行中）"
+                    className="rounded-md text-xs"
+                  />
+                  {block.url && (
+                    <p className="text-[10px] text-brand-gray-light">
+                      自動判定: {block.source === 'youtube' ? '▶ YouTube' : '📁 Google Drive（移行猶予中・新規は動画ファイル直アップロード推奨）'}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
           {block.type === 'pdf' && (
             <div className="space-y-2">
-              <Input
-                value={block.url}
-                onChange={(e) => updateBlock(i, { url: e.target.value } as any)}
-                placeholder="Google Drive の共有URLを貼り付け"
-                className="rounded-md text-xs"
-              />
+              {block.source === 'storage' && block.storage_path ? (
+                <div className="p-2 rounded bg-brand-blue/5 border border-brand-blue/10 text-xs space-y-1">
+                  <p className="text-brand-blue font-medium">📁 Storage PDF</p>
+                  <p className="font-mono text-brand-gray text-[10px] break-all">{block.storage_path}</p>
+                  <button
+                    type="button"
+                    onClick={() => updateBlock(i, { source: undefined, storage_path: undefined, url: '' } as Partial<ContentBlock>)}
+                    className="text-brand-red text-[10px] underline"
+                  >
+                    削除して別 PDF に変更
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    type="file"
+                    accept="application/pdf"
+                    disabled={uploading === i}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handlePdfUpload(i, f);
+                    }}
+                    className="rounded-md text-xs"
+                  />
+                  {uploading === i && <p className="text-xs text-brand-gray">アップロード中...</p>}
+                  {block.url && (
+                    <p className="text-[10px] text-brand-gray-light break-all">
+                      旧 Drive URL: {block.url}（移行猶予中）
+                    </p>
+                  )}
+                </>
+              )}
               <Input
                 value={block.label || ''}
-                onChange={(e) => updateBlock(i, { label: e.target.value } as any)}
+                onChange={(e) => updateBlock(i, { label: e.target.value } as Partial<ContentBlock>)}
                 placeholder="ラベル（任意、例: 就業規則.pdf）"
                 className="rounded-md text-xs"
               />
@@ -196,8 +286,8 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
       <div className="flex flex-wrap gap-2 pt-2">
         <Button type="button" variant="outline" size="sm" onClick={() => addBlock('text')} className="rounded-md text-xs">📝 文章を追加</Button>
         <Button type="button" variant="outline" size="sm" onClick={() => addBlock('image')} className="rounded-md text-xs">🖼️ 画像を追加</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => addBlock('video')} className="rounded-md text-xs">🎬 動画URLを追加</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => addBlock('pdf')} className="rounded-md text-xs">📁 PDF URLを追加</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => addBlock('video')} className="rounded-md text-xs">🎬 動画を追加</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => addBlock('pdf')} className="rounded-md text-xs">📁 PDFを追加</Button>
       </div>
     </div>
   );

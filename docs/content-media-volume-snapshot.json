@@ -1,0 +1,218 @@
+{
+  "snapshot_at": "2026-05-26T14:24:52.893Z",
+  "drive_video_ids": [
+    "1UUAYY1OFN9D9xoQPx_S679ndZp8VLsfn",
+    "1_2fc_HEX7qlHi7HXeW89rrMzjD2qTy6d",
+    "1nVL0znblbvIvjO6RWaXw6iIW-LtQNPZr",
+    "1U3SaXrmBUjbnL-aKnP2HwHCFVTEWt5xz",
+    "12cQ3GA2ic6lvzT8F_hfwQOi9u4ZpT15n",
+    "1V51G1-sjauXJf48YkCYUJttJBEI_20rO",
+    "1I132u9Vk0HAwT92lqv76sAj78WtO9AdG",
+    "1KSavEfOAtrb6sbbiGW0msPAAnUbrguXt",
+    "1ftIsNsAAexymqWGYmpdLLTMv-EJQD43q",
+    "13-pzJhRDp5SycJy6EkrNlpLplEIWp3x9",
+    "1xyqu6EmJ1959-SerhG5AJr6M6ihkCzNj",
+    "1fOIXrrl07AmP2CRkjFKTwlMkWPGCzZlo",
+    "12f418IDdQmlE8LC4tI9E7lOkW8irRg0E"
+  ],
+  "drive_pdf_ids": [
+    "1HyDi70wKw7TGmUzDs9mylP05_D96i2T8",
+    "1x2uedjVBrgmsD-iwxY2b5_gXlhvHgWN6",
+    "1hGQPG83FIF8VZsmXIkFso66IfV10_wok",
+    "1CSY20OkKAnXk9-c0597E6po3lTqrNEC9",
+    "1Ylhr4TOWmHwzFpwvXNXvvxShfZ0GTgN8",
+    "1v9YxIgAp3W_KoDGR32Bk9F1SIFOjtvEX",
+    "1T2vZQTeeTjNr0IcOrxzRCQGBrru-nruK",
+    "14KBSh7jxRL-LcMb1kF4S4NmJlVkfrvDq",
+    "1LwFJp5ZIj_XHFGWER-qS0A3TIg07HViy",
+    "1IWH1O_VED_gZj-pbKdCCt_auDZIpO9qx",
+    "18KNdWcJcPBpr5DtxwD0NT2AmBhKrJcJe",
+    "1OgH7yFp8SOHN8bGzZQL2qjOgLUGga8UQ",
+    "1ESbYA0ZyzBJJlSe8d-HYg3su4ANMRZGd",
+    "1vG-2-FtxRcJOjX5MEvEiYYm-rFNiKV1_",
+    "1V4HMhoCuBiwhSbHUR_r9wnYpAoH-cMun",
+    "1ZiBCiPjJr5El_Ds1Op3-R-gEOOYI227R",
+    "1sC8UQ3Ohdg37fzeuhDSn0xJYdCozPbN5"
+  ],
+  "storage_image_paths": [
+    "documents/manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709525990_qjnapb_S_19054617_0.jpg",
+    "documents/manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709510336_a7shtw_S_19054620_0.jpg"
+  ],
+  "per_row_drive_video": [
+    {
+      "table": "manuals",
+      "row_id": "dcc4b26c-542a-4381-8570-901cfd214272",
+      "fileId": "1UUAYY1OFN9D9xoQPx_S679ndZp8VLsfn"
+    },
+    {
+      "table": "manuals",
+      "row_id": "0b2969ff-fcba-4b3e-8b5c-a0351f63187b",
+      "fileId": "1_2fc_HEX7qlHi7HXeW89rrMzjD2qTy6d"
+    },
+    {
+      "table": "manuals",
+      "row_id": "212be8a4-4401-41e2-9ca6-df8d4a9a782e",
+      "fileId": "1nVL0znblbvIvjO6RWaXw6iIW-LtQNPZr"
+    },
+    {
+      "table": "manuals",
+      "row_id": "8ba9d97e-ed62-4d55-9261-3eb3d8da3bf6",
+      "fileId": "1U3SaXrmBUjbnL-aKnP2HwHCFVTEWt5xz"
+    },
+    {
+      "table": "manuals",
+      "row_id": "0d8b9d6a-be20-48e5-9e21-c8767f5a1959",
+      "fileId": "12cQ3GA2ic6lvzT8F_hfwQOi9u4ZpT15n"
+    },
+    {
+      "table": "manuals",
+      "row_id": "05e1a637-0e5e-4b22-9e3b-5dbbbb09c534",
+      "fileId": "1V51G1-sjauXJf48YkCYUJttJBEI_20rO"
+    },
+    {
+      "table": "manuals",
+      "row_id": "fd3a278b-f4a9-4359-bd23-cd4c7d95f134",
+      "fileId": "1I132u9Vk0HAwT92lqv76sAj78WtO9AdG"
+    },
+    {
+      "table": "manuals",
+      "row_id": "fd3a278b-f4a9-4359-bd23-cd4c7d95f134",
+      "fileId": "1KSavEfOAtrb6sbbiGW0msPAAnUbrguXt"
+    },
+    {
+      "table": "manuals",
+      "row_id": "fd3a278b-f4a9-4359-bd23-cd4c7d95f134",
+      "fileId": "1ftIsNsAAexymqWGYmpdLLTMv-EJQD43q"
+    },
+    {
+      "table": "manuals",
+      "row_id": "dab1ef38-acbd-4c30-bd5b-7326f3485df8",
+      "fileId": "13-pzJhRDp5SycJy6EkrNlpLplEIWp3x9"
+    },
+    {
+      "table": "manuals",
+      "row_id": "72c8802f-7342-4f09-8551-16ec28a7399a",
+      "fileId": "1xyqu6EmJ1959-SerhG5AJr6M6ihkCzNj"
+    },
+    {
+      "table": "trainings",
+      "row_id": "eb5a768b-37f0-495c-9d8d-4f187ebb2295",
+      "fileId": "1fOIXrrl07AmP2CRkjFKTwlMkWPGCzZlo"
+    },
+    {
+      "table": "trainings",
+      "row_id": "0c289667-173b-4015-967f-326a47b0d35d",
+      "fileId": "12f418IDdQmlE8LC4tI9E7lOkW8irRg0E"
+    }
+  ],
+  "per_row_drive_pdf": [
+    {
+      "table": "manuals",
+      "row_id": "70de276a-4502-4700-a1ce-858ed956d8a5",
+      "fileId": "1HyDi70wKw7TGmUzDs9mylP05_D96i2T8"
+    },
+    {
+      "table": "manuals",
+      "row_id": "dcc4b26c-542a-4381-8570-901cfd214272",
+      "fileId": "1x2uedjVBrgmsD-iwxY2b5_gXlhvHgWN6"
+    },
+    {
+      "table": "manuals",
+      "row_id": "f097ed0d-eaf8-42ca-9073-0189e0e40f9d",
+      "fileId": "1hGQPG83FIF8VZsmXIkFso66IfV10_wok"
+    },
+    {
+      "table": "manuals",
+      "row_id": "d2e3d153-052a-4269-9931-a39fb5cf5fd4",
+      "fileId": "1CSY20OkKAnXk9-c0597E6po3lTqrNEC9"
+    },
+    {
+      "table": "manuals",
+      "row_id": "652609c9-3c65-4e03-b4a4-3e687245d832",
+      "fileId": "1Ylhr4TOWmHwzFpwvXNXvvxShfZ0GTgN8"
+    },
+    {
+      "table": "manuals",
+      "row_id": "192339aa-9480-46e1-aa8d-613be112d931",
+      "fileId": "1v9YxIgAp3W_KoDGR32Bk9F1SIFOjtvEX"
+    },
+    {
+      "table": "manuals",
+      "row_id": "32014dbb-8011-4c3d-8d12-ddcd92c338bb",
+      "fileId": "1T2vZQTeeTjNr0IcOrxzRCQGBrru-nruK"
+    },
+    {
+      "table": "manuals",
+      "row_id": "7f90c0f8-65d1-4ad3-a296-eafaf14e961f",
+      "fileId": "14KBSh7jxRL-LcMb1kF4S4NmJlVkfrvDq"
+    },
+    {
+      "table": "manuals",
+      "row_id": "8942b751-099e-4d0f-b8e8-21a859d94758",
+      "fileId": "1LwFJp5ZIj_XHFGWER-qS0A3TIg07HViy"
+    },
+    {
+      "table": "manuals",
+      "row_id": "deddc06b-5e91-42b4-8a54-aeadeb7ce09d",
+      "fileId": "1IWH1O_VED_gZj-pbKdCCt_auDZIpO9qx"
+    },
+    {
+      "table": "manuals",
+      "row_id": "ff3c98e3-5545-4ea2-8fe5-eda40efbcd77",
+      "fileId": "18KNdWcJcPBpr5DtxwD0NT2AmBhKrJcJe"
+    },
+    {
+      "table": "manuals",
+      "row_id": "021aa9f8-5916-43c1-9ddb-f919856e7e23",
+      "fileId": "1OgH7yFp8SOHN8bGzZQL2qjOgLUGga8UQ"
+    },
+    {
+      "table": "trainings",
+      "row_id": "d7adc81b-e52b-4220-8677-900e5b0813d3",
+      "fileId": "1ESbYA0ZyzBJJlSe8d-HYg3su4ANMRZGd"
+    },
+    {
+      "table": "trainings",
+      "row_id": "4c462a9d-4f9a-490f-9bf8-ad3128d225ae",
+      "fileId": "1vG-2-FtxRcJOjX5MEvEiYYm-rFNiKV1_"
+    },
+    {
+      "table": "trainings",
+      "row_id": "2da6adda-effe-4c08-9bdc-229fde3b1c74",
+      "fileId": "1V4HMhoCuBiwhSbHUR_r9wnYpAoH-cMun"
+    },
+    {
+      "table": "trainings",
+      "row_id": "732b5107-ed72-46f5-8d20-43d45fec3983",
+      "fileId": "1ZiBCiPjJr5El_Ds1Op3-R-gEOOYI227R"
+    },
+    {
+      "table": "trainings",
+      "row_id": "4c7bbf9d-1554-405f-aeea-0349aae73a0a",
+      "fileId": "1sC8UQ3Ohdg37fzeuhDSn0xJYdCozPbN5"
+    }
+  ],
+  "per_row_storage_image": [
+    {
+      "table": "manuals",
+      "row_id": "c79e0543-e909-40be-a415-8fca3d934ca6",
+      "bucket": "documents",
+      "path": "manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709525990_qjnapb_S_19054617_0.jpg"
+    },
+    {
+      "table": "manuals",
+      "row_id": "c79e0543-e909-40be-a415-8fca3d934ca6",
+      "bucket": "documents",
+      "path": "manuals/a899a744-deeb-41b6-9cad-68d27bb6fbac/1779709510336_a7shtw_S_19054620_0.jpg"
+    }
+  ],
+  "counts": {
+    "drive_video_unique": 13,
+    "drive_pdf_unique": 17,
+    "storage_image_unique": 2,
+    "storage_signed_total": 2,
+    "storage_public_total": 0,
+    "youtube_total": 1,
+    "other_total": 0
+  }
+}

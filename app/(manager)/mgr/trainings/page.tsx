@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
@@ -216,10 +217,17 @@ export default function ManagerTrainingsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('この研修を削除しますか？')) return;
-    const { error } = await supabase.from('trainings').delete().eq('id', id);
-    if (error) { toast.error('削除に失敗しました'); return; }
+    const result = await deleteRowWithMediaCleanup(supabase, 'trainings', id);
+    if (!result.deleted) {
+      toast.error('削除に失敗しました', { description: result.error });
+      return;
+    }
     await cancelNotification('training', id);
-    toast.success('削除しました');
+    if (result.storageFailed > 0) {
+      toast.success(`削除しました（Storage 残 ${result.storageFailed} 件は後続クリーンアップ）`);
+    } else {
+      toast.success('削除しました');
+    }
     if (me) await reloadTrainings(me.tenant_id);
   }
 

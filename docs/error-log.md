@@ -5,6 +5,22 @@
 
 ---
 
+## Drive 動画が読込 10 秒以上で離脱増 → proxy 経路が真因 (2026-05-19 の対症療法を構造修正)
+
+- **発生日**: 2026-05-26
+- **発生箇所**: `components/admin/BlockRenderer.tsx` (Drive 動画分岐) + `app/api/drive-video/[fileId]/route.ts`
+- **フェーズ**: 本番運用中バグ修正
+- **エラー内容**: 4 機能 (遵守事項 / 研修 / お知らせ / 業務マニュアル) に貼った Drive 動画が再生開始まで 10 秒以上かかり離脱者が多発。
+- **原因 (真因 — 場所ではなく経路)**: Drive 動画を `<video src="/api/drive-video/{id}">` で配信していた。Vercel Function 経由のため (1) cold start (2) Drive への redirect chain (3) Range request も毎回 3 ホップ + `Cache-Control: private` で Edge にも乗らない (4) 同ページ複数動画が `preload="metadata"` で並列発火し Hobby Function の 10s timeout 近くまで詰まる、が重なった。さらに Vercel Hobby の **Fast Origin Transfer 10 GB 枠**を直撃して逼迫の主因にもなっていた。下記 2026-05-19 エントリで「Drive `/preview` iframe のモバイル UI 不具合を `<video>`+自前 proxy で塞いだ」判断が、プラン制約に抵触する構造的負債として残っていた。
+- **解決方法**: Drive 動画分岐を「Drive を新規タブで開くサムネカード (▶ ボタン)」に置換。`<video>` 要素と `googleDriveVideoUrl()` ヘルパを削除し、`app/api/drive-video/` ディレクトリごと削除。再生は Drive 側 player (CDN 直) で行うため Vercel Function は完全に経由しない。モバイル UI 不具合 (2026-05-19) は別タブ遷移で Drive アプリ / Drive web 側に責任委譲する形で永続的に解決。
+- **再発防止**:
+  1. `docs/constraints.md` §1 を新設し「動画は Vercel Function を経由させない」を明文化。次に同種の判断が必要になったとき constraints.md を読めば気付ける構造ガードにした。
+  2. `/api/drive-video` ディレクトリを残骸も残さず完全削除。grep で `drive-video` がヒットしないことで「やっていい例」として再導入されることを防ぐ。
+  3. `<video src="/api/...">` のような Function 経由配信パターンは PR レビュー時にこの error-log を参照。
+- **関連 case**: 同じファイル (BlockRenderer.tsx) の同じ分岐を 2026-05-19 → 2026-05-26 で 2 回直している。「症状の場所」(モバイルで見切れ → `<video>` 化、再生が遅い → ???) で対処するとループする。**真因は Drive 動画を deaf-ic 側で配信していること自体**で、Drive 側 player へ責任委譲するのが正解だった。
+
+---
+
 ## 「manager 投稿の push 通知が届かない」報告 → 真因はバグでなく push v2 の集約設計仕様 (3 リポ共通教訓)
 
 - **発生日**: 2026-05-25 (diletto で報告、deaf-ic / ORIGAMI も同じ push v2 設計のため共通教訓として記録)
@@ -779,6 +795,7 @@
 - **原因**: Drive `/preview` iframe はモバイルで Drive 側 UI バーが画面を占有 + cross-origin player の touch event 伝播が不安定。サイズ調整だけでは解決不可。
 - **解決方法**: 動画を `<video>` ネイティブ要素 + 自前 streaming proxy（`app/api/drive-video/[fileId]/route.ts` で drive.usercontent から Range ヘッダをフォワード + 206 Partial Content）で再生。iframe を廃止。`aspect-ratio` 16:9 + `object-contain`。
 - **再発防止**: cross-origin の埋め込み player はモバイルで touch / レイアウトが不安定。動画は可能な限りネイティブ `<video>` + 自前 proxy で配信する。
+- **【2026-05-26 補足 — 本欄の方針は逆転した】**: 上の解決方法（自前 streaming proxy）は **Vercel Hobby の Fast Origin Transfer 10 GB を直撃する構造**であり、本ファイル冒頭「Drive 動画が読込 10 秒以上で離脱増」（2026-05-26）で**完全撤去**された。現状の正しい解決方針は「**▶ サムネカードから Drive を新規タブで開く**（Drive 側 player に責任委譲）」。再発防止は `docs/constraints.md` §1 を参照。本エントリだけ読んで「`<video>`+proxy で配信する」を採用しないこと。
 
 ---
 ## 非公開保存なのに「2時間後にメール通知されます」toast が出る（記録漏れ補完）

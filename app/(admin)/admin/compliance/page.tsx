@@ -34,6 +34,7 @@ import { TargetScopeBadge } from '@/components/admin/FacilityScopeSelector';
 import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
+import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
 import type { Category, Facility, TargetType, Position, ComplianceDoc } from '@/lib/types';
 
 interface AckStatus {
@@ -243,15 +244,19 @@ export default function AdminCompliancePage() {
   async function handleDelete(docId: string) {
     if (!confirm('この遵守事項を削除しますか？')) return;
 
-    // ON DELETE CASCADE により関連するacknowledgmentsも自動削除される
-    const { error } = await supabase
-      .from('compliance_documents')
-      .delete()
-      .eq('id', docId);
-
-    if (error) { toast.error('削除に失敗しました'); return; }
+    // ON DELETE CASCADE により関連する acknowledgments も自動削除。
+    // deleteRowWithMediaCleanup で content_blocks 内の Storage ファイルも先に削除する。
+    const result = await deleteRowWithMediaCleanup(supabase, 'compliance_documents', docId);
+    if (!result.deleted) {
+      toast.error('削除に失敗しました', { description: result.error });
+      return;
+    }
     await cancelNotification('compliance', docId);
-    toast.success('削除しました');
+    if (result.storageFailed > 0) {
+      toast.success(`削除しました（Storage 残 ${result.storageFailed} 件は後続クリーンアップ）`);
+    } else {
+      toast.success('削除しました');
+    }
     loadDocs();
   }
 
