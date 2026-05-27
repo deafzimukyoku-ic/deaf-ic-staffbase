@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useSignedMediaUrl } from '@/lib/hooks/useSignedMediaUrl';
+import { PdfPagesCanvas } from '@/components/media/PdfPagesCanvas';
 
 /* Supabase Storage 上のメディア (画像/動画/PDF) を短期 Signed URL で表示する。
    退職者は API が 403 を返すため、自然にエラー表示に切り替わる。
@@ -318,10 +319,12 @@ export function SignedMediaPdf({ storagePath, label, className, style }: BasePro
       </div>
     );
   }
-  /* 自前「別タブで開く」リンクは削除 (DL 抑止)。
-     iframe 内側のブラウザ標準 PDF viewer の DL/印刷ボタンは cross-origin で Web 側制御不可。
-     ウォーターマークで追跡可能化することで抑止。
-     右クリックは iframe の外側だけ無効化 (iframe 内は cross-origin で制御不可)。 */
+  /* <iframe> 埋め込みは iOS Safari / iOS Chrome / iOS WKWebView で 1 ページ目しか
+     描画されない既知制約があったため、pdf.js (PdfPagesCanvas) で全ページを Canvas に
+     縦並び描画する方式に置き換え。inner overflow-y-auto で 16:9 ボックス内でスクロール、
+     fullscreen でも同じ scroll wrapper が機能する。
+     Canvas は draggable=false + onContextMenu prevent でブラウザ標準 DL を抑止
+     (iframe 標準 PDF ビューアの DL/印刷ボタンも描画されなくなるため iframe 時より強い)。 */
   return (
     <div
       ref={containerRef}
@@ -331,7 +334,9 @@ export function SignedMediaPdf({ storagePath, label, className, style }: BasePro
         : `relative mx-auto rounded-md overflow-hidden border border-brand-gray/10 bg-white block ${className ?? ''}`}
       style={isFullscreen ? undefined : containerStyle}
     >
-      <iframe src={url} className="w-full h-full block" title={label || 'PDF'} />
+      <div className="w-full h-full overflow-y-auto bg-white">
+        <PdfPagesCanvas url={url} label={label} />
+      </div>
       {watermark && <WatermarkLabel text={watermark} isFullscreen={isFullscreen} />}
       <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} position="top-left" />
     </div>

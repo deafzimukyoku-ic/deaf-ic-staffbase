@@ -44,3 +44,6 @@ next-env.d.ts
 # --- ローカル作業用ログ・Claude Code 状態（service role key 等を含む可能性あり） ---
 dev.log
 /.claude/
+
+# 調査スクリプトの出力 (employee 個人情報を含む CSV)
+/docs/pdf-mobile-bug/
