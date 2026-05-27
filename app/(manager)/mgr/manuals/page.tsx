@@ -23,7 +23,7 @@ import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { buildStoragePath } from '@/lib/upload-helpers';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import type { Manual, Category, Position } from '@/lib/types';
 
 interface MeRow {
@@ -195,11 +195,14 @@ export default function ManagerManualsPage() {
             };
 
             if (editingManual) {
+                const oldBlocks = (editingManual.content_blocks ?? []) as ContentBlock[];
                 const { error } = await supabase
                     .from('manuals')
                     .update({ ...payload, updated_by: me.id })
                     .eq('id', editingManual.id);
                 if (error) throw error;
+                /* 編集で消えたブロックの Storage を後追い削除 */
+                await cleanupRemovedBlocks(supabase, oldBlocks, blocks, `manuals/${editingManual.id}`);
                 toast.success('業務マニュアルを更新しました');
             } else {
                 const nextOrder = await nextSortOrder(supabase, 'manuals', me.tenant_id);

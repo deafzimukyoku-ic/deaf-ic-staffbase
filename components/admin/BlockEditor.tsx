@@ -13,10 +13,15 @@ import type { ContentBlockJson } from '@/lib/types';
 // 旧来の import 名 (8 ファイルで `import { type ContentBlock }` されているので維持)
 export type ContentBlock = ContentBlockJson;
 
-function detectVideoSource(url: string): 'youtube' | 'google_drive' {
-  if (/(youtube\.com|youtu\.be)/.test(url)) return 'youtube';
-  return 'google_drive';
-}
+// アップロード上限 (各バケットの file_size_limit と整合):
+//   - 動画: videos バケット 500 MB (migration 213)
+//   - 画像/PDF: documents バケット 200 MB (migration 212) のうち、UX 上は画像 10 / PDF 50 で制限
+const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const IMAGE_ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif'];
+const VIDEO_MAX_SIZE_BYTES = 500 * 1024 * 1024;
+const VIDEO_ALLOWED_MIME_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+const PDF_MAX_SIZE_BYTES = 50 * 1024 * 1024;
+const PDF_ALLOWED_MIME_TYPES = ['application/pdf'];
 
 interface Props {
   tenantId: string | null;
@@ -48,16 +53,21 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
   }
 
   function addBlock(type: ContentBlock['type']) {
+    /* 新規動画ブロックは Storage アップロード強制 (YouTube/Drive URL 直貼りは廃止)。
+       既存の YouTube/Drive 動画ブロックは BlockRenderer 側で互換維持。 */
     const next: ContentBlock =
       type === 'text' ? { type: 'text', value: '' }
       : type === 'image' ? { type: 'image', caption: '' }
-      : type === 'video' ? { type: 'video', source: 'youtube', url: '' }
-      : { type: 'pdf', label: '' };
+      : type === 'video' ? { type: 'video', source: 'storage', storage_path: '' }
+      : { type: 'pdf', source: 'storage', storage_path: '', label: '' };
     onChange([...blocks, next]);
   }
 
+  /* 共通アップロード。bucket は呼出側が決める (動画 → videos / それ以外 → documents)。 */
   async function uploadToStorage(
     file: File,
+    bucket: 'videos' | 'documents',
+    pathPrefix: string,
     contentType: string,
     label: string,
   ): Promise<string | null> {
@@ -65,15 +75,12 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
       toast.error('テナント情報が取得できていません');
       return null;
     }
-    const path = buildStoragePath(storagePrefix, tenantId, file.name);
-    const { error } = await supabase.storage.from('documents').upload(path, file, {
-      contentType,
-    });
+    const path = buildStoragePath(pathPrefix, tenantId, file.name);
+    const { error } = await supabase.storage.from(bucket).upload(path, file, { contentType });
     if (error) {
-      /* error を握りつぶさない: Supabase の StorageError は message に詳細が入る。
-         「Bucket not found」「new row violates row-level security policy」
-         「Payload too large」(200MB 超) 等をユーザーに表示する。 */
-      console.error(`[BlockEditor] ${label} upload failed`, { path, error });
+      /* StorageError は RLS / file_size_limit / mime_types ポリシーで弾かれた詳細を返す。
+         ユーザーに表示すれば管理者が原因を即特定できる */
+      console.error(`[BlockEditor] ${label} upload failed`, { bucket, path, error });
       toast.error(`${label}アップロードに失敗しました`, { description: error.message });
       return null;
     }
@@ -81,43 +88,82 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
   }
 
   async function handleImageUpload(index: number, file: File) {
+    if (file.size > IMAGE_MAX_SIZE_BYTES) {
+      toast.error('画像サイズが上限 10 MB を超えています', {
+        description: `選択されたファイル: ${(file.size / 1024 / 1024).toFixed(1)} MB`,
+      });
+      return;
+    }
+    if (!IMAGE_ALLOWED_MIME_TYPES.includes(file.type)) {
+      toast.error('対応していない画像形式です', {
+        description: `JPEG / PNG / WebP / HEIC / GIF のみ対応 (選択: ${file.type || '不明'})`,
+      });
+      return;
+    }
     setUploading(index);
     try {
-      const path = await uploadToStorage(file, file.type || 'image/jpeg', '画像');
+      const path = await uploadToStorage(file, 'documents', storagePrefix, file.type || 'image/jpeg', '画像');
       if (!path) return;
-      // 旧仕様 (10 年 Signed URL 直保存) は退職対策の穴になるため廃止。
-      // storage_path のみ保存して BlockRenderer 側で都度発行する。
+      // storage_path のみ保存。Signed URL は SignedMediaImage が都度発行 (退職者は 403 で自動遮断)
       updateBlock(index, { storage_path: path, url: undefined } as Partial<ContentBlock>);
+      toast.success('画像をアップロードしました');
     } finally {
       setUploading(null);
     }
   }
 
   async function handleVideoUpload(index: number, file: File) {
+    if (file.size > VIDEO_MAX_SIZE_BYTES) {
+      toast.error('動画サイズが上限 500 MB を超えています', {
+        description: `選択されたファイル: ${(file.size / 1024 / 1024).toFixed(1)} MB`,
+      });
+      return;
+    }
+    if (!VIDEO_ALLOWED_MIME_TYPES.includes(file.type)) {
+      toast.error('対応していない動画形式です', {
+        description: `mp4 / webm / mov のみ対応 (選択: ${file.type || '不明'})`,
+      });
+      return;
+    }
     setUploading(index);
     try {
-      const path = await uploadToStorage(file, file.type || 'video/mp4', '動画');
+      /* 動画は専用 videos バケット (500 MB / video MIME 限定 / migration 213) に保存 */
+      const path = await uploadToStorage(file, 'videos', 'videos', file.type || 'video/mp4', '動画');
       if (!path) return;
       updateBlock(index, {
         source: 'storage',
         storage_path: path,
         url: undefined,
       } as Partial<ContentBlock>);
+      toast.success('動画をアップロードしました');
     } finally {
       setUploading(null);
     }
   }
 
   async function handlePdfUpload(index: number, file: File) {
+    if (file.size > PDF_MAX_SIZE_BYTES) {
+      toast.error('PDF サイズが上限 50 MB を超えています', {
+        description: `選択されたファイル: ${(file.size / 1024 / 1024).toFixed(1)} MB`,
+      });
+      return;
+    }
+    if (!PDF_ALLOWED_MIME_TYPES.includes(file.type)) {
+      toast.error('PDF ファイルを選択してください', {
+        description: `選択: ${file.type || '不明'}`,
+      });
+      return;
+    }
     setUploading(index);
     try {
-      const path = await uploadToStorage(file, file.type || 'application/pdf', 'PDF');
+      const path = await uploadToStorage(file, 'documents', storagePrefix, 'application/pdf', 'PDF');
       if (!path) return;
       updateBlock(index, {
         source: 'storage',
         storage_path: path,
         url: undefined,
       } as Partial<ContentBlock>);
+      toast.success('PDF をアップロードしました');
     } finally {
       setUploading(null);
     }
@@ -185,6 +231,9 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
                 className="rounded-md text-xs"
               />
               {uploading === i && <p className="text-xs text-brand-gray">アップロード中...</p>}
+              <p className="text-[10px] text-brand-gray-light">
+                JPEG / PNG / WebP / HEIC / GIF、最大 10 MB
+              </p>
               <Input
                 value={block.caption || ''}
                 onChange={(e) => updateBlock(i, { caption: e.target.value } as Partial<ContentBlock>)}
@@ -197,18 +246,34 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
           {block.type === 'video' && (
             <div className="space-y-2">
               {block.source === 'storage' && block.storage_path ? (
+                /* Storage 動画 (新形式): プレビュー + 別動画への差し替えボタン */
                 <div className="p-2 rounded bg-brand-blue/5 border border-brand-blue/10 text-xs space-y-1">
                   <p className="text-brand-blue font-medium">📹 Storage 動画</p>
                   <p className="font-mono text-brand-gray text-[10px] break-all">{block.storage_path}</p>
                   <button
                     type="button"
-                    onClick={() => updateBlock(i, { source: 'youtube', storage_path: undefined, url: '' } as Partial<ContentBlock>)}
+                    onClick={() => updateBlock(i, { source: 'storage', storage_path: '', url: undefined } as Partial<ContentBlock>)}
                     className="text-brand-red text-[10px] underline"
                   >
                     削除して別動画に変更
                   </button>
                 </div>
+              ) : block.source === 'youtube' || block.source === 'google_drive' ? (
+                /* 既存 YouTube/Drive ブロック (互換維持): URL 編集のみ可能、新規追加は不可。
+                   Storage に切り替えたい場合はブロック自体を削除して動画ブロックを再追加してもらう。 */
+                <>
+                  <Input
+                    value={block.url || ''}
+                    onChange={(e) => updateBlock(i, { url: e.target.value } as Partial<ContentBlock>)}
+                    placeholder={block.source === 'youtube' ? 'YouTube URL' : 'Google Drive URL'}
+                    className="rounded-md text-xs"
+                  />
+                  <p className="text-[10px] text-brand-gray-light">
+                    ソース: {block.source === 'youtube' ? '▶ YouTube' : '📁 Google Drive (旧形式・新規追加不可)'}
+                  </p>
+                </>
               ) : (
+                /* 新規動画ブロック (source='storage' + storage_path='' の状態) → ファイルアップロード */
                 <>
                   <Input
                     type="file"
@@ -221,18 +286,9 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
                     className="rounded-md text-xs"
                   />
                   {uploading === i && <p className="text-xs text-brand-gray">アップロード中...</p>}
-                  <p className="text-[10px] text-brand-gray-light">または YouTube URL を貼り付け↓</p>
-                  <Input
-                    value={block.url || ''}
-                    onChange={(e) => updateBlock(i, { url: e.target.value, source: detectVideoSource(e.target.value), storage_path: undefined } as Partial<ContentBlock>)}
-                    placeholder="YouTube URL（Google Drive は移行中）"
-                    className="rounded-md text-xs"
-                  />
-                  {block.url && (
-                    <p className="text-[10px] text-brand-gray-light">
-                      自動判定: {block.source === 'youtube' ? '▶ YouTube' : '📁 Google Drive（移行猶予中・新規は動画ファイル直アップロード推奨）'}
-                    </p>
-                  )}
+                  <p className="text-[10px] text-brand-gray-light">
+                    mp4 / webm / mov、最大 500 MB
+                  </p>
                 </>
               )}
             </div>
@@ -241,18 +297,27 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
           {block.type === 'pdf' && (
             <div className="space-y-2">
               {block.source === 'storage' && block.storage_path ? (
+                /* Storage PDF (新形式): プレビュー + 別 PDF への差し替えボタン */
                 <div className="p-2 rounded bg-brand-blue/5 border border-brand-blue/10 text-xs space-y-1">
                   <p className="text-brand-blue font-medium">📁 Storage PDF</p>
                   <p className="font-mono text-brand-gray text-[10px] break-all">{block.storage_path}</p>
                   <button
                     type="button"
-                    onClick={() => updateBlock(i, { source: undefined, storage_path: undefined, url: '' } as Partial<ContentBlock>)}
+                    onClick={() => updateBlock(i, { source: 'storage', storage_path: '', url: undefined } as Partial<ContentBlock>)}
                     className="text-brand-red text-[10px] underline"
                   >
                     削除して別 PDF に変更
                   </button>
                 </div>
+              ) : block.url ? (
+                /* 既存 Drive PDF (互換維持): URL は表示のみ。新規 Drive 投稿はできない */
+                <>
+                  <p className="text-[10px] text-brand-gray-light break-all">
+                    旧 Drive URL: {block.url}（移行猶予中・新規追加不可）
+                  </p>
+                </>
               ) : (
+                /* 新規 PDF ブロック → ファイルアップロード */
                 <>
                   <Input
                     type="file"
@@ -265,11 +330,7 @@ export function BlockEditor({ tenantId, blocks, onChange, storagePrefix = 'conte
                     className="rounded-md text-xs"
                   />
                   {uploading === i && <p className="text-xs text-brand-gray">アップロード中...</p>}
-                  {block.url && (
-                    <p className="text-[10px] text-brand-gray-light break-all">
-                      旧 Drive URL: {block.url}（移行猶予中）
-                    </p>
-                  )}
+                  <p className="text-[10px] text-brand-gray-light">PDF、最大 50 MB</p>
                 </>
               )}
               <Input

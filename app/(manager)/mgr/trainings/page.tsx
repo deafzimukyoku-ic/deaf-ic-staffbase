@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import { CategorySelect, CategoryBadge } from '@/components/admin/CategorySelect';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
 import { NewBadge } from '@/components/admin/NewBadge';
@@ -187,11 +187,14 @@ export default function ManagerTrainingsPage() {
     };
 
     if (editingTraining) {
+      const oldBlocks = (editingTraining.content_blocks ?? []) as ContentBlock[];
       const { error } = await supabase
         .from('trainings')
         .update({ ...trainingData, updated_by: me.id })
         .eq('id', editingTraining.id);
       if (error) { toast.error('更新に失敗しました'); setSaving(false); return; }
+      /* 編集で消えたブロックの Storage を後追い削除 */
+      await cleanupRemovedBlocks(supabase, oldBlocks, blocks, `trainings/${editingTraining.id}`);
       toast.success('研修を更新しました');
     } else {
       const nextOrder = await nextSortOrder(supabase, 'trainings', me.tenant_id);

@@ -26,7 +26,7 @@ import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateC
 import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import type { Announcement, Category, Facility, TargetType, Position } from '@/lib/types';
 
 export default function AdminAnnouncementsPage() {
@@ -118,6 +118,7 @@ export default function AdminAnnouncementsPage() {
     if (editingAnnouncement) {
       /* announcements は updated_at カラム無し（007 で作成 + 後から追加されていない）。
          updated_by のみ記録、created_at は再公開判定に使われないので問題なし。 */
+      const oldBlocks = (editingAnnouncement.content_blocks ?? []) as ContentBlock[];
       const { error } = await supabase
         .from('announcements')
         .update({
@@ -135,6 +136,8 @@ export default function AdminAnnouncementsPage() {
         setSaving(false);
         return;
       }
+      /* 編集で消えたブロックの Storage を後追い削除 */
+      await cleanupRemovedBlocks(supabase, oldBlocks, blocks, `announcements/${editingAnnouncement.id}`);
       /* 非公開なら enqueue せず cancel。toast も is_published 状態に合わせて切替。
          旧コードは is_published 無視で常に enqueue + 「送信される」toast を出して UX 誤誘導していた。 */
       const isPublished = editingAnnouncement.is_published !== false;

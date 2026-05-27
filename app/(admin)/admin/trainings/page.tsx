@@ -26,7 +26,7 @@ import { enqueueNotification, QUIET_HOURS_LABEL } from '@/lib/notifications/queu
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import type { Training, Category, Facility, TargetType, Position } from '@/lib/types';
 
 export default function AdminTrainingsPage() {
@@ -139,6 +139,7 @@ export default function AdminTrainingsPage() {
       /* 更新（updated_by 記録）。requireRecert=ON のときだけ recert_at を now() に
          進め、過去の合格を「旧版」にして再受講を促す (content-version-tracking)。
          OFF なら recert_at を update 句に含めず据え置く。 */
+      const oldBlocks = (editingTraining.content_blocks ?? []) as ContentBlock[];
       const updatePayload: Record<string, unknown> = { ...trainingData, updated_by: myEmployeeId };
       if (requireRecert) updatePayload.recert_at = new Date().toISOString();
       const { error } = await supabase
@@ -151,6 +152,8 @@ export default function AdminTrainingsPage() {
         setSaving(false);
         return;
       }
+      /* 編集で消えたブロックの Storage を後追い削除 */
+      await cleanupRemovedBlocks(supabase, oldBlocks, blocks, `trainings/${editingTraining.id}`);
 
       // リストを再取得して creator/editor を最新に
       await reloadTrainings(tenantId);

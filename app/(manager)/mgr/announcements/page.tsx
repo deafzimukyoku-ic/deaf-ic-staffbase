@@ -22,7 +22,7 @@ import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { TargetAttributeBadges } from '@/components/admin/AttributeTargetSelector';
 import { enqueueNotification, cancelNotification } from '@/lib/notifications/queue';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import type { Announcement, Category, Position } from '@/lib/types';
 
 interface MeRow {
@@ -174,11 +174,14 @@ export default function ManagerAnnouncementsPage() {
             };
 
             if (editingAnnouncement) {
+                const oldBlocks = (editingAnnouncement.content_blocks ?? []) as ContentBlock[];
                 const { error } = await supabase
                     .from('announcements')
                     .update({ ...payload, updated_by: me.id })
                     .eq('id', editingAnnouncement.id);
                 if (error) throw error;
+                /* 編集で消えたブロックの Storage を後追い削除 */
+                await cleanupRemovedBlocks(supabase, oldBlocks, blocks, `announcements/${editingAnnouncement.id}`);
                 toast.success('お知らせを更新しました');
             } else {
                 const nextOrder = await nextSortOrder(supabase, 'announcements', me.tenant_id);

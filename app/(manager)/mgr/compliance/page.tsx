@@ -19,7 +19,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import { NewBadge } from '@/components/admin/NewBadge';
 import { PersonInline } from '@/components/admin/PersonInline';
 import { DragSortList, DragSortItem, DragHandleIcon, reorderViaSortColumn } from '@/components/admin/DragSortList';
@@ -191,6 +191,7 @@ export default function ManagerCompliancePage() {
 
     if (editDoc) {
       // 更新
+      const oldBlocks = (editDoc.content_blocks ?? []) as ContentBlock[];
       const { error } = await supabase
         .from('compliance_documents')
         .update({
@@ -207,6 +208,8 @@ export default function ManagerCompliancePage() {
         })
         .eq('id', editDoc.id);
       if (error) { toast.error('保存に失敗しました'); setSaving(false); return; }
+      /* 編集で消えたブロックの Storage を後追い削除 */
+      await cleanupRemovedBlocks(supabase, oldBlocks, editBlocks, `compliance_documents/${editDoc.id}`);
       await enqueueNotification('compliance', editDoc.id);
       toast.success('保存しました。社員は再確認が必要になります。2時間後にメール通知されます。');
     } else {

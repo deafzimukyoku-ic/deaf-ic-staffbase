@@ -34,7 +34,7 @@ import { TargetScopeBadge } from '@/components/admin/FacilityScopeSelector';
 import { enqueueNotification, cancelNotification, enqueueOrCancelByPublished, QUIET_HOURS_LABEL } from '@/lib/notifications/queue';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import type { Category, Facility, TargetType, Position, ComplianceDoc } from '@/lib/types';
 
 interface AckStatus {
@@ -172,6 +172,7 @@ export default function AdminCompliancePage() {
 
     if (editDoc) {
       // 更新 — updated_atを更新して既存のacknowledgmentsを無効化
+      const oldBlocks = (editDoc.content_blocks ?? []) as ContentBlock[];
       const { error } = await supabase
         .from('compliance_documents')
         .update({
@@ -189,6 +190,8 @@ export default function AdminCompliancePage() {
         .eq('id', editDoc.id);
 
       if (error) { toast.error('保存に失敗しました'); setSaving(false); return; }
+      /* 編集で消えたブロックの Storage を後追い削除 */
+      await cleanupRemovedBlocks(supabase, oldBlocks, editBlocks, `compliance_documents/${editDoc.id}`);
       /* 非公開なら enqueue せず cancel + 「メール通知しません」toast に切替 (旧 UX 嘘問題の修正) */
       const isPublished = editDoc.is_published !== false;
       const editedId = editDoc.id;

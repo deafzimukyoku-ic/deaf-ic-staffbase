@@ -26,7 +26,7 @@ import { BulkPublishButtons } from '@/components/admin/BulkPublishButtons';
 import { ImportantUpdateConfirmModal } from '@/components/admin/ImportantUpdateConfirmModal';
 import { notifyPushOnPublish } from '@/lib/push/notify-publish-client';
 import { toast } from 'sonner';
-import { deleteRowWithMediaCleanup } from '@/lib/content-blocks/storage-cleanup';
+import { deleteRowWithMediaCleanup, cleanupRemovedBlocks } from '@/lib/content-blocks/storage-cleanup';
 import type { Manual, Category, Facility, Position } from '@/lib/types';
 
 type TargetType = 'all' | 'facility';
@@ -118,6 +118,7 @@ export default function AdminManualsPage() {
     const { data: me } = await supabase.from('employees').select('id').eq('auth_user_id', user?.id).single();
 
     if (editingManual) {
+      const oldBlocks = (editingManual.content_blocks ?? []) as ContentBlock[];
       const { error } = await supabase
         .from('manuals')
         .update({
@@ -137,6 +138,8 @@ export default function AdminManualsPage() {
         setSaving(false);
         return;
       }
+      /* 編集で消えたブロックの Storage を後追い削除 (失敗しても DB は更新済なので続行) */
+      await cleanupRemovedBlocks(supabase, oldBlocks, blocks, `manuals/${editingManual.id}`);
       /* 非公開なら enqueue せず cancel + toast 切替 (旧 UX 嘘問題の修正) */
       const isPublished = editingManual.is_published !== false;
       const editedId = editingManual.id;

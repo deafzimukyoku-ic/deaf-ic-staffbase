@@ -1,18 +1,20 @@
 /* Phase 3-A: 既存の Drive 動画/PDF を Supabase Storage に全件移行
-   docs/features/content-media-signed-url.md Phase 3 参照。
+   docs/features/content-media-signed-url.md Phase 3
+   + content-media-parity-with-diletto.md Phase C 参照。
 
    処理:
      1. 4 テーブル (manuals/trainings/announcements/compliance_documents)
         の content_blocks を全件走査
      2. video (source!=youtube) / pdf type に対応する Drive 共有 URL を抽出
      3. 各 fileId について:
-        a. drive.usercontent.google.com から HEAD で Content-Type + Length を取得
-        b. ダウンロード (mp4/pdf を想定)
-        c. tenant_id を行から取得して buildStoragePath 相当でパス生成
-        d. Supabase Storage (documents) に service-role で put
-        e. content_blocks 内の該当 block を {type, source:'storage', storage_path}
+        a. drive.usercontent.google.com からダウンロード (mp4/pdf を想定)
+        b. tenant_id を行から取得して buildStoragePath 相当でパス生成
+        c. Supabase Storage に service-role で put
+           - 動画 → videos バケット (path: videos/{tenant}/...、500 MB / video MIME 限定)
+           - PDF  → documents バケット (path: {prefix}/{tenant}/...、200 MB)
+        d. content_blocks 内の該当 block を {type, source:'storage', storage_path}
            に書き換え
-        f. テーブル行を UPDATE
+        e. テーブル行を UPDATE
      4. 失敗行はリストとして残し、後追い手動対応可能にする
 
    実行: node scripts/migrate-drive-to-storage.mjs --dry-run   (計画のみ)
@@ -165,14 +167,23 @@ try {
     process.stdout.write(`${tag} ${item.blockType} ${item.fileId} ... `);
     try {
       const dl = await downloadDriveFile(item.fileId);
-      const ext = extToFromContentType(dl.contentType) || (item.blockType === 'video' ? 'mp4' : 'pdf');
-      const storagePath = buildStoragePath(item.storagePrefix, item.tenant_id, ext);
+      /* Drive は PDF を application/octet-stream で返すことが多い。block.type で
+         本来の MIME を確定させてバケット allowed_mime_types を通す。 */
+      const isVideo = item.blockType === 'video';
+      const enforcedContentType = isVideo
+        ? (dl.contentType && /^video\//.test(dl.contentType) ? dl.contentType : 'video/mp4')
+        : 'application/pdf';
+      const ext = isVideo ? (extToFromContentType(enforcedContentType) || 'mp4') : 'pdf';
+      /* 動画は videos バケット (videos/{tenant}/...) / PDF は documents バケット ({prefix}/{tenant}/...) */
+      const bucket = isVideo ? 'videos' : 'documents';
+      const prefix = isVideo ? 'videos' : item.storagePrefix;
+      const storagePath = buildStoragePath(prefix, item.tenant_id, ext);
 
-      const { error: upErr } = await sb.storage.from('documents').upload(storagePath, dl.buffer, {
-        contentType: dl.contentType || (ext === 'pdf' ? 'application/pdf' : 'video/mp4'),
+      const { error: upErr } = await sb.storage.from(bucket).upload(storagePath, dl.buffer, {
+        contentType: enforcedContentType,
         upsert: false,
       });
-      if (upErr) throw new Error(`storage upload failed: ${upErr.message}`);
+      if (upErr) throw new Error(`storage upload failed (${bucket}, ${(dl.size/1024/1024).toFixed(1)}MB): ${upErr.message}`);
 
       // content_blocks の該当 block を更新 (atomic に行全体を再書込)
       const fresh = await pgClient.query(

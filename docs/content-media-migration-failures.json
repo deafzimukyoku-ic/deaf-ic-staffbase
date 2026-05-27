@@ -1,0 +1,137 @@
+{
+  "snapshot_at": "2026-05-27T02:22:28.178Z",
+  "failures": [
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "0b2969ff-fcba-4b3e-8b5c-a0351f63187b",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 0,
+      "blockType": "video",
+      "fileId": "1_2fc_HEX7qlHi7HXeW89rrMzjD2qTy6d",
+      "oldUrl": "https://drive.google.com/file/d/1_2fc_HEX7qlHi7HXeW89rrMzjD2qTy6d/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 77.0MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "8ba9d97e-ed62-4d55-9261-3eb3d8da3bf6",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 0,
+      "blockType": "video",
+      "fileId": "1U3SaXrmBUjbnL-aKnP2HwHCFVTEWt5xz",
+      "oldUrl": "https://drive.google.com/file/d/1U3SaXrmBUjbnL-aKnP2HwHCFVTEWt5xz/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 54.1MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "0d8b9d6a-be20-48e5-9e21-c8767f5a1959",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 0,
+      "blockType": "video",
+      "fileId": "12cQ3GA2ic6lvzT8F_hfwQOi9u4ZpT15n",
+      "oldUrl": "https://drive.google.com/file/d/12cQ3GA2ic6lvzT8F_hfwQOi9u4ZpT15n/view?usp=sharing",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 71.4MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "05e1a637-0e5e-4b22-9e3b-5dbbbb09c534",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 1,
+      "blockType": "video",
+      "fileId": "1V51G1-sjauXJf48YkCYUJttJBEI_20rO",
+      "oldUrl": "https://drive.google.com/file/d/1V51G1-sjauXJf48YkCYUJttJBEI_20rO/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 66.3MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "f097ed0d-eaf8-42ca-9073-0189e0e40f9d",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 0,
+      "blockType": "pdf",
+      "fileId": "1hGQPG83FIF8VZsmXIkFso66IfV10_wok",
+      "oldUrl": "https://drive.google.com/file/d/1hGQPG83FIF8VZsmXIkFso66IfV10_wok/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (documents, 51.3MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "652609c9-3c65-4e03-b4a4-3e687245d832",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 0,
+      "blockType": "pdf",
+      "fileId": "1Ylhr4TOWmHwzFpwvXNXvvxShfZ0GTgN8",
+      "oldUrl": "https://drive.google.com/file/d/1Ylhr4TOWmHwzFpwvXNXvvxShfZ0GTgN8/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (documents, 117.9MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "8942b751-099e-4d0f-b8e8-21a859d94758",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 0,
+      "blockType": "pdf",
+      "fileId": "1LwFJp5ZIj_XHFGWER-qS0A3TIg07HViy",
+      "oldUrl": "https://drive.google.com/file/d/1LwFJp5ZIj_XHFGWER-qS0A3TIg07HViy/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (documents, 59.7MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "dab1ef38-acbd-4c30-bd5b-7326f3485df8",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 0,
+      "blockType": "video",
+      "fileId": "13-pzJhRDp5SycJy6EkrNlpLplEIWp3x9",
+      "oldUrl": "https://drive.google.com/file/d/13-pzJhRDp5SycJy6EkrNlpLplEIWp3x9/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 63.1MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "72c8802f-7342-4f09-8551-16ec28a7399a",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 1,
+      "blockType": "video",
+      "fileId": "1xyqu6EmJ1959-SerhG5AJr6M6ihkCzNj",
+      "oldUrl": "https://drive.google.com/file/d/1xyqu6EmJ1959-SerhG5AJr6M6ihkCzNj/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 113.1MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "fd3a278b-f4a9-4359-bd23-cd4c7d95f134",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 1,
+      "blockType": "video",
+      "fileId": "1KSavEfOAtrb6sbbiGW0msPAAnUbrguXt",
+      "oldUrl": "https://drive.google.com/file/d/1KSavEfOAtrb6sbbiGW0msPAAnUbrguXt/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 50.3MB): The object exceeded the maximum allowed size"
+    },
+    {
+      "table": "manuals",
+      "label": "マニュアル",
+      "row_id": "fd3a278b-f4a9-4359-bd23-cd4c7d95f134",
+      "tenant_id": "a899a744-deeb-41b6-9cad-68d27bb6fbac",
+      "blockIndex": 2,
+      "blockType": "video",
+      "fileId": "1ftIsNsAAexymqWGYmpdLLTMv-EJQD43q",
+      "oldUrl": "https://drive.google.com/file/d/1ftIsNsAAexymqWGYmpdLLTMv-EJQD43q/view?usp=drive_link",
+      "storagePrefix": "manuals",
+      "error": "storage upload failed (videos, 81.4MB): The object exceeded the maximum allowed size"
+    }
+  ]
+}
