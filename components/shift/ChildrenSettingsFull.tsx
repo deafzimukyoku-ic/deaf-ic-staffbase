@@ -100,15 +100,6 @@ export default function ChildrenSettingsFull({ scope }: Props) {
   const [error, setError] = useState('');
   const [me, setMe] = useState<{ id: string; tenant_id: string; facility_id: string | null; role: string } | null>(null);
 
-  /* shift_manager は児童情報の追加・編集・削除不可（migration 140 + RLS）。
-     UI でブロックして alert で通知。同種ガードを StaffSettingsFull にも入れている */
-  const assertWritable = (): boolean => {
-    if (me?.role === 'shift_manager') {
-      alert('権限がありません\n\n事業所の管理者または本部に変更をお願いしてください');
-      return false;
-    }
-    return true;
-  };
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [children, setChildren] = useState<ChildRow[]>([]);
   // facility ごとの pickup/dropoff_area_labels
@@ -214,7 +205,6 @@ export default function ChildrenSettingsFull({ scope }: Props) {
   }, [loading, children]);
 
   const handleAdd = () => {
-    if (!assertWritable()) return;
     const defaultFacilityId =
       scope === 'manager' && me?.facility_id
         ? me.facility_id
@@ -245,7 +235,6 @@ export default function ChildrenSettingsFull({ scope }: Props) {
   };
 
   const handleEdit = async (child: ChildRow) => {
-    if (!assertWritable()) return;
     let eligibility = new Map<string, Set<string>>();
     try {
       const { data: items } = await supabase
@@ -282,7 +271,6 @@ export default function ChildrenSettingsFull({ scope }: Props) {
 
   const handleSave = async () => {
     if (!editing || !editing.name || !me) return;
-    if (!assertWritable()) return;
     setSaving(true);
     setError('');
     try {
@@ -373,7 +361,6 @@ export default function ChildrenSettingsFull({ scope }: Props) {
 
   const handleDelete = async () => {
     if (!editing || editing.isNew) return;
-    if (!assertWritable()) return;
     if (!confirm(`${editing.name} を削除しますか？`)) return;
     setSaving(true);
     try {

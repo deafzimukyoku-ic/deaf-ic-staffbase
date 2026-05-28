@@ -25,6 +25,7 @@
 | 211 | `211_can_access_media_path_rpc.sql` | 2026-05-26 | 2han2be4han@gmail.com | `scripts/apply-migration-211.mjs` |
 | 212 | `212_documents_bucket_size_limit_200mb.sql` | 2026-05-26 | 2han2be4han@gmail.com | `scripts/apply-migration-212.mjs` |
 | 213 | `213_videos_storage_bucket.sql` | 2026-05-27 | 2han2be4han@gmail.com | `scripts/apply-migration-213.mjs` + `scripts/snapshot-storage-policies.mjs` |
+| 214 | `214_shift_manager_staff_edit_rpc.sql` | 2026-05-28 | 2han2be4han@gmail.com | `scripts/apply-migration-214.mjs`（RPC のみ・storage 非変更のため snapshot 不要） |
 
 ## 既知の不整合 (適用済 ≠ migration ファイル)
 

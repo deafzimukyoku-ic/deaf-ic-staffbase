@@ -233,15 +233,6 @@ export default function StaffSettingsFull({ scope }: Props) {
   const [info, setInfo] = useState('');
   const [me, setMe] = useState<{ id: string; tenant_id: string; facility_id: string | null; role: string } | null>(null);
 
-  /* shift_manager は職員情報の編集・並び替え不可（migration 140 + RLS）。
-     UI でブロックして alert で通知。同種ガードを ChildrenSettingsFull にも入れている */
-  const assertWritable = (): boolean => {
-    if (me?.role === 'shift_manager') {
-      alert('権限がありません\n\n事業所の管理者または本部に変更をお願いしてください');
-      return false;
-    }
-    return true;
-  };
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [shiftFacilityId, setShiftFacilityId] = useShiftFacilityId();
   // manager は自 facility 固定、admin は上部ヘッダーの選択に従う
@@ -335,7 +326,6 @@ export default function StaffSettingsFull({ scope }: Props) {
   };
 
   const handleEdit = (s: StaffRow) => {
-    if (!assertWritable()) return;
     setEditing({
       id: s.id,
       facility_id: s.facility_id,
@@ -356,26 +346,44 @@ export default function StaffSettingsFull({ scope }: Props) {
 
   const handleSave = async () => {
     if (!editing) return;
-    if (!assertWritable()) return;
     setSaving(true);
     setError('');
     setInfo('');
     try {
-      const { error: upErr } = await supabase
-        .from('employees')
-        .update({
-          employment_type: editing.employment_type,
-          default_start_time: editing.default_start_time || null,
-          default_end_time: editing.default_end_time || null,
-          pickup_transport_areas: editing.pickup_transport_areas,
-          dropoff_transport_areas: editing.dropoff_transport_areas,
-          shift_qualifications: editing.shift_qualifications,
-          is_qualified: editing.is_qualified,
-          is_driver: editing.is_driver,
-          is_attendant: editing.is_attendant,
-        })
-        .eq('id', editing.id);
-      if (upErr) throw new Error(upErr.message);
+      /* shift_manager は employees の直接 UPDATE 権限を持たないため、
+         シフト系9項目だけ更新する SECURITY DEFINER RPC 経由（migration 214）。
+         admin / manager は従来どおり直接 update。 */
+      if (me?.role === 'shift_manager') {
+        const { error: upErr } = await supabase.rpc('update_staff_shift_fields', {
+          p_employee_id: editing.id,
+          p_employment_type: editing.employment_type,
+          p_default_start_time: editing.default_start_time || null,
+          p_default_end_time: editing.default_end_time || null,
+          p_pickup_transport_areas: editing.pickup_transport_areas,
+          p_dropoff_transport_areas: editing.dropoff_transport_areas,
+          p_shift_qualifications: editing.shift_qualifications,
+          p_is_qualified: editing.is_qualified,
+          p_is_driver: editing.is_driver,
+          p_is_attendant: editing.is_attendant,
+        });
+        if (upErr) throw new Error(upErr.message);
+      } else {
+        const { error: upErr } = await supabase
+          .from('employees')
+          .update({
+            employment_type: editing.employment_type,
+            default_start_time: editing.default_start_time || null,
+            default_end_time: editing.default_end_time || null,
+            pickup_transport_areas: editing.pickup_transport_areas,
+            dropoff_transport_areas: editing.dropoff_transport_areas,
+            shift_qualifications: editing.shift_qualifications,
+            is_qualified: editing.is_qualified,
+            is_driver: editing.is_driver,
+            is_attendant: editing.is_attendant,
+          })
+          .eq('id', editing.id);
+        if (upErr) throw new Error(upErr.message);
+      }
       setInfo('更新しました');
       setTimeout(() => setInfo(''), 2000);
       setEditing(null);
@@ -399,19 +407,26 @@ export default function StaffSettingsFull({ scope }: Props) {
   };
 
   const handleReorderStaff = async (from: number, to: number) => {
-    if (!assertWritable()) return;
     if (from === to || from < 0 || to < 0 || from >= staffList.length || to >= staffList.length) return;
     const next = [...staffList];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     setStaffList(next);
     try {
-      for (let i = 0; i < next.length; i++) {
-        const { error: upErr } = await supabase
-          .from('employees')
-          .update({ shift_display_order: i })
-          .eq('id', next[i].id);
+      /* shift_manager は一括 RPC（migration 214）、admin / manager は従来どおり直接 update。 */
+      if (me?.role === 'shift_manager') {
+        const { error: upErr } = await supabase.rpc('reorder_staff_shift_orders', {
+          p_ordered_ids: next.map((s) => s.id),
+        });
         if (upErr) throw new Error(upErr.message);
+      } else {
+        for (let i = 0; i < next.length; i++) {
+          const { error: upErr } = await supabase
+            .from('employees')
+            .update({ shift_display_order: i })
+            .eq('id', next[i].id);
+          if (upErr) throw new Error(upErr.message);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '並び替えに失敗しました');

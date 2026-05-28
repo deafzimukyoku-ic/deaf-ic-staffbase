@@ -21,7 +21,7 @@
 
 ### 削除・改変する既存機能
 - **Stripe関連** 完全削除（課金不要）
-- **super_admin ロール** 完全削除（3段階 admin / manager / employee に統一）
+- **super_admin ロール** 完全削除（admin / manager / employee に統一。後に migration 140 で **shift_manager**（事業所共用のシフト・送迎専用端末）を追加し、現在は計4ロール。詳細は §4）
 - **デモモード**（shift-maker の `sp_demo` cookie / DEV_SKIP_AUTH）完全削除
 - **マルチテナント**は1テナント固定（NPO本部）、配下事業所は `facilities` で表現
 - **事業所単位の機能 ON/OFF**は `facilities` テーブルのフラグで制御:
@@ -58,17 +58,18 @@
 
 ---
 
-## 4. ロール設計（3段階）
+## 4. ロール設計（4段階）
 
 | ロール | 範囲 | シフトパズル |
 |---|---|---|
 | **admin** | NPO全事業所の全機能、tenant設定、事業所追加、ロール変更 | ✅ 全事業所 |
 | **manager** | 所属事業所のみの全機能、employee画面への切替可 | ✅ 自事業所のみ |
+| **shift_manager** | 所属1事業所の共用操作端末（migration 140）。シフト・送迎の作成〜公開〜帳票出力・閲覧。休み希望は閲覧のみ（承認不可）。社員管理・事業所/権限設定は不可。モード固定でログイン | ✅ 自事業所のみ |
 | **employee** | 自分の情報のみ（自シフト閲覧・休み希望提出・書類・研修・お知らせ） | ❌ 不可 |
 
-- `employees.role` enum: `admin` / `manager` / `employee`
+- `employees.role` enum: `admin` / `manager` / `shift_manager` / `employee`
 - `employees.facility_id` で所属事業所を紐付け
-- RLS: manager は `facility_id = auth のemployees.facility_id` のみ操作可、admin はスコープ無制限
+- RLS: manager は `facility_id = auth のemployees.facility_id` のみ操作可、admin はスコープ無制限。shift_manager は主所属1事業所のみ（manager_facilities は使わず1施設固定）
 
 ---
 
@@ -214,7 +215,7 @@ staffbase ベース:
 - `INPUT_TYPES: text|textarea|date|number|select`
 - ~~`VISIBILITY_CONDITIONS`~~ migration 119 で廃止。書類の必須/任意・対象者は `lib/field-applicability.ts` の `CORE_FIELD_GATES` + `custom_employee_fields.gate_fields` から **タグの required + source_field** に基づき自動判定（`lib/document-applicability.isDocumentApplicable`）
 - `TRAINING_RESULT: pending|passed|failed|resubmit`
-- `ROLES: admin|manager|employee`
+- `ROLES: admin|manager|shift_manager|employee`（実体は `lib/constants.ts` の `EMPLOYEE_ROLES`）
 - `PUBLISH_STATUS: draft|ready|published`
 - `ATTENDANCE_STATUS: planned|present|absent|late|early_leave`
 

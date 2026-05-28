@@ -313,7 +313,7 @@ type FacilityLite = {
 };
 
 function FacilityHeaderSelector({ facilities, value, onChange }: { facilities: FacilityLite[]; value: string | null; onChange: (id: string) => void }) {
-  if (facilities.length === 0) return null;
+  if (facilities.length <= 1) return null;
   return (
     <select
       value={value ?? ''}

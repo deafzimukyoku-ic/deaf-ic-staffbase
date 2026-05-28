@@ -404,7 +404,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: true });
       const all = (facData as Facility[]) || [];
-      setFacilities(all);
+      /* shift_manager は主所属1施設のみ（兼務なし）。施設セレクタを出さないため
+         アクセス可能施設だけに絞る。admin は全施設のまま。 */
+      setFacilities(
+        emp.role === 'shift_manager' ? all.filter((f) => f.id === emp.facility_id) : all
+      );
       /* 初期選択ロジック（① 仕様改）:
          admin はレイアウトマウント（ログイン直後・リロード・新規タブ）のたびに
          「自分の所属施設」を優先で再セット。同タブ内のドロップダウン切替は
@@ -498,9 +502,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </select>
             )}
             <NotificationsBell />
-            <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors whitespace-nowrap shrink-0">
-              社員画面
-            </Link>
+            {!isShiftManager && (
+              <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors whitespace-nowrap shrink-0">
+                社員画面
+              </Link>
+            )}
           </div>
         </header>
 
@@ -532,9 +538,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </select>
             )}
             <NotificationsBell />
-            <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors">
-              社員画面
-            </Link>
+            {!isShiftManager && (
+              <Link href="/my/dashboard" className="text-xs text-brand-blue hover:text-brand-ink font-medium transition-colors">
+                社員画面
+              </Link>
+            )}
           </div>
         </header>
 

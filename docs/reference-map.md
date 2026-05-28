@@ -56,6 +56,7 @@
 | 211 | 211_can_access_media_path_rpc.sql | **Signed URL 発行可否判定 RPC** `can_access_media_path(p_path text) → boolean` 新設。SECURITY DEFINER で `auth.uid()` → employees → active + tenant 判定。`/api/storage/sign` から呼ぶ二重ガード | ✅ 適用済 |
 | 212 | 212_documents_bucket_size_limit_200mb.sql | documents バケット file_size_limit を 20MB → 200MB に引上げ (旧 Drive 動画/PDF 最大 117.9 MB をカバー) | ✅ 適用済 |
 | 213 | 213_videos_storage_bucket.sql | **videos バケット新設** (private / 500MB / video/mp4\|webm\|quicktime 限定) + tenant 分離 RLS 2 本 (`status='active'` 条件付き)。動画専用バケットで documents (画像/PDF) と分離。docs/features/content-media-parity-with-diletto.md Phase A | ✅ 適用済 |
+| 214 | 214_shift_manager_staff_edit_rpc.sql | **shift_manager 職員編集 RPC 2 本**。`update_staff_shift_fields(...)`（シフト系9項目のみ更新、role/給与/氏名は不可）+ `reorder_staff_shift_orders(uuid[])`（shift_display_order 一括）。SECURITY DEFINER、admin=テナント内 / manager・shift_manager=自管轄施設(主所属 or 兼任)。StaffSettingsFull が shift_manager のときのみ RPC 経由。児童編集は children の既存 RLS 許可分をフロント解除（ChildrenSettingsFull の assertWritable 撤去）。施設セレクタ・社員画面リンクは shift_manager / 兼務なし manager で非表示（layout.tsx）。docs/features/shift-manager-children-staff-edit.md | ✅ 適用済 |
 
 ---
 
