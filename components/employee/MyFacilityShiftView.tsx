@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { addMonths, format, getDaysInMonth, getDay, subMonths } from 'date-fns';
 import MonthStepper from '@/components/shift/MonthStepper';
+import ShiftConfirmButton from '@/components/shift/ShiftConfirmButton';
 import { createClient } from '@/lib/supabase/client';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
 import { todayStr } from '@/lib/date/isToday';
@@ -43,6 +44,7 @@ interface ShiftRow {
   end_time: string | null;
   assignment_type: ShiftAssignmentType;
   note: string | null;
+  publish_status: 'ready' | 'published';
 }
 
 interface EmployeeRow {
@@ -50,6 +52,7 @@ interface EmployeeRow {
   last_name: string;
   first_name: string;
   facility_id: string | null;
+  shift_display_order: number | null;
 }
 
 interface FacilityRow {
@@ -76,7 +79,10 @@ interface Props {
 export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const searchParams = useSearchParams();
-  /* URL ?month=YYYY-MM 駆動。範囲外 / 不正値は今月にフォールバック */
+  /* 今月が未公開でも公開済みの月(通常は翌月)を初期表示にするためのスマート既定。
+     URL ?month= が明示されていればそちらを最優先する。 */
+  const [smartDefault, setSmartDefault] = useState<string | null>(null);
+  /* URL ?month=YYYY-MM 駆動。範囲外 / 不正値は スマート既定 → 今月 にフォールバック */
   const { year, month, thisMonth, prevMonth, nextMonth } = useMemo(() => {
     const thisMonth = thisMonthStr();
     const prevMonth = shiftMonth(thisMonth, -1);
@@ -84,10 +90,13 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
     const allowed = [prevMonth, thisMonth, nextMonth];
     const urlMonth = searchParams.get('month');
     const isValidFmt = !!urlMonth && /^\d{4}-\d{2}$/.test(urlMonth);
-    const target = isValidFmt && allowed.includes(urlMonth!) ? urlMonth! : thisMonth;
+    /* 優先順位: URL 明示 > 公開済み最新月(smartDefault) > 今月 */
+    const target = isValidFmt && allowed.includes(urlMonth!)
+      ? urlMonth!
+      : (smartDefault ?? thisMonth);
     const [y, m] = target.split('-').map(Number);
     return { year: y, month: m, thisMonth, prevMonth, nextMonth };
-  }, [searchParams]);
+  }, [searchParams, smartDefault]);
 
   const [loading, setLoading] = useState(true);
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
@@ -98,6 +107,37 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
   const monthStr = `${year}-${String(month).padStart(2, '0')}`;
   const daysInMonth = getDaysInMonth(new Date(year, month - 1));
   const today = todayStr();
+
+  /* 初回: URL に month が無い場合のみ、所属 facility の公開済み月を調べて
+     公開済みの最新月(窓内: 前月/今月/翌月)を初期表示に採用する。
+     「翌月公開・今月未公開」でも開いた瞬間に公開済みシフトが見えるようにする。 */
+  useEffect(() => {
+    if (searchParams.get('month')) return;
+    let cancelled = false;
+    (async () => {
+      const facIds = await fetchMyFacilityIds(supabase, employeeId, facilityId);
+      if (cancelled || facIds.length === 0) return;
+      /* 上限は nextMonth の翌月 1 日（排他境界）。`${nextMonth}-31` は 30/29/28 日月で
+         無効日付になり Postgres がクエリエラー → smartDefault 不発になる不具合を回避。 */
+      const [ny, nm] = nextMonth.split('-').map(Number);
+      const afterNext = nm === 12 ? `${ny + 1}-01-01` : `${ny}-${String(nm + 1).padStart(2, '0')}-01`;
+      const { data } = await supabase
+        .from('shift_assignments')
+        .select('date')
+        .in('facility_id', facIds)
+        .eq('publish_status', 'published')
+        .gte('date', `${prevMonth}-01`)
+        .lt('date', afterNext);
+      if (cancelled) return;
+      const months = new Set((data ?? []).map((r: { date: string }) => r.date.slice(0, 7)));
+      /* 翌月 > 今月 > 前月 の優先で、公開済みが存在する最新月を採用 */
+      const preferred = [nextMonth, thisMonth, prevMonth].find((mm) => months.has(mm));
+      if (preferred && preferred !== thisMonth) setSmartDefault(preferred);
+    })();
+    return () => { cancelled = true; };
+    /* 初回マウント時の facility/window で 1 度だけ評価する（URL month 明示時は無効） */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, employeeId, facilityId, prevMonth, thisMonth, nextMonth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,18 +151,19 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
       const from = `${monthStr}-01`;
       const to = `${monthStr}-${String(daysInMonth).padStart(2, '0')}`;
 
-      /* RLS により、publish_status='published' かつ自分の facility のみ取得される */
+      /* RLS（migration 160 拡張）により、publish_status in (ready, published) かつ
+         自分の facility のみ取得される。ready は「仮（確認中）」として表示する。 */
       const [{ data: shiftData }, { data: empData }, { data: facData }] = await Promise.all([
         supabase
           .from('shift_assignments')
-          .select('employee_id, facility_id, date, start_time, end_time, assignment_type, note')
+          .select('employee_id, facility_id, date, start_time, end_time, assignment_type, note, publish_status')
           .in('facility_id', facIds)
-          .eq('publish_status', 'published')
+          .in('publish_status', ['ready', 'published'])
           .gte('date', from)
           .lte('date', to),
         supabase
           .from('employees')
-          .select('id, last_name, first_name, facility_id')
+          .select('id, last_name, first_name, facility_id, shift_display_order')
           .eq('tenant_id', tenantId)
           .eq('status', 'active')
           .in('facility_id', facIds),
@@ -150,20 +191,37 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
     return m;
   }, [shifts]);
 
-  /* 表示する社員は employees そのまま。並び順: 主所属 facility 順 → 名前順 */
+  /* 並び順: 施設順（兼任で複数施設のときのグループ化）→ 送迎表と同じ
+     shift_display_order ASC（NULLS LAST）→ 氏名。職員管理 DnD の並びがそのまま反映される。 */
   const sortedEmployees = useMemo(() => {
     const facOrder = new Map(facilities.map((f, i) => [f.id, i]));
     return [...employees].sort((a, b) => {
       const fa = a.facility_id ? (facOrder.get(a.facility_id) ?? 9999) : 9999;
       const fb = b.facility_id ? (facOrder.get(b.facility_id) ?? 9999) : 9999;
       if (fa !== fb) return fa - fb;
-      const an = `${a.last_name} ${a.first_name}`;
-      const bn = `${b.last_name} ${b.first_name}`;
-      return an.localeCompare(bn, 'ja');
+      const ao = a.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+      const bo = b.shift_display_order ?? Number.MAX_SAFE_INTEGER;
+      if (ao !== bo) return ao - bo;
+      return `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`, 'ja');
     });
   }, [employees, facilities]);
 
   const facNameById = useMemo(() => new Map(facilities.map((f) => [f.id, f.name])), [facilities]);
+
+  /* 当月の段階（ready が 1 件でもあれば「仮」、全て published なら「公開」）と、
+     確認対象の施設集合（当月に ready/published シフトがある施設）を算出。 */
+  const { monthStage, facilityIdsWithShifts } = useMemo(() => {
+    const facSet = new Set<string>();
+    let hasReady = false;
+    let hasPublished = false;
+    for (const s of shifts) {
+      facSet.add(s.facility_id);
+      if (s.publish_status === 'ready') hasReady = true;
+      else if (s.publish_status === 'published') hasPublished = true;
+    }
+    const stage: 'ready' | 'published' | null = hasReady ? 'ready' : hasPublished ? 'published' : null;
+    return { monthStage: stage, facilityIdsWithShifts: Array.from(facSet) };
+  }, [shifts]);
 
   /* 月送りはどの状態でも常に表示するため、ローディング / 空 / 未公開状態は inline で描画 (return しない) */
   const stateBlock = loading ? (
@@ -185,7 +243,7 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <MonthStepper minMonth={prevMonth} maxMonth={nextMonth} />
+          <MonthStepper minMonth={prevMonth} maxMonth={nextMonth} defaultMonth={monthStr} />
         </div>
         {stateBlock}
       </div>
@@ -210,15 +268,36 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-bold text-brand-ink">
-          {year}年{month}月 — {myFacilityIds.length === 1 ? facilities[0]?.name : `所属事業所のシフト (${facilities.length} 施設)`}
-        </h2>
-        <span className="text-[10px] text-brand-gray">公開済みのみ表示 / 表は読み取り専用</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-sm font-bold text-brand-ink">
+            {year}年{month}月 — {myFacilityIds.length === 1 ? facilities[0]?.name : `所属事業所のシフト (${facilities.length} 施設)`}
+          </h2>
+          {monthStage === 'ready' && (
+            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">仮（確認中）</span>
+          )}
+          {monthStage === 'published' && (
+            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">公開済み</span>
+          )}
+        </div>
+        {monthStage && facilityIdsWithShifts.length > 0 && (
+          <ShiftConfirmButton
+            tenantId={tenantId}
+            employeeId={employeeId}
+            facilityIds={facilityIdsWithShifts}
+            month={monthStr}
+            stage={monthStage}
+          />
+        )}
       </div>
+      {monthStage === 'ready' && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-900">
+          これは<strong>仮シフト</strong>です。内容を確認し、問題があれば「シフト変更申請」からご連絡ください。確認したら「確認しました」を押してください。
+        </div>
+      )}
 
       {/* 月送り (現在月 ± 1 ヶ月制限) */}
       <div className="flex items-center gap-2 flex-wrap">
-        <MonthStepper minMonth={prevMonth} maxMonth={nextMonth} />
+        <MonthStepper minMonth={prevMonth} maxMonth={nextMonth} defaultMonth={monthStr} />
       </div>
 
       {/* 凡例 */}
@@ -283,10 +362,13 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
             {sortedEmployees.map((e) => (
               <tr key={e.id}>
                 <td
-                  className={`sticky left-0 z-10 px-3 py-1.5 font-medium whitespace-nowrap ${
-                    e.id === employeeId ? 'bg-brand-blue/5' : 'bg-white'
-                  }`}
-                  style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
+                  className="sticky left-0 z-10 px-3 py-1.5 font-medium whitespace-nowrap"
+                  style={{
+                    /* 固定列は必ず不透明背景で覆う。半透明 (bg-brand-blue/5) だと横スクロール時に
+                       後ろのデータセル（希望休 等）が透けて文字が重なって見える。 */
+                    background: e.id === employeeId ? '#eef2fb' : '#ffffff',
+                    boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)',
+                  }}
                 >
                   <div className="flex flex-col">
                     <span>{e.last_name} {e.first_name}{e.id === employeeId ? ' (あなた)' : ''}</span>

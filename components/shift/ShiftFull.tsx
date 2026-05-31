@@ -517,6 +517,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? '遷移失敗');
       await fetchAll();
+      /* 遷移は成功したが通知予約に失敗した場合は無言にせず管理者へ知らせる */
+      if (json.notification_warning) alert(json.notification_warning);
       return json;
     } catch (e) {
       alert(e instanceof Error ? e.message : '遷移失敗');

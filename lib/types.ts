@@ -871,6 +871,17 @@ export interface ShiftAssignmentRow {
   created_at: string;
 }
 
+// --- Shift: 「確認しました」記録（migration 216）。職員が施設×月の仮/公開シフトを確認した記録 ---
+export interface ShiftConfirmationRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  employee_id: string;
+  month: string; // YYYY-MM
+  confirmed_count: number;
+  confirmed_at: string;
+}
+
 // --- Shift: 送迎担当（migration 112 で配列スキーマに移行） ---
 // 1 行 = 1 schedule_entry。pickup/dropoff 両方を配列で保持（最大2名想定）
 export interface TransportAssignmentRow {

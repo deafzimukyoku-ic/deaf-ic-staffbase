@@ -13,7 +13,7 @@ import { fetchMyFacilityIds, isItemInAudience } from '@/lib/multi-facility';
 import { listenBadgeRefresh } from '@/lib/badge-refresh';
 import type { Employee, TargetType } from '@/lib/types';
 
-type UnreadKey = 'document' | 'compliance' | 'training' | 'announcement' | 'manual' | 'message';
+type UnreadKey = 'document' | 'compliance' | 'training' | 'announcement' | 'manual' | 'message' | 'shift';
 
 const tabs: { href: string; label: string; unreadKey?: UnreadKey }[] = [
   { href: '/my/dashboard', label: 'ホーム' },
@@ -25,14 +25,14 @@ const tabs: { href: string; label: string; unreadKey?: UnreadKey }[] = [
   { href: '/my/announcements', label: 'お知らせ', unreadKey: 'announcement' },
   { href: '/my/manuals', label: '業務マニュアル', unreadKey: 'manual' },
   { href: '/my/messages', label: '個別連絡', unreadKey: 'message' },
-  { href: '/my/requests', label: '休み希望（+シフト）' },
+  { href: '/my/requests', label: '休み希望（+シフト）', unreadKey: 'shift' },
 ];
 
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [userRole, setUserRole] = useState<string>('employee');
-  const [unread, setUnread] = useState<Record<UnreadKey, number>>({ document: 0, compliance: 0, training: 0, announcement: 0, manual: 0, message: 0 });
+  const [unread, setUnread] = useState<Record<UnreadKey, number>>({ document: 0, compliance: 0, training: 0, announcement: 0, manual: 0, message: 0, shift: 0 });
   /* 175: 初回ログイン マニュアル誘導ダイアログ */
   const [introState, setIntroState] = useState<{ employeeId: string; manualCategoryId: string | null } | null>(null);
 
@@ -66,9 +66,18 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
          migration 130/131 の兼任対応に追従するため、layout 側もここで取得する。 */
       const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
 
+      /* シフト未確認バッジ用の月窓: 今月 + 来月（過去月は確認不要なので対象外）。
+         上限は来月の翌月 1 日（排他境界）で月末日問題を避ける。 */
+      const _now = new Date();
+      const _ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const thisMonthKey = _ym(new Date(_now.getFullYear(), _now.getMonth(), 1));
+      const nextMonthKey = _ym(new Date(_now.getFullYear(), _now.getMonth() + 1, 1));
+      const shiftWinFrom = `${thisMonthKey}-01`;
+      const shiftWinToExcl = `${_ym(new Date(_now.getFullYear(), _now.getMonth() + 2, 1))}-01`;
+
       // 未確認/未読/未合格のカウント計算（施設スコープ + position スコープ考慮）
       type Row = { id: string; updated_at?: string; recert_at?: string; target_type: TargetType; target_facility_ids: string[] | null; target_position_ids: string[] | null };
-      const [compRes, trainRes, annRes, manRes, ackRes, subRes, annViewRes, manViewRes, threadRes, msgReadRes, docResubmit] = await Promise.all([
+      const [compRes, trainRes, annRes, manRes, ackRes, subRes, annViewRes, manViewRes, threadRes, msgReadRes, docResubmit, shiftAssignRes, shiftConfRes] = await Promise.all([
         // 非公開分はバッジ件数からも除外（admin/manager が社員画面を閲覧した際にも正しく動かすため明示フィルタ。employee は RLS でも除外される）
         // content-version-tracking: 版基準列 (updated_at / recert_at) も取得し現版判定する
         supabase.from('compliance_documents').select('id, updated_at, target_type, target_facility_ids, target_position_ids').eq('tenant_id', me.tenant_id).eq('is_published', true),
@@ -87,6 +96,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         /* 179 (R1): 書類バッジは /my/documents 上の「再提出する」赤ボタン数と同じロジックで算出する。
            audience / matrix / is_company_issued / snapshot 比較を共通ヘルパーに集約 */
         countDocumentsNeedingResubmit(supabase, me as Employee),
+        /* シフト未確認: 今月+来月の ready/published シフトがある (施設, 月) を取得（RLS 160 拡張で ready も可視）。 */
+        supabase.from('shift_assignments').select('facility_id, date').in('facility_id', myFacilityIds.length ? myFacilityIds : ['00000000-0000-0000-0000-000000000000']).in('publish_status', ['ready', 'published']).gte('date', shiftWinFrom).lt('date', shiftWinToExcl),
+        /* 自分の確認記録（今月+来月） */
+        supabase.from('shift_confirmations').select('facility_id, month').eq('employee_id', me.id).in('month', [thisMonthKey, nextMonthKey]),
       ]);
 
       /* 旧 applyScopeFilter (FacilityScopeSelector.tsx) は単一 facility_id + position 無視で、
@@ -154,6 +167,17 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         messageUnread = ((pending || []) as { id: string }[]).filter((m) => !myReadMsgIds.has(m.id)).length;
       }
 
+      /* シフト未確認件数: ready/published のある (施設, 月) のうち、自分の確認記録が無いもの */
+      const shiftFacMonths = new Set(
+        ((shiftAssignRes.data || []) as { facility_id: string; date: string }[])
+          .map((r) => `${r.facility_id}__${r.date.slice(0, 7)}`)
+      );
+      const shiftConfirmedSet = new Set(
+        ((shiftConfRes.data || []) as { facility_id: string; month: string }[])
+          .map((r) => `${r.facility_id}__${r.month}`)
+      );
+      const shiftUnread = [...shiftFacMonths].filter((k) => !shiftConfirmedSet.has(k)).length;
+
       setUnread({
         document: docResubmit,
         compliance: scopedComp.filter((c) => c.updated_at && !confirmedSet.has(`${c.id}::${c.updated_at}`)).length,
@@ -161,6 +185,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         announcement: scopedAnn.filter((a) => !readAnnIds.has(a.id)).length,
         manual: scopedMan.filter((m) => !readManIds.has(m.id)).length,
         message: messageUnread,
+        shift: shiftUnread,
       });
     }
     loadCompany();

@@ -5,6 +5,28 @@
 
 ---
 
+## シフトを公開しても職員に通知メール/PWAが届かない → enqueue が first_scheduled_at NOT NULL 違反で全失敗（握り潰し）
+
+- **発生日**: 2026-05-31
+- **発生箇所**: `app/api/shifts/transition/route.ts`（通知 enqueue INSERT）。影響は `app/api/cron/send-notifications/route.ts` 経由の全シフト通知（メール・PWA 両方）
+- **フェーズ**: 本番運用中バグ修正（パレット事業所「6月シフトを公開したが職員が見れない」の調査起点）
+- **エラー内容**: `null value in column "first_scheduled_at" of relation "notification_queue" violates not-null constraint`（本番 DB の dry-run INSERT で再現）。UI 上は公開が成功するため無症状に見え、`notification_queue` に shift_ready/shift_publish が累計 0 件（deaf-ic 108 件中 0 / diletto 33 件中 0）。
+- **原因（真因 — 場所ではなく経路）**: migration 180 で `notification_queue.first_scheduled_at` を NOT NULL 化したが、enqueue 経路は 2 つあり、`app/api/notifications/enqueue`（コンテンツ系）は追従して値を設定、`app/api/shifts/transition`（シフト系）は設定漏れ。後者の INSERT が NOT NULL 違反で必ず失敗し、しかも `catch` がログのみで握り潰していたため遷移は成功扱い →「公開できるのに通知ゼロ」が 180 適用（2026-05-18）以降ずっと継続。なお「職員が見れない」の主訴は RLS ではなく（実 employee の JWT で 318 件 SELECT 可と再現確認済）、職員向け画面（施設シフトタブ / ダッシュボードカード）が常に「今月」固定で、翌月公開・今月未公開のため「未公開」と表示していた別問題（同時修正）。
+- **解決方法**:
+  1. `app/api/shifts/transition` の enqueue INSERT に `first_scheduled_at` を明示設定。`catch` の握り潰しをやめ `notification_warning` をレスポンスで返し `ShiftFull` が alert 表示。
+  2. migration 215（deaf-ic）/ 200（diletto）で `first_scheduled_at` に `DEFAULT now()` を付与（どの enqueue 経路が omit しても落ちない構造ガード）。
+  3. 公開時に職員へも通知（`processShiftRow` の shift_publish で admin に加え該当施設職員へ別テンプレ `buildShiftPublishedEmployeeEmail` + Push を配信）。
+  4. 施設シフトタブ / ダッシュボードシフトカードを「公開済み最新月（通常は翌月）」基準に変更し「未公開」誤表示を解消。
+- **再発防止**:
+  1. DB 側 `DEFAULT now()`（構造ガード）＋ アプリ側明示設定の 2 段構え。
+  2. 通知 enqueue 失敗を握り潰さず UI に出す（無症状化の防止）。
+  3. 教訓「migration で既存列に NOT NULL を足すときは、全 INSERT 経路を grep して追従漏れを確認する」。
+- **横展開**: diletto-new-staffbase も同一コード・同一制約で同症状。migration 200 ＋ 同一コード修正で同時是正。
+- **検証**: 両 repo の apply script の before/after dry-run で BEFORE=NOT NULL 違反で失敗 → AFTER=成功 を実証。
+- **追記（2026-05-31 同日の自己回帰）**: ① の smartDefault 実装で公開済み月クエリの上限を `` `${nextMonth}-31` `` とハードコードしたため、30/29/28 日月（例 2026-06）で `date/time field value out of range: "2026-06-31"` のクエリエラー → 結果 0 件 → smartDefault 不発 → 今月にフォールバックする不具合をローカル確認で検出。**月末を `-31` でハードコードしない**。排他境界 `.lt('date', 翌月1日)` に修正（`MyFacilityShiftView.tsx` 両 repo）。`scripts/probe-smartdefault-date.mjs` で BEFORE=エラー0件 / AFTER=318件・公開月=2026-06 を実証。
+
+---
+
 ## Drive 動画が読込 10 秒以上で離脱増 → proxy 経路が真因 (2026-05-19 の対症療法を構造修正)
 
 - **発生日**: 2026-05-26

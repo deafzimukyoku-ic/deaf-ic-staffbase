@@ -1035,6 +1035,41 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<div class="phase">
+  <h2>シフト公開通知の真因修正 + 公開時の職員通知 + 既定月（2026-05-31, パレット報告起点） <span class="phase-pct">コード実装完了 / migration 215・200 適用済 / デプロイ・実機確認待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">真因: シフト通知 enqueue が first_scheduled_at(180でNOT NULL化) 未設定で全失敗・握り潰し → 公開できるのに通知ゼロ。主訴「職員が見れない」は RLS ではなく職員画面が「今月」固定だったため。deaf-ic / diletto 両方。</td></tr>
+      <tr><td>② enqueue バグ修正（first_scheduled_at 設定 + 警告可視化）</td><td class="files">app/api/shifts/transition/route.ts, components/shift/ShiftFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>INSERT に first_scheduled_at 追加。catch 握り潰しをやめ notification_warning を返し ShiftFull が alert</td></tr>
+      <tr><td>② 再発防止 migration（DEFAULT now()）</td><td class="files">supabase/migrations/215_notification_queue_first_scheduled_default.sql (deaf-ic) / 200_*(diletto)</td><td><span class="status done">適用済</span></td><td class="pct">100%</td><td>両 repo 本番適用。before/after dry-run で「省略INSERT BEFORE=失敗→AFTER=成功」を実証</td></tr>
+      <tr><td>③ 公開時に職員へも通知（メール+Push）</td><td class="files">lib/email/shift-notification-email.ts, app/api/cron/send-notifications/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>buildShiftPublishedEmployeeEmail 新規。shift_publish で admin に加え該当施設職員へ別テンプレ + Push（/my/requests?tab=facility-shift&month=）</td></tr>
+      <tr><td>① 既定月を「公開済み最新月」に</td><td class="files">components/employee/MyFacilityShiftView.tsx, app/(employee)/my/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>施設シフトタブ: smartDefault(窓内 翌月>今月>前月)。ダッシュボードカード: 今月+来月集計で公開月を表示・深リンク。「未公開」誤表示を解消</td></tr>
+      <tr><td>型チェック</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>両 repo tsc 0 エラー。変更ファイル eslint 新規エラーなし（既存 any 2件は変更外の processContentDigest/processTenantDigest）</td></tr>
+      <tr><td>デプロイ / 実機動作確認</td><td class="files">—</td><td><span class="status todo">未</span></td><td class="pct">0%</td><td>デプロイは指示待ち。デプロイ後にテスト施設で ready→published し ①職員にメール/Push ②施設シフトタブ/ダッシュボードが公開月表示 を確認</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 公開(ready→published)で notification_queue に shift_publish 行が作られ sent_at が付くか ② 職員に「公開されました」メール + Push が届き /my/requests?tab=facility-shift の公開月に着地するか ③ admin にも従来通り公開メールが届くか ④ 施設シフトタブを開くと今月(draft)でなく公開済み翌月が初期表示されるか ⑤ ダッシュボードのシフトカードが「未公開」でなく翌月の日数を出すか ⑥ enqueue 失敗時に ShiftFull が警告 alert を出すか ⑦ diletto でも同挙動か</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="phase">
+  <h2>シフト「確認しました」機能 + 未確認赤バッジ + 送迎表並び統一（2026-05-31） <span class="phase-pct">コード実装完了 / migration 216・201 適用済 / デプロイ・実機確認待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">仕様書 docs/features/shift-confirmation-and-badge.md。職員が仮(ready)/公開(published)シフトを「確認しました」ボタンで記録、未確認は他タブと同じ赤バッジ。仮も施設全員分表示（RLS 160 拡張）。再 ready/再公開でリセット。deaf-ic / diletto 両方。</td></tr>
+      <tr><td>migration: shift_confirmations + RLS 5本 + 160 ready 拡張</td><td class="files">supabase/migrations/216_shift_confirmations.sql (deaf-ic) / 201_*(diletto)</td><td><span class="status done">適用済</span></td><td class="pct">100%</td><td>両 repo 本番適用。employee 視点 probe で published 6月=318件（回帰なし）を確認。認証副作用なし</td></tr>
+      <tr><td>確認ボタン（明示クリックで upsert）</td><td class="files">components/shift/ShiftConfirmButton.tsx（新規）, lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ViewConfirmButton 踏襲 + notifyBadgeRefresh()。当月に ready/published のある施設ぶん一括 upsert</td></tr>
+      <tr><td>仮シフト表示 + 「仮（確認中）」 + 並び順統一</td><td class="files">components/employee/MyFacilityShiftView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>クエリを ready/published に拡張。社員並びを送迎表と同じ shift_display_order ASC→氏名 に変更（職員管理 DnD 反映）</td></tr>
+      <tr><td>赤バッジ: サイドバー nav + ダッシュボードカード</td><td class="files">app/(employee)/layout.tsx, app/(employee)/my/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>今月+来月の未確認 (施設,月) 件数。layout/dashboard 同一ロジック</td></tr>
+      <tr><td>再 ready/再公開でリセット</td><td class="files">app/api/shifts/transition/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ready/published 遷移時に当該 (施設,月) の shift_confirmations を delete → バッジ再点灯</td></tr>
+      <tr><td>型チェック</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>両 repo tsc 0 エラー。変更ファイル eslint 新規エラーなし</td></tr>
+      <tr><td>デプロイ / 実機動作確認</td><td class="files">—</td><td><span class="status todo">未</span></td><td class="pct">0%</td><td>デプロイは指示待ち。dev(6001) で職員ログインして確認可</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① ready にすると職員の nav「休み希望（+シフト）」とダッシュボードカードに赤バッジが出るか ② 施設シフトタブで ready が施設全員分見え「仮（確認中）」と分かるか ③ 「確認しました」でバッジが即時に消えるか ④ 再公開で再点灯するか ⑤ 社員並びが送迎表(shift_display_order)と一致するか ⑥ 過去月はバッジに計上されないか ⑦ diletto でも同挙動か</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>

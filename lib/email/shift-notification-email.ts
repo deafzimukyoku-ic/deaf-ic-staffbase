@@ -125,3 +125,48 @@ export function buildShiftReadyEmail(args: BuildArgs) {
 
   return { subject, html, text };
 }
+
+/** shift_publish: 該当 facility の employee 向け「シフト・送迎表が公開されました」
+ *  buildShiftPublishEmail（admin 向け・/admin/shifts リンク）とは別に、職員は
+ *  /admin に到達できないため /my/requests?tab=facility-shift に深リンクする。
+ *  骨格・配色は buildShiftReadyEmail（兄弟テンプレ）と揃える。 */
+export function buildShiftPublishedEmployeeEmail(args: BuildArgs) {
+  const { year, month, facilityName, appUrl } = args;
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+  /* 公開された当月の施設シフト表に直接着地させる（職員は /admin/shifts 不可） */
+  const link = `${appUrl.replace(/\/$/, '')}/my/requests?tab=facility-shift&month=${monthStr}`;
+
+  const subject = `【シフト・送迎表 公開】${year}年${month}月 ${facilityName}`;
+  const text = [
+    `${facilityName} の${year}年${month}月分の シフト表 と 送迎表 が公開されました。`,
+    '',
+    '・ご自身の勤務予定（時間・休み）をご確認ください。',
+    '・送迎担当（迎/送）の予定もあわせてご確認ください。',
+    '・問題があれば「シフト変更申請」よりご連絡ください。',
+    '',
+    `確認: ${link}`,
+    '',
+    'このメールはシステムから自動送信されています。',
+  ].join('\n');
+
+  const html = `<!DOCTYPE html><html lang="ja"><body style="margin:0;padding:0;background:#f5f4f0;font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#111;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f4f0;padding:32px 16px;">
+<tr><td align="center"><table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:8px;overflow:hidden;">
+<tr><td style="padding:24px 28px 16px;border-bottom:1px solid rgba(0,0,0,0.08);">
+<p style="margin:0 0 6px;font-size:11px;color:#0f766e;font-weight:600;letter-spacing:0.05em;">SHIFT &amp; TRANSPORT PUBLISHED</p>
+<p style="margin:0;font-size:18px;font-weight:700;">${year}年${month}月 のシフト・送迎表が公開されました</p>
+</td></tr>
+<tr><td style="padding:24px 28px;font-size:14px;line-height:1.7;">
+<p style="margin:0 0 12px;">${escapeHtml(facilityName)} の <strong>${year}年${month}月 シフト表 と 送迎表</strong> が公開されました。</p>
+<ul style="margin:12px 0;padding-left:20px;color:#5a5a55;">
+<li>ご自身の勤務予定（時間・休み）をご確認ください。</li>
+<li>送迎担当（迎/送）の予定もあわせてご確認ください。</li>
+<li>問題があれば「シフト変更申請」よりご連絡ください。</li>
+</ul>
+<p style="margin:24px 0 0;"><a href="${escapeHtml(link)}" style="display:inline-block;background:#0f766e;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">シフト・送迎表を確認する</a></p>
+</td></tr>
+<tr><td style="padding:16px 28px 24px;border-top:1px solid rgba(0,0,0,0.06);font-size:11px;color:#a8a8a0;">このメールはシステムから自動送信されています。</td></tr>
+</table></td></tr></table></body></html>`;
+
+  return { subject, html, text };
+}

@@ -57,6 +57,54 @@
 | 212 | 212_documents_bucket_size_limit_200mb.sql | documents バケット file_size_limit を 20MB → 200MB に引上げ (旧 Drive 動画/PDF 最大 117.9 MB をカバー) | ✅ 適用済 |
 | 213 | 213_videos_storage_bucket.sql | **videos バケット新設** (private / 500MB / video/mp4\|webm\|quicktime 限定) + tenant 分離 RLS 2 本 (`status='active'` 条件付き)。動画専用バケットで documents (画像/PDF) と分離。docs/features/content-media-parity-with-diletto.md Phase A | ✅ 適用済 |
 | 214 | 214_shift_manager_staff_edit_rpc.sql | **shift_manager 職員編集 RPC 2 本**。`update_staff_shift_fields(...)`（シフト系9項目のみ更新、role/給与/氏名は不可）+ `reorder_staff_shift_orders(uuid[])`（shift_display_order 一括）。SECURITY DEFINER、admin=テナント内 / manager・shift_manager=自管轄施設(主所属 or 兼任)。StaffSettingsFull が shift_manager のときのみ RPC 経由。児童編集は children の既存 RLS 許可分をフロント解除（ChildrenSettingsFull の assertWritable 撤去）。施設セレクタ・社員画面リンクは shift_manager / 兼務なし manager で非表示（layout.tsx）。docs/features/shift-manager-children-staff-edit.md | ✅ 適用済 |
+| 215 | 215_notification_queue_first_scheduled_default.sql | **シフト通知 enqueue 全失敗の真因修正（再発防止ガード）**。`notification_queue.first_scheduled_at` に `DEFAULT now()` を付与。180 で NOT NULL 化された同列を `app/api/shifts/transition` の enqueue INSERT が設定し忘れ → NOT NULL 違反で全失敗 → shift_ready/shift_publish 通知ゼロ（握り潰し）。docs/features/shift-publish-notification-and-default-month.md | ✅ 適用済 |
+| 216 | 216_shift_confirmations.sql | **シフト「確認しました」機能 + ready 可視化**。新テーブル `shift_confirmations(tenant_id, facility_id, employee_id, month, confirmed_count, confirmed_at)` UNIQUE(employee,facility,month) + RLS 5本（本人 SELECT/INSERT/UPDATE、manager/admin DELETE）。`sa_employee_facility_shifts`(160) を `published` → `('ready','published')` に drop&recreate（職員が施設全員分の仮シフトをレビュー可に）。docs/features/shift-confirmation-and-badge.md | ✅ 適用済 |
+
+---
+
+## 0.15 シフト「確認しました」機能 + 未確認赤バッジ + 送迎表並び統一（2026-05-31）
+
+仕様: [docs/features/shift-confirmation-and-badge.md](features/shift-confirmation-and-badge.md)（両 repo: deaf-ic 216 / diletto 201）。
+
+### 変更
+- **新テーブル** `shift_confirmations`（migration 216）+ 型 `lib/types.ts` `ShiftConfirmationRow`
+- **RLS 160 拡張**: `sa_employee_facility_shifts` を ready 含むよう変更 → 職員が施設の仮シフトを閲覧可
+- **新規** `components/shift/ShiftConfirmButton.tsx`（`ViewConfirmButton` 踏襲 + `notifyBadgeRefresh()`）
+- `components/employee/MyFacilityShiftView.tsx`: ready 表示 + 「仮（確認中）」+ 確認ボタン + クエリ `.in('publish_status',['ready','published'])` + **並び順を `shift_display_order ASC→氏名`（送迎表と統一）**
+- `app/(employee)/layout.tsx`: `UnreadKey` に `'shift'` + nav バッジ（今月+来月の未確認 (施設,月) 件数）
+- `app/(employee)/my/dashboard/page.tsx`: シフトカードに未確認赤バッジ（`shiftUnconfirmed`）
+- `app/api/shifts/transition/route.ts`: ready/published 遷移時に `shift_confirmations` の (施設,月) を delete（リセット）
+
+### 参照テーブル・カラム
+- `shift_confirmations.{tenant_id, facility_id, employee_id, month, confirmed_count, confirmed_at}`（migration 216）
+- `employees.shift_display_order`（送迎表・職員管理 DnD と共通の並び順キー）
+- `shift_assignments.publish_status`（employee SELECT は 160 拡張で ready/published 可）
+
+---
+
+## 0.14 シフト公開通知の真因修正 + 職員通知追加 + 既定月（2026-05-31）
+
+### 背景（パレット「6月公開したが職員が見れない」報告）
+2 つの別問題が重なっていた。RLS は正常（実 employee の JWT で 6月 published 318 件 SELECT 可と再現確認）。
+
+### ① 真因: シフト通知が一切 enqueue されない（メール・PWA 両方）
+- migration 180 で `notification_queue.first_scheduled_at` を NOT NULL 化したが、enqueue 経路 2 つのうち `app/api/shifts/transition` だけ値の設定漏れ。INSERT が NOT NULL 違反で失敗し `catch` がログのみで握り潰し。
+- 修正: transition の INSERT に `first_scheduled_at` 設定 + `notification_warning` をレスポンスで返す（`ShiftFull` が alert）。migration 215 で列に `DEFAULT now()`（構造ガード）。
+
+### ② 公開時に職員へも通知（設計変更）
+- `app/api/cron/send-notifications/route.ts` `processShiftRow`: `shift_publish` で admin（/admin/shifts）に加え、該当施設の active employee へ別テンプレ + Push（/my/requests?tab=facility-shift&month=）を配信。
+- `lib/email/shift-notification-email.ts`: `buildShiftPublishedEmployeeEmail` 新規（兄弟テンプレと同骨格・teal）。
+
+### ③ 既定月を「公開済み最新月」に
+- `components/employee/MyFacilityShiftView.tsx`: URL 明示 > 公開済み最新月(smartDefault, 窓内 prev/this/next) > 今月。`MonthStepper` に `defaultMonth` 連動。
+- `app/(employee)/my/dashboard/page.tsx`: シフトカードを今月+来月で集計し、今月に公開分が無ければ来月を表示・深リンク。「未公開」誤表示を解消。
+
+### 参照テーブル・カラム
+- `notification_queue.first_scheduled_at`（180=NOT NULL / 215=DEFAULT now()）/ `content_type`（shift_ready/shift_publish）/ `facility_id` / `meta(year/month)`
+- `shift_assignments.{publish_status, facility_id, employee_id, date, assignment_type}`（employee SELECT は migration 160 `sa_employee_facility_shifts` で published のみ可）
+
+### 横展開
+- diletto-new-staffbase に同一変更 + migration 200。詳細仕様 `docs/features/shift-publish-notification-and-default-month.md`
 
 ---
 

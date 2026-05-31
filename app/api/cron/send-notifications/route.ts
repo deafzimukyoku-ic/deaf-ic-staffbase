@@ -5,6 +5,7 @@ import { buildDigestEmail, type DigestItem } from '@/lib/email/digest-email';
 import {
   buildShiftPublishEmail,
   buildShiftReadyEmail,
+  buildShiftPublishedEmployeeEmail,
 } from '@/lib/email/shift-notification-email';
 import { sendWebPushToEmployees } from '@/lib/push/server';
 import type {
@@ -401,7 +402,9 @@ async function processTenantDigest(
 
 // シフト系通知（shift_ready / shift_publish）の処理
 // shift_ready: 該当 facility の active employee 全員に「仮シフト確認のお願い」
-// shift_publish: tenant 全 active admin に「シフト公開しました」
+// shift_publish: ① tenant 全 active admin に「シフト公開しました」(/admin/shifts)
+//                ② 該当 facility の active employee に「公開されました」(/my/requests?tab=facility-shift)
+//   → 職員は admin 宛とは別テンプレ・別リンクで配信する（職員は /admin に到達不可）。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Promise<'sent' | 'skipped'> {
   if (!row.facility_id || !row.meta?.year || !row.meta?.month) {
@@ -442,36 +445,7 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
       '管理者';
   }
 
-  // 宛先の決定 (id も取って Web Push 並行配信に使う)
-  let recipients: { id: string; email: string }[] = [];
-  if (row.content_type === 'shift_publish') {
-    // NPO 全 active admin
-    const { data: admins } = await supabase
-      .from('employees')
-      .select('id, email')
-      .eq('tenant_id', row.tenant_id)
-      .eq('role', 'admin')
-      .eq('status', 'active')
-      .not('email', 'is', null);
-    recipients = (admins ?? []).filter((a: { id: string; email: string | null }) => isValidEmail(a.email)) as { id: string; email: string }[];
-  } else {
-    // shift_ready: 該当 facility の active employee 全員
-    const { data: emps } = await supabase
-      .from('employees')
-      .select('id, email')
-      .eq('tenant_id', row.tenant_id)
-      .eq('facility_id', row.facility_id)
-      .eq('role', 'employee')
-      .eq('status', 'active')
-      .not('email', 'is', null);
-    recipients = (emps ?? []).filter((e: { id: string; email: string | null }) => isValidEmail(e.email)) as { id: string; email: string }[];
-  }
-
-  if (recipients.length === 0) {
-    await supabase.from('notification_queue').update({ sent_at: new Date().toISOString() }).eq('id', row.id);
-    return 'skipped';
-  }
-
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`;
   const emailArgs = {
     year,
     month,
@@ -480,36 +454,83 @@ async function processShiftRow(supabase: any, row: QueueRow, appUrl: string): Pr
     publishedAt: row.scheduled_at,
     appUrl,
   };
-  const { subject, html, text } =
-    row.content_type === 'shift_publish'
-      ? buildShiftPublishEmail(emailArgs)
-      : buildShiftReadyEmail(emailArgs);
 
-  /* メール送信 + Push 配信を並行 (Promise.allSettled) */
+  /* 該当 facility の active employee (email あり)。shift_ready / shift_publish 共通で職員に届ける */
+  const fetchFacilityEmployees = async (): Promise<{ id: string; email: string }[]> => {
+    const { data } = await supabase
+      .from('employees')
+      .select('id, email')
+      .eq('tenant_id', row.tenant_id)
+      .eq('facility_id', row.facility_id)
+      .eq('role', 'employee')
+      .eq('status', 'active')
+      .not('email', 'is', null);
+    return (data ?? []).filter((e: { id: string; email: string | null }) => isValidEmail(e.email)) as { id: string; email: string }[];
+  };
+
+  /* 配信グループ: 宛先ごとにテンプレ・遷移先が異なるためまとめて表現する */
+  type DeliveryGroup = { recipients: { id: string; email: string }[]; subject: string; html: string; text: string; pushUrl: string };
+  const groups: DeliveryGroup[] = [];
+
+  if (row.content_type === 'shift_publish') {
+    /* (a) admin 向け「公開しました」(/admin/shifts) */
+    const { data: admins } = await supabase
+      .from('employees')
+      .select('id, email')
+      .eq('tenant_id', row.tenant_id)
+      .eq('role', 'admin')
+      .eq('status', 'active')
+      .not('email', 'is', null);
+    const adminRecipients = (admins ?? []).filter((a: { id: string; email: string | null }) => isValidEmail(a.email)) as { id: string; email: string }[];
+    if (adminRecipients.length > 0) {
+      groups.push({ recipients: adminRecipients, ...buildShiftPublishEmail(emailArgs), pushUrl: '/admin/shifts' });
+    }
+    /* (b) 該当 facility の職員向け「公開されました」(/my/requests?tab=facility-shift&month) */
+    const empRecipients = await fetchFacilityEmployees();
+    if (empRecipients.length > 0) {
+      groups.push({ recipients: empRecipients, ...buildShiftPublishedEmployeeEmail(emailArgs), pushUrl: `/my/requests?tab=facility-shift&month=${monthStr}` });
+    }
+  } else {
+    /* shift_ready: 該当 facility の職員向け「仮シフト確認のお願い」 */
+    const empRecipients = await fetchFacilityEmployees();
+    if (empRecipients.length > 0) {
+      groups.push({ recipients: empRecipients, ...buildShiftReadyEmail(emailArgs), pushUrl: `/my/requests?tab=facility-shift&month=${monthStr}` });
+    }
+  }
+
+  if (groups.length === 0) {
+    await supabase.from('notification_queue').update({ sent_at: new Date().toISOString() }).eq('id', row.id);
+    return 'skipped';
+  }
+
+  /* メール送信 + Push 配信を並行 (Promise.allSettled)。グループごとに別テンプレ・別遷移先で配信 */
   const sendShiftEmails = async () => {
-    for (let i = 0; i < recipients.length; i += RESEND_BATCH_SIZE) {
-      const chunk = recipients.slice(i, i + RESEND_BATCH_SIZE);
-      const emails = chunk.map((r) => ({
-        from: FROM_EMAIL,
-        to: [r.email],
-        subject,
-        html,
-        text,
-      }));
-      const res = await resend.batch.send(emails);
-      if (res.error) {
-        console.error('[cron/shift] resend batch failed', { id: row.id, error: res.error });
-        throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+    for (const g of groups) {
+      for (let i = 0; i < g.recipients.length; i += RESEND_BATCH_SIZE) {
+        const chunk = g.recipients.slice(i, i + RESEND_BATCH_SIZE);
+        const emails = chunk.map((r) => ({
+          from: FROM_EMAIL,
+          to: [r.email],
+          subject: g.subject,
+          html: g.html,
+          text: g.text,
+        }));
+        const res = await resend.batch.send(emails);
+        if (res.error) {
+          console.error('[cron/shift] resend batch failed', { id: row.id, error: res.error });
+          throw new Error(`resend error: ${res.error.message || JSON.stringify(res.error)}`);
+        }
       }
     }
   };
   const sendShiftPushes = async () => {
-    const pushUrl = row.content_type === 'shift_publish' ? '/admin/shifts' : '/my/requests';
-    await sendWebPushToEmployees(
-      supabase,
-      recipients.map((r) => r.id),
-      { title: subject, body: `${facility.name} (${year}年${month}月)`, url: pushUrl },
-    );
+    for (const g of groups) {
+      await sendWebPushToEmployees(
+        supabase,
+        g.recipients.map((r) => r.id),
+        { title: g.subject, body: `${facility.name} (${year}年${month}月)`, url: g.pushUrl },
+      );
+    }
   };
   const [emailRes] = await Promise.allSettled([sendShiftEmails(), sendShiftPushes()]);
   if (emailRes.status === 'rejected') {

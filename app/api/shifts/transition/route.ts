@@ -138,6 +138,9 @@ export async function POST(request: NextRequest) {
     target === 'published' ? { kind: 'shift_publish' } :
     null;
 
+  let notificationQueued = false;
+  let notificationWarning: string | null = null;
+
   if (queuedNotification) {
     // 既存の未送信キューを上書き（編集再公開対応）
     await ctx.supabase
@@ -152,6 +155,10 @@ export async function POST(request: NextRequest) {
       .filter('meta->>month', 'eq', String(month));
 
     // 即時送信（scheduled_at = now）。Vercel Cron が10分以内に処理する。
+    // first_scheduled_at は migration 180 で NOT NULL 化された。ここで設定しないと
+    // INSERT が NOT NULL 違反で失敗し、シフトの ready/公開通知が一切送られなくなる
+    // （2026-05-31 真因修正。再発防止として DB 側にも DEFAULT now() を付与）。
+    const nowIso = new Date().toISOString();
     const { error: enqErr } = await ctx.supabase
       .from('notification_queue')
       .insert({
@@ -160,13 +167,32 @@ export async function POST(request: NextRequest) {
         content_type: queuedNotification.kind,
         content_id: null,
         meta: { year, month, kind: queuedNotification.kind },
-        scheduled_at: new Date().toISOString(),
+        scheduled_at: nowIso,
+        first_scheduled_at: nowIso,
         created_by: ctx.employeeId,
       });
 
     if (enqErr) {
-      // キュー失敗でも遷移自体は成功。ログのみ。
+      // 遷移自体は成功させるが、握り潰さずに警告として呼び出し元へ返す
+      // （無言の通知欠落を二度と起こさないため）。
       console.error('[shift/transition] notification enqueue failed', enqErr);
+      notificationWarning = '公開は完了しましたが、通知の送信予約に失敗しました。時間をおいて再度お試しください。';
+    } else {
+      notificationQueued = true;
+    }
+
+    // 確認リセット（migration 216）: ready / published に遷移したら、この月の
+    // shift_confirmations を全社員分削除 → 未確認（赤バッジ再点灯）に戻し、最新版を再確認させる。
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+    const { error: resetErr } = await ctx.supabase
+      .from('shift_confirmations')
+      .delete()
+      .eq('tenant_id', ctx.tenantId)
+      .eq('facility_id', ctx.facilityId)
+      .eq('month', monthKey);
+    if (resetErr) {
+      // リセット失敗でも遷移自体は成功扱い（バッジが残るだけで実害は小さい）。
+      console.error('[shift/transition] confirmation reset failed', resetErr);
     }
   }
 
@@ -175,6 +201,7 @@ export async function POST(request: NextRequest) {
     target,
     publish_status: rule.to,
     affected: existing.length,
-    notification_queued: !!queuedNotification,
+    notification_queued: notificationQueued,
+    notification_warning: notificationWarning,
   });
 }
