@@ -5,6 +5,19 @@
 
 ---
 
+## GitHub Actions `notification-cron` が毎回失敗してエラーメールが届き続ける → pg_cron 移行後の残骸ファイル
+
+- **発生日**: 2026-05-31（ユーザー指摘）
+- **発生箇所**: `.github/workflows/notification-cron.yml`
+- **フェーズ**: 運用中
+- **エラー内容**: GitHub Actions の `notification-cron` ワークフローが 30 分毎に「All jobs have failed」で失敗し、`deafzimukyoku-ic/deaf-ic-staffbase` の workflow run 失敗メールが届き続ける。
+- **原因（真因）**: migration 181 で通知ディスパッチを GitHub Actions cron → Supabase pg_cron（`dispatch_notification_queue`、`*/10` で稼働中・成功を実 DB で確認）に移行したが、`.github/workflows/notification-cron.yml` を削除し忘れて残置。GH Secrets（CRON_TARGET_URL / CRON_SECRET）が Vault 移行で未設定になり、ワークフロー先頭の secret チェックで `exit 1`（または 401）し毎回失敗していた。実害なし（pg_cron が正規配信、二重ではない）だが失敗メールが鳴り続ける。
+- **解決方法**: `.github/workflows/notification-cron.yml` を `git rm` で削除。pg_cron が唯一の配信経路として稼働継続。`scripts/probe-pgcron.mjs` で job active + 直近実行 succeeded を確認済。
+- **再発防止**: 配信経路を移行するときは旧経路（GHA workflow / Vercel cron 等）のファイルも同じ PR で削除する。pg_cron 稼働は `scripts/probe-pgcron.mjs` で確認できる。
+- **横展開**: diletto は `.github/workflows` 自体が存在せず該当なし。
+
+---
+
 ## シフトを公開しても職員に通知メール/PWAが届かない → enqueue が first_scheduled_at NOT NULL 違反で全失敗（握り潰し）
 
 - **発生日**: 2026-05-31
