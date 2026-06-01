@@ -5,6 +5,23 @@
 
 ---
 
+## 兼任職員の施設シフト表が「途中まで」しか表示されない → PostgREST の暗黙 max-rows(1000) 打ち切り
+
+- **発生日**: 2026-06-01（ユーザー指摘「社員画面でパレットのシフトが途中までしか表示されない」）
+- **発生箇所**: `components/employee/MyFacilityShiftView.tsx`（施設シフト表の shift_assignments 取得）。同型の取得が `app/(employee)/layout.tsx`（nav バッジ）/ `app/(employee)/my/dashboard/page.tsx`（シフトカード）にもあった
+- **フェーズ**: 本番運用中バグ修正
+- **エラー内容**: 兼任（複数施設所属）の職員が施設のシフトタブを開くと、表の右側（後半の日付）が多くの職員で空（—）になり「途中まで」に見える。エラーは一切出ない（サイレント）
+- **原因（真因 — ユーザーの仮説が的中）**: `MyFacilityShiftView` は `.in('facility_id', facIds)`（主所属 + 兼任先の**複数施設**）で shift_assignments を取得するが、`.limit()` も `.range()` も付けていなかった。パレット(318) + パステル(311) + パズル(423) の 6 月分 = **1052 行 > PostgREST のデフォルト max-rows(1000)** に当たり、**1000 行で黙って打ち切られていた**。データ・RLS は正常（service role / employee の JWT 注入いずれでも 318 件全日取得可）で、employees も 40 名取得できるため「行は出るのにシフトセルが 52 行ぶん欠落」して途中までに見えた。単体所属（パレットのみ 318 行）の職員は 1000 以下なので無症状だった
+- **解決方法**: `lib/multi-facility.ts` に `fetchAllRows()` ページングヘルパーを新設（`.range(from, from+999)` で 1000 件ずつ全件ループ取得）。`MyFacilityShiftView` のシフト取得 + layout / dashboard のシフトバッジ取得を `fetchAllRows` 経由に置換。実 DB で「単発=1000 打ち切り → fetchAllRows=1052 全件」を実証
+- **再発防止**:
+  1. PostgREST の暗黙上限に依存しない `fetchAllRows()` を共通ヘルパー化（複数施設 × 大量行を引く箇所はこれを使う）
+  2. 教訓「`.in('facility_id', 複数)` で行数が増えうるクエリは `.limit()`/`.range()` 無しにしない。数千行になりうるテーブル（shift_assignments / schedule_entries / transport_assignments）は特に注意」
+  3. 「サイレントに途中まで」系の症状は PostgREST max-rows をまず疑い、`scripts/probe-1000-cap.mjs`（Prefer: count=exact で content-range の総数 vs 返却数を比較）で確定する
+- **横展開**: diletto-new-staffbase も同一コードのため同症状。同じ `fetchAllRows` 修正を適用
+- **検証**: 両 repo tsc 0 エラー / 変更ファイル eslint 新規エラーなし。実 DB ページング取得で 1052 件（パレット 318 全件含む）を確認
+
+---
+
 ## GitHub Actions `notification-cron` が毎回失敗してエラーメールが届き続ける → pg_cron 移行後の残骸ファイル
 
 - **発生日**: 2026-05-31（ユーザー指摘）

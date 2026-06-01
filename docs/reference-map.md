@@ -62,6 +62,44 @@
 
 ---
 
+## 0.17 兼任職員の施設シフト表が途中までしか出ない（PostgREST 1000行上限）+ getClaims 高速化（2026-06-01）
+
+### ① 兼任職員のシフト表「途中まで」修正（真因: PostgREST max-rows=1000）
+- 仕様/真因: `MyFacilityShiftView` が `.in('facility_id', facIds)`（主+兼任の複数施設）で shift_assignments を `.limit()` 無しで取得 → 3施設×1ヶ月=1052行 > 1000 で黙って打ち切り。詳細は `docs/error-log.md` 同日エントリ
+- `lib/multi-facility.ts`: **`fetchAllRows<T>(build, pageSize=1000)` 新設**（`.range()` ページングで全件取得。PostgREST 暗黙上限に依存しない）
+- `components/employee/MyFacilityShiftView.tsx` / `app/(employee)/layout.tsx` / `app/(employee)/my/dashboard/page.tsx`: shift_assignments の複数施設取得を `fetchAllRows` 経由に置換
+- 両 repo（diletto も同一コード・同修正）
+
+### ② ミドルウェア getClaims 高速化（モード遷移が遅い件）
+- `middleware.ts`: `auth.getUser()`（Auth サーバー往復 ~300-500ms/req）→ `auth.getClaims()`（ES256 非対称鍵でローカル JWT 検証）。`user.id`→`claims.sub`。Supabase SSR 正準パターン（getClaims がトークンリフレッシュも担う）
+- `app/(admin)/admin/shifts/dashboard/page.tsx`: `computeStatuses` の順次5クエリを `Promise.all` 並列化 + ページも getClaims 化
+- deaf-ic のみ（diletto はミドルウェア無し）
+
+### 参照
+- `lib/multi-facility.ts` `fetchAllRows`（複数施設×大量行を引く箇所はこれを使う）
+- `scripts/probe-1000-cap.mjs`（max-rows 打ち切りの検証: Prefer count=exact で content-range 総数 vs 返却数）
+
+---
+
+## 0.16 職員のシフト変更申請（提出UI 復活）+ ダッシュボードカード遷移修正（2026-06-01）
+
+仕様: [docs/features/shift-change-request-employee.md](features/shift-change-request-employee.md)（両 repo）。
+
+### ① 職員のシフト変更申請（提出UI）復活
+- **新規 migration / API / RLS なし**（`shift_change_requests` + RLS `scr_insert` + 承認 `ApprovalQueueFull` / `[id]` PATCH は既存）
+- `components/shift/ShiftChangeRequestForm.tsx` 復元（git `5c274a9^` 由来。deaf-ic=brand- / diletto=diletto-）。直接 INSERT
+- `components/employee/MyFacilityShiftView.tsx`: 自分の行(`e.id===employeeId`)のセル `onClick` → `openChangeRequest` → モーダル。凡例下にヒント
+- `components/shift/MyRequestsView.tsx`: 締切バナーを「施設のシフト」タブ誘導へ修正
+
+### ② ダッシュボードのシフトカード遷移修正（2026-06-01）
+- `app/(employee)/my/dashboard/page.tsx`: カードの遷移先月を「職員自身の出勤(normal)有無」基準 → 「施設で公開済みの最新月（翌月>今月）」基準に変更（nav の smartDefault と統一）。badge クエリに `publish_status` 追加 + `shiftCardPublished` で「未公開/公開済み/N日」を出し分け
+
+### 参照テーブル・カラム
+- `shift_change_requests.{target_date, change_type, requested_payload, snapshot_before, reason, status}`（migration 100/131・既存）
+- RLS `scr_insert`（migration 131・既存）/ 承認 `app/api/shifts/shift-change-requests/[id]/route.ts`（既存）
+
+---
+
 ## 0.15 シフト「確認しました」機能 + 未確認赤バッジ + 送迎表並び統一（2026-05-31）
 
 仕様: [docs/features/shift-confirmation-and-badge.md](features/shift-confirmation-and-badge.md)（両 repo: deaf-ic 216 / diletto 201）。

@@ -166,3 +166,32 @@ export async function fetchEmployeeIdsForFacilities(
   for (const r of additional ?? []) ids.add(r.employee_id);
   return Array.from(ids);
 }
+
+/**
+ * PostgREST の暗黙の max-rows(=1000) で結果が黙って打ち切られるのを防ぐページング取得。
+ *
+ * 背景（2026-06-01 バグ）: 兼任職員が施設シフト表 (MyFacilityShiftView) を開くと
+ * `.in('facility_id', facIds)`（主+兼任先の複数施設）で shift_assignments を引くが、
+ * 3 施設 × 1 ヶ月で 1052 行 > 1000 となり PostgREST が 1000 行で打ち切り → 表が「途中まで」。
+ * `.limit()` も `.range()` も付けていなかったため暗黙上限を踏んでいた。
+ *
+ * この関数は `.range(offset, offset+PAGE-1)` で PAGE 件ずつ全件ループ取得し、上限に依存しない。
+ *
+ * @param build range を適用するクエリビルダを返す関数。呼ぶたびに新しいクエリを返すこと
+ *   （同じ PostgrestFilterBuilder を使い回すと range 条件が積算されるため）。
+ */
+export async function fetchAllRows<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  build: () => any,
+  pageSize = 1000,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await build().range(from, from + pageSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < pageSize) break; // 最終ページ
+  }
+  return out;
+}

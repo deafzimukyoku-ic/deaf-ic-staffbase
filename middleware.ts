@@ -32,16 +32,20 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims(): 非対称鍵(ES256)で JWT をローカル検証し、必要ならトークンをリフレッシュする
+  // （Supabase SSR の正準パターン）。getUser() の Auth サーバーへのネットワーク往復
+  // (~300-500ms/req) を排除して全ナビゲーションを高速化する。
+  // 注意: createServerClient と getClaims() の間にコードを挟まない（挟むとランダムログアウトの原因）。
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims ?? null;
+  const userId = claims?.sub ?? null;
 
   const pathname = request.nextUrl.pathname;
 
   const publicPaths = ['/login', '/register', '/reset-password', '/invite', '/auth/callback'];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
-  if (!user && !isPublic) {
+  if (!claims && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
@@ -50,7 +54,7 @@ export async function middleware(request: NextRequest) {
   // /invite/accept と /reset-password/confirm は code 交換で「認証済み」扱いになるが、
   // パスワード設定 UI を表示する必要があるため auto-redirect から除外する。
   if (
-    user &&
+    claims &&
     isPublic &&
     !pathname.startsWith('/invite') &&
     !pathname.startsWith('/reset-password/confirm')
@@ -58,7 +62,7 @@ export async function middleware(request: NextRequest) {
     const { data: employee } = await supabase
       .from('employees')
       .select('role, status')
-      .eq('auth_user_id', user.id)
+      .eq('auth_user_id', userId)
       .maybeSingle();
 
     /* 退職者は admin が誤って /login を踏ませても入れない（API/Auth BAN と二重に防ぐ）。
@@ -86,11 +90,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (user && (pathname.startsWith('/admin') || pathname.startsWith('/setup') || pathname.startsWith('/mgr') || pathname.startsWith('/my'))) {
+  if (claims && (pathname.startsWith('/admin') || pathname.startsWith('/setup') || pathname.startsWith('/mgr') || pathname.startsWith('/my'))) {
     const { data: employee } = await supabase
       .from('employees')
       .select('role, status')
-      .eq('auth_user_id', user.id)
+      .eq('auth_user_id', userId)
       .maybeSingle();
 
     if (!employee) {

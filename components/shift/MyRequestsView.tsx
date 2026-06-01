@@ -10,7 +10,8 @@ import Button from '@/components/shift-compat/Button';
 import { createClient } from '@/lib/supabase/client';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
 import { todayStr } from '@/lib/date/isToday';
-import type { ShiftRequestRow, ShiftRequestType } from '@/lib/types';
+import ShiftChangeRequestForm from '@/components/shift/ShiftChangeRequestForm';
+import type { ShiftRequestRow, ShiftRequestType, ShiftAssignmentType } from '@/lib/types';
 
 /**
  * 自分の休み希望提出カレンダー（タスクC）
@@ -79,6 +80,10 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [editingDay, setEditingDay] = useState<string | null>(null);
   const [readOnly, setReadOnly] = useState(false);
+  /* readOnly(締切)時に日付タップで開く「シフト変更申請」用: 自分の確定シフト + 基本勤務時間 */
+  const [dateShiftMap, setDateShiftMap] = useState<Record<string, { assignment_type: ShiftAssignmentType; start_time: string | null; end_time: string | null }>>({});
+  const [myDefaults, setMyDefaults] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+  const [changeReq, setChangeReq] = useState<{ date: string; currentShift: { assignment_type: ShiftAssignmentType; start_time: string | null; end_time: string | null } | null } | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -115,6 +120,25 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
         (a: { publish_status: string }) => a.publish_status === 'ready' || a.publish_status === 'published'
       );
       setReadOnly(isPublished);
+
+      /* 自分の確定シフト（変更申請モーダルの現状表示用）+ 基本勤務時間。
+         readOnly のとき日付タップで ShiftChangeRequestForm に渡す。 */
+      const [{ data: myShifts }, { data: me }] = await Promise.all([
+        supabase
+          .from('shift_assignments')
+          .select('date, assignment_type, start_time, end_time')
+          .eq('employee_id', employeeId)
+          .in('publish_status', ['ready', 'published'])
+          .gte('date', from)
+          .lte('date', to),
+        supabase.from('employees').select('default_start_time, default_end_time').eq('id', employeeId).maybeSingle(),
+      ]);
+      const sMap: Record<string, { assignment_type: ShiftAssignmentType; start_time: string | null; end_time: string | null }> = {};
+      for (const s of (myShifts ?? []) as { date: string; assignment_type: ShiftAssignmentType; start_time: string | null; end_time: string | null }[]) {
+        sMap[s.date] = { assignment_type: s.assignment_type, start_time: s.start_time, end_time: s.end_time };
+      }
+      setDateShiftMap(sMap);
+      setMyDefaults({ start: (me?.default_start_time as string | null) ?? null, end: (me?.default_end_time as string | null) ?? null });
     } catch (e) {
       setError(e instanceof Error ? e.message : '読み込み失敗');
     } finally {
@@ -123,6 +147,11 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
   }, [supabase, employeeId, targetMonth, year, monthNum, facilityId]);
 
   useEffect(() => { void fetchAll(); }, [fetchAll]);
+
+  /* readOnly(締切)時: 日付タップでその日のシフト変更申請モーダルを開く */
+  const openChangeRequest = (date: string) => {
+    setChangeReq({ date, currentShift: dateShiftMap[date] ?? null });
+  };
 
   // カレンダーグリッド構築
   const weeks = useMemo(() => {
@@ -253,7 +282,7 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
 
       {readOnly && (
         <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
-          📌 この月は既にシフトが作成されています。希望の変更は<strong>シフト変更申請</strong>で行ってください。
+          📌 この月は既にシフトが作成されています。変更したい場合は<strong>下のカレンダーの日付</strong>（または「施設のシフト」タブの自分の勤務）をタップして<strong>シフト変更申請</strong>をしてください。
         </div>
       )}
 
@@ -321,14 +350,13 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
             return (
               <div key={c.date} className="relative">
                 <button
-                  onClick={() => !readOnly && setEditingDay(isEditing ? null : c.date)}
-                  disabled={readOnly}
-                  title={holiday ? jpHolidayName(c.date) ?? undefined : undefined}
+                  onClick={() => (readOnly ? openChangeRequest(c.date) : setEditingDay(isEditing ? null : c.date))}
+                  title={readOnly ? 'タップしてシフト変更申請' : holiday ? jpHolidayName(c.date) ?? undefined : undefined}
                   className={`
                     w-full flex flex-col items-center justify-center py-2 rounded-md transition-all active:scale-95 border-[1.5px]
                     ${useGradient ? 'border-blue-400' : cfg ? `${cfg.bg} ${cfg.border}` : isWeekend || holiday ? 'bg-black/[0.02] border-transparent' : 'bg-white border-transparent'}
                     ${isToday ? 'ring-2 ring-brand-blue/40' : ''}
-                    ${readOnly ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:brightness-95'}
+                    cursor-pointer hover:brightness-95
                   `}
                   style={{ minHeight: '52px', ...(bgStyle ?? {}) }}
                 >
@@ -396,6 +424,21 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
             {saving ? '保存中...' : '保存する'}
           </Button>
         </div>
+      )}
+
+      {changeReq && (
+        <ShiftChangeRequestForm
+          isOpen
+          onClose={() => setChangeReq(null)}
+          onSubmitted={() => { /* フォームがトースト表示。閉じるは onClose に委譲 */ }}
+          tenantId={tenantId}
+          facilityId={facilityId}
+          employeeId={employeeId}
+          targetDate={changeReq.date}
+          currentShift={changeReq.currentShift}
+          defaultStartTime={myDefaults.start}
+          defaultEndTime={myDefaults.end}
+        />
       )}
     </div>
   );

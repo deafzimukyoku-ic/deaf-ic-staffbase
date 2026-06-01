@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { applyScopeFilter } from '@/components/admin/FacilityScopeSelector';
-import { fetchMyFacilityIds, isItemInAudience } from '@/lib/multi-facility';
+import { fetchMyFacilityIds, isItemInAudience, fetchAllRows } from '@/lib/multi-facility';
 import type { TargetType, DocumentTemplate, PdfTag } from '@/lib/types';
 import { extractReferencedEmployeeFields, needsResubmitBySnapshot } from '@/lib/document-resubmit';
 
@@ -29,6 +29,8 @@ interface TodoItem {
   shiftMonthNum?: number;
   /* シフトカード専用: 未確認の (施設,月) 件数 (赤バッジ用) */
   shiftUnconfirmed?: number;
+  /* シフトカード専用: 施設で公開済みの月があるか (「未公開」表示の判定) */
+  shiftCardPublished?: boolean;
 }
 
 type UpdateKind = 'announcement' | 'compliance' | 'training' | 'manual';
@@ -282,11 +284,15 @@ export default function EmployeeDashboardPage() {
       const myFacilityIds = await fetchMyFacilityIds(supabase, me.id, me.facility_id);
       /* シフトカード赤バッジ: 今月+来月の ready/published がある (施設,月) のうち、
          自分の確認記録が無い数。layout の nav バッジと同一ロジック（migration 216）。 */
-      const [shiftBadgeAssignRes, shiftBadgeConfRes] = await Promise.all([
-        supabase.from('shift_assignments').select('facility_id, date').in('facility_id', myFacilityIds.length ? myFacilityIds : ['00000000-0000-0000-0000-000000000000']).in('publish_status', ['ready', 'published']).gte('date', thisMonthFrom).lte('date', nextMonthTo),
+      /* 兼任(複数施設×2ヶ月)で 1000 行超えうるため fetchAllRows でページング取得（2026-06-01 バグ修正）。 */
+      const [shiftBadgeRowsAll, shiftBadgeConfRes] = await Promise.all([
+        myFacilityIds.length
+          ? fetchAllRows<{ facility_id: string; date: string; publish_status: string }>(() =>
+              supabase.from('shift_assignments').select('facility_id, date, publish_status').in('facility_id', myFacilityIds).in('publish_status', ['ready', 'published']).gte('date', thisMonthFrom).lte('date', nextMonthTo).order('date', { ascending: true }))
+          : Promise.resolve([] as { facility_id: string; date: string; publish_status: string }[]),
         supabase.from('shift_confirmations').select('facility_id, month').eq('employee_id', eid).in('month', [thisMonthKey, nextMonth]),
       ]);
-      const shiftBadgeFacMonths = new Set(((shiftBadgeAssignRes.data ?? []) as { facility_id: string; date: string }[]).map((r) => `${r.facility_id}__${r.date.slice(0, 7)}`));
+      const shiftBadgeFacMonths = new Set(shiftBadgeRowsAll.map((r) => `${r.facility_id}__${r.date.slice(0, 7)}`));
       const shiftBadgeConfirmed = new Set(((shiftBadgeConfRes.data ?? []) as { facility_id: string; month: string }[]).map((r) => `${r.facility_id}__${r.month}`));
       const shiftUnconfirmed = [...shiftBadgeFacMonths].filter((k) => !shiftBadgeConfirmed.has(k)).length;
       const myPositionId = (me.position_id as string | null) ?? null;
@@ -367,13 +373,15 @@ export default function EmployeeDashboardPage() {
         messageUnreadCount = ((pendingMsgs || []) as { id: string }[]).filter((m) => !myReadMsgIds.has(m.id)).length;
       }
 
-      /* シフトカード: 今月に公開/ready の出勤予定が無ければ来月を見る（翌月公開・今月未公開対策）。
-         href も対象月へ深リンクし、職員が公開済みシフトに直接着地できるようにする。 */
+      /* シフトカードの遷移先 = 施設で「公開済み」の最新月（翌月>今月）。サイドバー nav の
+         smartDefault と揃える。職員自身の出勤(normal)有無では決めない
+         （出勤の無い職員が未公開月にリンクされる不具合の修正 2026-06-01）。 */
+      const publishedMonthSet = new Set(shiftBadgeRowsAll.filter((r) => r.publish_status === 'published').map((r) => r.date.slice(0, 7)));
+      const latestPublishedMonth = [nextMonth, thisMonthKey].find((mm) => publishedMonthSet.has(mm)) ?? null;
+      const shiftCardMonth = latestPublishedMonth ?? thisMonthKey;
+      const shiftCardPublished = latestPublishedMonth !== null;
       const shiftPlannedRows = (shiftPlanned.data ?? []) as { date: string }[];
-      const thisMonthPlanned = shiftPlannedRows.filter((r) => r.date.slice(0, 7) === thisMonthKey).length;
-      const nextMonthPlanned = shiftPlannedRows.filter((r) => r.date.slice(0, 7) === nextMonth).length;
-      const shiftCardMonth = thisMonthPlanned > 0 ? thisMonthKey : (nextMonthPlanned > 0 ? nextMonth : thisMonthKey);
-      const shiftPlannedCount = thisMonthPlanned > 0 ? thisMonthPlanned : nextMonthPlanned;
+      const shiftPlannedCount = shiftPlannedRows.filter((r) => r.date.slice(0, 7) === shiftCardMonth).length;
       const shiftCardMonthNum = Number(shiftCardMonth.slice(5, 7));
 
       // 「最近の更新」ヒーローデータ: 7日以内かつ未消化の遵守事項/研修/お知らせ
@@ -443,7 +451,7 @@ export default function EmployeeDashboardPage() {
         { label: '業務マニュアル', href: '/my/manuals', done: mDone >= mTotal && mTotal > 0, current: mDone, total: mTotal, icon: '📘' },
         /* sidebar 並びに合わせて 業務マニュアル と 休み希望 の間に「個別連絡」、その後に「シフト」を配置 */
         { label: '個別連絡', href: '/my/messages', done: messageUnreadCount === 0, current: 0, total: 0, icon: '💬', messageUnread: messageUnreadCount },
-        { label: 'シフト', href: `/my/requests?tab=facility-shift&month=${shiftCardMonth}`, done: false, current: 0, total: 0, icon: '📅', shiftPlannedDays: shiftPlannedCount, shiftMonthNum: shiftCardMonthNum, shiftUnconfirmed },
+        { label: 'シフト', href: `/my/requests?tab=facility-shift&month=${shiftCardMonth}`, done: false, current: 0, total: 0, icon: '📅', shiftPlannedDays: shiftPlannedCount, shiftMonthNum: shiftCardMonthNum, shiftUnconfirmed, shiftCardPublished },
         { label: `休み希望（${nextMonthDate.getMonth() + 1}月分）`, href: '/my/requests', done: reqDone, current: reqDone ? 1 : 0, total: 1, icon: '🗓️' },
       ]);
 
@@ -574,7 +582,7 @@ export default function EmployeeDashboardPage() {
                     )}
                     {isShiftCard && (
                       <span className="text-[10px] font-medium text-brand-gray">
-                        {(t.shiftPlannedDays ?? 0) > 0 ? `${t.shiftPlannedDays}日` : '未公開'}
+                        {!t.shiftCardPublished ? '未公開' : (t.shiftPlannedDays ?? 0) > 0 ? `${t.shiftPlannedDays}日` : '公開済み'}
                       </span>
                     )}
                   </div>

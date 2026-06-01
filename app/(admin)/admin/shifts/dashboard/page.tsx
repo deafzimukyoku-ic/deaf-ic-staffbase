@@ -40,26 +40,32 @@ async function computeStatuses(tenantId: string, targetMonthStr: string, monthFr
     request: 'empty',
   };
 
-  const { data: entries } = await supabase
-    .from('schedule_entries')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .gte('date', monthFrom)
-    .lte('date', monthTo);
-  const entryIds = (entries ?? []).map((e) => e.id);
+  /* 独立する 4 クエリを並列化（wave 1）。transport だけ entryIds に依存するので wave 2。
+     旧実装は 5 本を順次 await していたため SSR が遅かった（2026-06-01 並列化）。 */
+  const [entriesRes, sRowsRes, activeEmpsRes, reqRowsRes] = await Promise.all([
+    supabase.from('schedule_entries').select('id').eq('tenant_id', tenantId).gte('date', monthFrom).lte('date', monthTo),
+    supabase.from('shift_assignments').select('publish_status').eq('tenant_id', tenantId).gte('date', monthFrom).lte('date', monthTo),
+    supabase.from('employees').select('id').eq('tenant_id', tenantId).eq('status', 'active').neq('role', 'admin'),
+    supabase.from('shift_requests').select('employee_id').eq('tenant_id', tenantId).eq('month', targetMonthStr),
+  ]);
+
+  const entryIds = (entriesRes.data ?? []).map((e) => e.id);
   result.schedule = entryIds.length > 0 ? 'complete' : 'empty';
 
-  const { data: sRows } = await supabase
-    .from('shift_assignments')
-    .select('publish_status')
-    .eq('tenant_id', tenantId)
-    .gte('date', monthFrom)
-    .lte('date', monthTo);
-  const sList = (sRows ?? []) as { publish_status: string }[];
+  const sList = (sRowsRes.data ?? []) as { publish_status: string }[];
   if (sList.length === 0) result.shift = 'empty';
   else if (sList.every((r) => r.publish_status === 'published')) result.shift = 'complete';
   else result.shift = 'incomplete';
 
+  const totalStaff = (activeEmpsRes.data ?? []).length;
+  if (totalStaff > 0) {
+    const submitted = new Set((reqRowsRes.data ?? []).map((r) => r.employee_id));
+    result.request = submitted.size === 0 ? 'empty'
+      : submitted.size >= totalStaff ? 'complete'
+      : 'incomplete';
+  }
+
+  // transport は entryIds に依存するため wave 2（依存がある分だけ後続）
   if (entryIds.length > 0) {
     const { data: tRows } = await supabase
       .from('transport_assignments')
@@ -71,39 +77,23 @@ async function computeStatuses(tenantId: string, targetMonthStr: string, monthFr
     else result.transport = 'incomplete';
   }
 
-  const { data: activeEmps } = await supabase
-    .from('employees')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('status', 'active')
-    .neq('role', 'admin');
-  const totalStaff = (activeEmps ?? []).length;
-  if (totalStaff > 0) {
-    const { data: reqRows } = await supabase
-      .from('shift_requests')
-      .select('employee_id')
-      .eq('tenant_id', tenantId)
-      .eq('month', targetMonthStr);
-    const submitted = new Set((reqRows ?? []).map((r) => r.employee_id));
-    result.request = submitted.size === 0 ? 'empty'
-      : submitted.size >= totalStaff ? 'complete'
-      : 'incomplete';
-  }
-
   return result;
 }
 
 export default async function AdminShiftsDashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  /* getClaims(): ローカル JWT 検証（Auth サーバー往復なし）。middleware で検証済みなので
+     ここは user id 取得のみが目的。getUser() の往復を避けて SSR を速くする。 */
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub ?? null;
 
   let tenantId: string | null = null;
   let userName = '';
-  if (user) {
+  if (userId) {
     const { data: emp } = await supabase
       .from('employees')
       .select('last_name, first_name, tenant_id')
-      .eq('auth_user_id', user.id)
+      .eq('auth_user_id', userId)
       .single();
     if (emp) {
       tenantId = emp.tenant_id;

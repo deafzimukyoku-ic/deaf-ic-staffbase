@@ -5,10 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import { addMonths, format, getDaysInMonth, getDay, subMonths } from 'date-fns';
 import MonthStepper from '@/components/shift/MonthStepper';
 import ShiftConfirmButton from '@/components/shift/ShiftConfirmButton';
+import ShiftChangeRequestForm from '@/components/shift/ShiftChangeRequestForm';
 import { createClient } from '@/lib/supabase/client';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
 import { todayStr } from '@/lib/date/isToday';
-import { fetchMyFacilityIds } from '@/lib/multi-facility';
+import { fetchMyFacilityIds, fetchAllRows } from '@/lib/multi-facility';
 import type { ShiftAssignmentType } from '@/lib/types';
 
 /**
@@ -53,6 +54,8 @@ interface EmployeeRow {
   first_name: string;
   facility_id: string | null;
   shift_display_order: number | null;
+  default_start_time: string | null;
+  default_end_time: string | null;
 }
 
 interface FacilityRow {
@@ -103,6 +106,12 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [facilities, setFacilities] = useState<FacilityRow[]>([]);
   const [myFacilityIds, setMyFacilityIds] = useState<string[]>([]);
+  /* 自分の勤務セルをタップしたときに開く「シフト変更申請」モーダルの対象 */
+  const [changeReq, setChangeReq] = useState<{
+    date: string;
+    facilityId: string;
+    currentShift: { assignment_type: ShiftAssignmentType; start_time: string | null; end_time: string | null } | null;
+  } | null>(null);
 
   const monthStr = `${year}-${String(month).padStart(2, '0')}`;
   const daysInMonth = getDaysInMonth(new Date(year, month - 1));
@@ -148,22 +157,36 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
       const facIds = await fetchMyFacilityIds(supabase, employeeId, facilityId);
       if (cancelled) return;
 
+      /* facId が空のまま .in('facility_id', []) を投げると PostgREST が `in.()` を
+         400 で拒否し、表が「読み込み中」で固まる。所属施設が無い (例: 施設未設定の
+         閲覧者) ときは空表示で確定させる。 */
+      if (facIds.length === 0) {
+        setShifts([]); setEmployees([]); setFacilities([]); setMyFacilityIds([]); setLoading(false);
+        return;
+      }
+
       const from = `${monthStr}-01`;
       const to = `${monthStr}-${String(daysInMonth).padStart(2, '0')}`;
 
       /* RLS（migration 160 拡張）により、publish_status in (ready, published) かつ
-         自分の facility のみ取得される。ready は「仮（確認中）」として表示する。 */
-      const [{ data: shiftData }, { data: empData }, { data: facData }] = await Promise.all([
-        supabase
-          .from('shift_assignments')
-          .select('employee_id, facility_id, date, start_time, end_time, assignment_type, note, publish_status')
-          .in('facility_id', facIds)
-          .in('publish_status', ['ready', 'published'])
-          .gte('date', from)
-          .lte('date', to),
+         自分の facility のみ取得される。ready は「仮（確認中）」として表示する。
+         shift_assignments は兼任(複数 facility × 1ヶ月)で 1000 行を超えうるため
+         fetchAllRows でページング取得し、PostgREST の暗黙 max-rows(1000) 打ち切りを回避する
+         （2026-06-01 「兼任職員の表が途中までしか出ない」バグの修正）。 */
+      const [shiftData, { data: empData }, { data: facData }] = await Promise.all([
+        fetchAllRows<ShiftRow>(() =>
+          supabase
+            .from('shift_assignments')
+            .select('employee_id, facility_id, date, start_time, end_time, assignment_type, note, publish_status')
+            .in('facility_id', facIds)
+            .in('publish_status', ['ready', 'published'])
+            .gte('date', from)
+            .lte('date', to)
+            .order('date', { ascending: true }),
+        ),
         supabase
           .from('employees')
-          .select('id, last_name, first_name, facility_id, shift_display_order')
+          .select('id, last_name, first_name, facility_id, shift_display_order, default_start_time, default_end_time')
           .eq('tenant_id', tenantId)
           .eq('status', 'active')
           .in('facility_id', facIds),
@@ -174,7 +197,7 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
       ]);
 
       if (cancelled) return;
-      setShifts((shiftData ?? []) as ShiftRow[]);
+      setShifts(shiftData);
       setEmployees((empData ?? []) as EmployeeRow[]);
       setFacilities((facData ?? []) as FacilityRow[]);
       setMyFacilityIds(facIds);
@@ -222,6 +245,18 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
     const stage: 'ready' | 'published' | null = hasReady ? 'ready' : hasPublished ? 'published' : null;
     return { monthStage: stage, facilityIdsWithShifts: Array.from(facSet) };
   }, [shifts]);
+
+  /* 自分の行の勤務セルをタップ → その日のシフト変更申請モーダルを開く。
+     facility は当該セルの施設（兼任時に正しい施設で申請するため）。空セルは未設定として申請可。 */
+  const openChangeRequest = (date: string, cell: ShiftRow | null) => {
+    setChangeReq({
+      date,
+      facilityId: cell?.facility_id ?? facilityId,
+      currentShift: cell
+        ? { assignment_type: cell.assignment_type, start_time: cell.start_time, end_time: cell.end_time }
+        : null,
+    });
+  };
 
   /* 月送りはどの状態でも常に表示するため、ローディング / 空 / 未公開状態は inline で描画 (return しない) */
   const stateBlock = loading ? (
@@ -309,6 +344,10 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
         ))}
       </div>
 
+      {monthStage && (
+        <p className="text-[11px] text-brand-gray-light">💡 自分の勤務（あなたの行）をタップすると、その日の<strong>シフト変更申請</strong>ができます。</p>
+      )}
+
       {/* 表 (横スクロール) */}
       <div className="rounded-md border border-brand-gray/10 bg-white overflow-x-auto">
         <table className="text-xs border-collapse w-max min-w-full">
@@ -379,12 +418,18 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
                 </td>
                 {dateList.map((d) => {
                   const cell = shiftMap.get(`${e.id}__${d.date}`);
+                  /* 自分の行のセルはタップで変更申請モーダルを開く（他人の行は不可） */
+                  const isOwn = e.id === employeeId;
+                  const ownClick = isOwn ? () => openChangeRequest(d.date, cell ?? null) : undefined;
+                  const ownCls = isOwn ? ' cursor-pointer hover:ring-2 hover:ring-inset hover:ring-brand-blue/50' : '';
                   if (!cell) {
                     return (
                       <td
                         key={d.date}
-                        className={`text-center px-1 py-1.5 ${d.date === today ? 'bg-brand-blue/[0.03]' : ''}`}
+                        className={`text-center px-1 py-1.5 ${d.date === today ? 'bg-brand-blue/[0.03]' : ''}${ownCls}`}
                         style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
+                        onClick={ownClick}
+                        title={isOwn ? 'タップしてシフト変更申請' : undefined}
                       >
                         <span className="text-brand-gray-light/40">—</span>
                       </td>
@@ -396,9 +441,10 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
                     return (
                       <td
                         key={d.date}
-                        className={`text-center px-1 py-1.5 ${config.bg}`}
+                        className={`text-center px-1 py-1.5 ${config.bg}${ownCls}`}
                         style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
-                        title={`出勤 ${cell.start_time.slice(0, 5)}〜${cell.end_time.slice(0, 5)}${noteAttr}`}
+                        title={`出勤 ${cell.start_time.slice(0, 5)}〜${cell.end_time.slice(0, 5)}${noteAttr}${isOwn ? ' / タップして変更申請' : ''}`}
+                        onClick={ownClick}
                       >
                         <div className={`text-[10px] font-medium ${config.color} leading-tight`}>
                           {cell.start_time.slice(0, 5)}
@@ -412,9 +458,10 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
                   return (
                     <td
                       key={d.date}
-                      className={`text-center px-1 py-1.5 ${config.bg}`}
+                      className={`text-center px-1 py-1.5 ${config.bg}${ownCls}`}
                       style={{ boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06), inset -1px 0 0 rgba(0,0,0,0.06)' }}
-                      title={`${config.label}${noteAttr}`}
+                      title={`${config.label}${noteAttr}${isOwn ? ' / タップして変更申請' : ''}`}
+                      onClick={ownClick}
                     >
                       <span className={`text-[10px] font-bold ${config.color}`}>{config.label}</span>
                     </td>
@@ -425,6 +472,21 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
           </tbody>
         </table>
       </div>
+
+      {changeReq && (
+        <ShiftChangeRequestForm
+          isOpen
+          onClose={() => setChangeReq(null)}
+          onSubmitted={() => { /* 送信成功時はフォームがトースト表示。閉じるは onClose に委譲 */ }}
+          tenantId={tenantId}
+          facilityId={changeReq.facilityId}
+          employeeId={employeeId}
+          targetDate={changeReq.date}
+          currentShift={changeReq.currentShift}
+          defaultStartTime={employees.find((x) => x.id === employeeId)?.default_start_time ?? null}
+          defaultEndTime={employees.find((x) => x.id === employeeId)?.default_end_time ?? null}
+        />
+      )}
     </div>
   );
 }

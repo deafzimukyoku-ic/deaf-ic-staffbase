@@ -9,7 +9,7 @@ import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
 import { ManualIntroDialog } from '@/components/employee/ManualIntroDialog';
 import { countDocumentsNeedingResubmit } from '@/lib/document-resubmit-count';
-import { fetchMyFacilityIds, isItemInAudience } from '@/lib/multi-facility';
+import { fetchMyFacilityIds, isItemInAudience, fetchAllRows } from '@/lib/multi-facility';
 import { listenBadgeRefresh } from '@/lib/badge-refresh';
 import type { Employee, TargetType } from '@/lib/types';
 
@@ -96,8 +96,13 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         /* 179 (R1): 書類バッジは /my/documents 上の「再提出する」赤ボタン数と同じロジックで算出する。
            audience / matrix / is_company_issued / snapshot 比較を共通ヘルパーに集約 */
         countDocumentsNeedingResubmit(supabase, me as Employee),
-        /* シフト未確認: 今月+来月の ready/published シフトがある (施設, 月) を取得（RLS 160 拡張で ready も可視）。 */
-        supabase.from('shift_assignments').select('facility_id, date').in('facility_id', myFacilityIds.length ? myFacilityIds : ['00000000-0000-0000-0000-000000000000']).in('publish_status', ['ready', 'published']).gte('date', shiftWinFrom).lt('date', shiftWinToExcl),
+        /* シフト未確認: 今月+来月の ready/published シフトがある (施設, 月) を取得（RLS 160 拡張で ready も可視）。
+           兼任(複数施設×2ヶ月)で 1000 行を超えうるため fetchAllRows でページング取得し、
+           PostgREST の暗黙 max-rows(1000) 打ち切りを回避する（2026-06-01 バグ修正）。 */
+        myFacilityIds.length
+          ? fetchAllRows<{ facility_id: string; date: string }>(() =>
+              supabase.from('shift_assignments').select('facility_id, date').in('facility_id', myFacilityIds).in('publish_status', ['ready', 'published']).gte('date', shiftWinFrom).lt('date', shiftWinToExcl).order('date', { ascending: true }))
+          : Promise.resolve([] as { facility_id: string; date: string }[]),
         /* 自分の確認記録（今月+来月） */
         supabase.from('shift_confirmations').select('facility_id, month').eq('employee_id', me.id).in('month', [thisMonthKey, nextMonthKey]),
       ]);
@@ -167,9 +172,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         messageUnread = ((pending || []) as { id: string }[]).filter((m) => !myReadMsgIds.has(m.id)).length;
       }
 
-      /* シフト未確認件数: ready/published のある (施設, 月) のうち、自分の確認記録が無いもの */
+      /* シフト未確認件数: ready/published のある (施設, 月) のうち、自分の確認記録が無いもの。
+         shiftAssignRes は fetchAllRows の戻り（配列そのもの）。 */
       const shiftFacMonths = new Set(
-        ((shiftAssignRes.data || []) as { facility_id: string; date: string }[])
+        (shiftAssignRes as { facility_id: string; date: string }[])
           .map((r) => `${r.facility_id}__${r.date.slice(0, 7)}`)
       );
       const shiftConfirmedSet = new Set(

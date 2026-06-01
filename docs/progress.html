@@ -1070,6 +1070,24 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<div class="phase">
+  <h2>職員のシフト変更申請（提出UI 復活）+ ダッシュボードカード遷移修正（2026-06-01） <span class="phase-pct">コード実装完了 / ローカル確認中 / push 待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">仕様書 docs/features/shift-change-request-employee.md。バナーが入口の無い機能を案内していた（提出UIが撤廃済）→ 復活。新規 migration/API/RLS なし（承認側は既存）。deaf-ic / diletto 両方。</td></tr>
+      <tr><td>変更申請フォーム復活</td><td class="files">components/shift/ShiftChangeRequestForm.tsx（git 5c274a9^ 復元）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>時刻変更/休暇申請/勤務種別変更。直接 INSERT（RLS scr_insert）+ 送信トースト。deaf-ic=brand- / diletto=diletto-</td></tr>
+      <tr><td>施設シフトで自分セル→モーダル</td><td class="files">components/employee/MyFacilityShiftView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>自分の行(e.id===employeeId)のセル onClick→openChangeRequest。空セルも申請可。凡例下にヒント</td></tr>
+      <tr><td>締切バナーを実機能へ接続</td><td class="files">components/shift/MyRequestsView.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「希望の変更はシフト変更申請で」→「施設のシフト」タブで自分の勤務をタップ、へ修正</td></tr>
+      <tr><td>承認ループ（既存・無改造）</td><td class="files">ApprovalQueueFull.tsx, /api/shifts/shift-change-requests/[id]</td><td><span class="status done">確認</span></td><td class="pct">100%</td><td>admin 承認 → shift_assignments 反映。ShiftFull に描画済</td></tr>
+      <tr><td>ダッシュボードカード遷移修正</td><td class="files">app/(employee)/my/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>遷移先を「公開済み最新月」基準に（nav と統一）。未公開/公開済み/N日 を出し分け</td></tr>
+      <tr><td>型チェック</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>両 repo tsc 0 エラー / 変更ファイル eslint 新規エラーなし</td></tr>
+      <tr><td>ローカル確認 / push</td><td class="files">—</td><td><span class="status todo">進行中</span></td><td class="pct">50%</td><td>dev(6001) 起動・コンパイルOK。実機確認後に main push</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 施設シフトで自分の勤務をタップ→モーダルが開くか ② 時刻/休暇/種別変更で申請→トースト ③ 管理者のシフト表（承認キュー）に申請が出るか ④ 承認で shift_assignments が更新されるか ⑤ 他人の行は押せないか ⑥ 休み希望タブのバナーが正しい導線か ⑦ ダッシュボードのシフトカードが公開月へ飛ぶか ⑧ diletto でも同挙動か</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>
