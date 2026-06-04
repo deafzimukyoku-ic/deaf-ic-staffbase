@@ -16,10 +16,9 @@ import Button from '@/components/shift-compat/Button';
 import Modal from '@/components/shift-compat/Modal';
 import { GRADE_LABELS } from '@/lib/shift-utils';
 import ScheduleGridFull, { type ScheduleCellData } from '@/components/shift/ScheduleGridFull';
-import PdfImportModal from '@/components/shift/PdfImportModal';
 import ExcelPasteModal, { type ExistingEntrySummary } from '@/components/shift/ExcelPasteModal';
 import { useShiftFacilityId } from '@/lib/shift-facility';
-import type { ChildRow, ScheduleEntryRow, AttendanceStatus, AttendanceAuditLogRow, Facility, AreaLabel, ParsedScheduleEntry } from '@/lib/types';
+import type { ChildRow, ScheduleEntryRow, AttendanceStatus, AttendanceAuditLogRow, ParsedScheduleEntry } from '@/lib/types';
 import { inferChildDefaultTimes } from '@/lib/logic/inferDefaultTimes';
 
 interface Props {
@@ -98,13 +97,10 @@ export default function ScheduleFull({ scope }: Props) {
   const [children, setChildren] = useState<ChildRow[]>([]);
   const [cells, setCells] = useState<ScheduleCellData[]>([]);
   const [rawEntries, setRawEntries] = useState<ScheduleEntryRow[]>([]);
-  const [pickupAreas, setPickupAreas] = useState<AreaLabel[]>([]);
-  const [dropoffAreas, setDropoffAreas] = useState<AreaLabel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // PDF/Excel インポートモーダル
-  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  // ペースト（コピペ取り込み）モーダル
   const [excelModalOpen, setExcelModalOpen] = useState(false);
 
   // セル編集モーダル
@@ -165,15 +161,6 @@ export default function ScheduleFull({ scope }: Props) {
         .gte('date', from)
         .lte('date', to);
       const entries = ((entriesData ?? []) as ScheduleEntryRow[]);
-
-      // facility のエリアラベル（PDFインポートのマーク推論用）
-      const { data: fs } = await supabase
-        .from('facility_shift_settings')
-        .select('pickup_area_labels, dropoff_area_labels')
-        .eq('facility_id', selectedFacilityId)
-        .maybeSingle();
-      setPickupAreas(Array.isArray(fs?.pickup_area_labels) ? fs!.pickup_area_labels : []);
-      setDropoffAreas(Array.isArray(fs?.dropoff_area_labels) ? fs!.dropoff_area_labels : []);
 
       setChildren(ch);
       setRawEntries(entries);
@@ -322,7 +309,7 @@ export default function ScheduleFull({ scope }: Props) {
     }
   };
 
-  // PDF/Excel インポートからの一括登録
+  // ペースト（コピペ）からの一括取り込み = 当月の完全上書き
   const handleBulkImport = async (entries: ParsedScheduleEntry[]) => {
     if (!me) return;
     const nameToChild = new Map(children.map((c) => [c.name, c]));
@@ -349,24 +336,51 @@ export default function ScheduleFull({ scope }: Props) {
 
     const skipped = entries.length - rows.length;
 
+    /* 児童名が1件も一致しない場合は誤爆防止のため削除せず中断
+       （空配列で upsert→全削除、を防ぐ） */
     if (rows.length === 0) {
       alert('児童名が一致しませんでした。児童管理で名前を登録してください。');
       return;
     }
 
+    /* 完全上書き:
+       1) 貼り付け分を upsert。同 (child_id,date) は in-place 更新で id を保持するため、
+          送迎割当 (transport_assignments.schedule_entry_id) の FK は無傷で残る＝再登録分は送迎不変。
+       2) 当月の既存利用 (rawEntries) のうち貼り付けに含まれないものを削除。
+          schedule_entries の削除は ON DELETE CASCADE で送迎も道連れ（＝完全上書き）。 */
+    const keepKeys = new Set(rows.map((r) => `${r.child_id}_${r.date}`));
+
     const { error: upErr } = await supabase
       .from('schedule_entries')
       .upsert(rows, { onConflict: 'tenant_id,facility_id,child_id,date' });
-
     if (upErr) {
       alert('インポートに失敗しました: ' + upErr.message);
       return;
     }
 
+    // rawEntries は当月分（1施設で1000行未満）。貼り付けに無い既存行を chunk 削除。
+    const toDelete = rawEntries
+      .filter((e) => !keepKeys.has(`${e.child_id}_${e.date}`))
+      .map((e) => e.id);
+    let deleted = 0;
+    for (let i = 0; i < toDelete.length; i += 100) {
+      const chunk = toDelete.slice(i, i + 100);
+      const { error: delErr } = await supabase
+        .from('schedule_entries')
+        .delete()
+        .in('id', chunk);
+      if (delErr) {
+        alert('古いデータの削除に失敗しました: ' + delErr.message);
+        await fetchAll();
+        return;
+      }
+      deleted += chunk.length;
+    }
+
     alert(
-      skipped > 0
-        ? `${rows.length}件を反映しました（${skipped}件は児童名未登録のためスキップ）`
-        : `${rows.length}件の利用予定を登録しました`
+      `${rows.length}件で利用表を上書きしました` +
+      (deleted > 0 ? `（貼り付けに無い古い${deleted}件を削除）` : '') +
+      (skipped > 0 ? `\n※${skipped}件は児童名未登録のためスキップ` : '')
     );
     await fetchAll();
   };
@@ -544,21 +558,12 @@ export default function ScheduleFull({ scope }: Props) {
           <button
             type="button"
             onClick={() => setExcelModalOpen(true)}
-            className="h-11 w-11 flex items-center justify-center rounded-md text-xl transition-all hover:bg-[var(--accent-pale)]"
-            style={{ background: 'var(--white)', color: 'var(--ink-2)', border: '1px solid var(--rule-strong)' }}
-            title="Excel貼付"
-            aria-label="Excel貼付"
-          >
-            📋
-          </button>
-          <button
-            type="button"
-            onClick={() => setPdfModalOpen(true)}
             className="h-11 px-4 flex items-center justify-center gap-1.5 rounded-md text-sm font-bold transition-all hover:opacity-90 whitespace-nowrap"
             style={{ background: 'var(--accent)', color: '#fff', border: 'none' }}
-            title="PDFインポート"
+            title="利用表をペースト（コピペ取り込み）"
+            aria-label="ペースト"
           >
-            📄 PDF
+            📋 ペースト
           </button>
         </div>
       </div>
@@ -589,15 +594,6 @@ export default function ScheduleFull({ scope }: Props) {
           </div>
         )}
       </div>
-
-      <PdfImportModal
-        isOpen={pdfModalOpen}
-        onClose={() => setPdfModalOpen(false)}
-        onConfirm={handleBulkImport}
-        childList={children}
-        pickupAreas={pickupAreas}
-        dropoffAreas={dropoffAreas}
-      />
 
       {me && (
         <ExcelPasteModal

@@ -1141,3 +1141,30 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | 予防記録 | [docs/error-log.md](./error-log.md) 同日エントリ — diletto 側との関連 + 次回再現時のチェック手順 |
 
 教訓: 共通コードベースの他リポでバグ報告が出たら、同根再発の予防として観測コードだけ先回り移植 (修正は再現時の真因確定後)。
+
+---
+
+## 利用表ペースト＝完全上書き化 ＋ PDF取込廃止（schedule-paste-overwrite, 2026-06-04）
+
+詳細仕様: `docs/features/schedule-paste-overwrite.md`
+
+事案: コピペ取り込みが upsert のみ（削除なし）で前回分が残り、当月に古い利用が混在していた（モーダルは「削除」を表示するが実際は未削除）。完全上書きに変更し、取り込み手段をコピペに一本化。
+
+| ファイル | 変更内容 |
+|---|---|
+| `components/shift/ScheduleFull.tsx` | `handleBulkImport` を完全上書き化（upsert 後、当月 `rawEntries` のうち貼付に無い行を `.in('id', chunk)` で 100 件刻み DELETE）。📋ボタンを「📋 ペースト」(accent) に改名、📄PDF ボタン・`<PdfImportModal>`・`pdfModalOpen`・`pickupAreas`/`dropoffAreas`・`facility_shift_settings` 取得・未使用型 `Facility`/`AreaLabel` を除去 |
+| `components/shift/ExcelPasteModal.tsx` | 差分4分類（`DiffClass`）と死配線 `confirmedTransportEntryIds` を除去。代わりに「上書きで既存 N 件削除」警告のみ表示。タイトル「利用表をペースト」 |
+| `components/shift/PdfImportModal.tsx` | UI からの参照を全て除去（**ファイル自体は残置=孤児**。解析バックエンド物理削除は別タスク） |
+
+### 核心メカニズム（送迎を壊さない理由）
+- `transport_assignments.schedule_entry_id` は `ON DELETE CASCADE`（migration 100/112）。
+- **再登録**（同 child_id+date が貼付に存在）→ `upsert ... DO UPDATE` で行を in-place 更新し `id` 保持 → 送迎 FK 無傷 → **送迎表は不変**。
+- **貼付に無い既存**→ DELETE → CASCADE で送迎も道連れ（＝完全上書き。確定/公開済みも対象=ユーザー指示）。
+
+### 参照 RLS（DELETE 許可済み・新規ポリシー不要）
+- `se_admin_all`（admin, FOR ALL）/ `se_manager_facility`（manager + shift_manager, FOR ALL, migration 140）
+- employee は SELECT のみ＝利用表インポートUIに到達しない
+
+### 運用クリーンアップ（一時）
+- `scripts/probe-schedule-entries.mjs`（facility×月の件数・送迎影響を可視化。1000行上限のため range ページング必須）
+- `scripts/cleanup-schedule-month.mjs`（指定 facility×月の `schedule_entries` 全削除＝即時上書き。実行前に `docs/cleanup-backup-*.json` へバックアップ）。2026-06-04 に 🧩パズル 2026-05（利用249/送迎225 draft）を実行

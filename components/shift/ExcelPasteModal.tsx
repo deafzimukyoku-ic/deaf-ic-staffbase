@@ -33,8 +33,6 @@ export type ExistingEntrySummary = {
   dropoff_mark: string | null;
 };
 
-export type DiffClass = 'added' | 'modified' | 'unchanged' | 'protected';
-
 type ExcelPasteModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -46,8 +44,8 @@ type ExcelPasteModalProps = {
   facilityId: string;
   existingChildNames?: string[];
   onChildrenRegistered?: () => Promise<void> | void;
+  /** 当月の既存利用。完全上書きで「削除される件数」の警告に使用 */
   existingEntries?: ExistingEntrySummary[];
-  confirmedTransportEntryIds?: Set<string>;
   childNameToId?: Map<string, string>;
 };
 
@@ -62,7 +60,6 @@ export default function ExcelPasteModal({
   existingChildNames = [],
   onChildrenRegistered,
   existingEntries = [],
-  confirmedTransportEntryIds,
   childNameToId,
 }: ExcelPasteModalProps) {
   const [rawText, setRawText] = useState('');
@@ -147,7 +144,7 @@ export default function ExcelPasteModal({
     <Modal
       isOpen={isOpen}
       onClose={() => { handleReset(); onClose(); }}
-      title="Excelから貼り付け"
+      title="利用表をペースト"
       size="xl"
     >
       <div className="flex flex-col gap-4">
@@ -272,7 +269,6 @@ export default function ExcelPasteModal({
             onConfirm={handleConfirm}
             onRequestRegister={() => setRegisterOpen(true)}
             existingEntries={existingEntries}
-            confirmedTransportEntryIds={confirmedTransportEntryIds}
             childNameToId={childNameToId}
           />
         )}
@@ -307,7 +303,6 @@ function ExcelGridPreview({
   onConfirm,
   onRequestRegister,
   existingEntries = [],
-  confirmedTransportEntryIds,
   childNameToId,
 }: {
   parsed: ParsedScheduleEntry[];
@@ -318,7 +313,6 @@ function ExcelGridPreview({
   onConfirm: () => void;
   onRequestRegister: () => void;
   existingEntries?: ExistingEntrySummary[];
-  confirmedTransportEntryIds?: Set<string>;
   childNameToId?: Map<string, string>;
 }) {
   const [editingCell, setEditingCell] = useState<{ child: string; date: string } | null>(null);
@@ -327,64 +321,16 @@ function ExcelGridPreview({
   const cellMap = new Map<string, ParsedScheduleEntry>();
   parsed.forEach((e) => cellMap.set(`${e.child_name}_${e.date}`, e));
 
-  const existingByKey = new Map<string, ExistingEntrySummary>();
-  for (const e of existingEntries) existingByKey.set(`${e.child_id}_${e.date}`, e);
-
-  const diffClassByCell = new Map<string, DiffClass>();
-  const importedDateRange = (() => {
-    if (dates.length === 0) return null;
-    return { from: dates[0], to: dates[dates.length - 1] };
-  })();
+  /* 完全上書き: 貼り付けに含まれる (child_id, date) 以外の当月既存利用は削除される。
+     その件数だけを警告として表示する（差分の細分類は廃止）。 */
   const importedKeys = new Set<string>();
-
   for (const entry of parsed) {
     const childId = childNameToId?.get(entry.child_name);
-    if (!childId) {
-      diffClassByCell.set(`${entry.child_name}_${entry.date}`, 'added');
-      continue;
-    }
-    const key = `${childId}_${entry.date}`;
-    importedKeys.add(key);
-    const existing = existingByKey.get(key);
-    if (!existing) {
-      diffClassByCell.set(`${entry.child_name}_${entry.date}`, 'added');
-      continue;
-    }
-    if (confirmedTransportEntryIds?.has(existing.id)) {
-      diffClassByCell.set(`${entry.child_name}_${entry.date}`, 'protected');
-      continue;
-    }
-    const same =
-      (existing.pickup_time ?? null) === (entry.pickup_time ?? null) &&
-      (existing.dropoff_time ?? null) === (entry.dropoff_time ?? null) &&
-      existing.pickup_method === (entry.pickup_method ?? 'pickup') &&
-      existing.dropoff_method === (entry.dropoff_method ?? 'dropoff') &&
-      (existing.pickup_mark ?? null) === (entry.pickup_mark ?? null) &&
-      (existing.dropoff_mark ?? null) === (entry.dropoff_mark ?? null);
-    diffClassByCell.set(`${entry.child_name}_${entry.date}`, same ? 'unchanged' : 'modified');
+    if (childId) importedKeys.add(`${childId}_${entry.date}`);
   }
-
-  const removeEntries: ExistingEntrySummary[] = [];
-  if (importedDateRange && childNameToId) {
-    const childIdToName = new Map(Array.from(childNameToId.entries()).map(([n, id]) => [id, n]));
-    for (const e of existingEntries) {
-      if (e.date < importedDateRange.from || e.date > importedDateRange.to) continue;
-      const name = childIdToName.get(e.child_id);
-      if (!name) continue;
-      const key = `${e.child_id}_${e.date}`;
-      if (!importedKeys.has(key)) removeEntries.push(e);
-    }
-  }
-
-  const diffCounts = {
-    added: 0,
-    modified: 0,
-    unchanged: 0,
-    protected: 0,
-    removed: removeEntries.length,
-    removedProtected: removeEntries.filter((e) => confirmedTransportEntryIds?.has(e.id)).length,
-  };
-  for (const c of diffClassByCell.values()) diffCounts[c]++;
+  const removeCount = existingEntries.filter(
+    (e) => !importedKeys.has(`${e.child_id}_${e.date}`),
+  ).length;
 
   const handleCellUpdate = (
     childName: string,
@@ -426,30 +372,15 @@ function ExcelGridPreview({
 
       {existingEntries.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap px-3 py-2 text-xs"
-          style={{ background: 'var(--accent-pale)', borderRadius: '6px', color: 'var(--ink-2)' }}>
-          <strong style={{ color: 'var(--ink)' }}>差分:</strong>
-          <span className="px-2 py-0.5 rounded" style={{ background: '#d4f4dd', color: '#166534' }}>
-            🟢 新規 {diffCounts.added}
-          </span>
-          <span className="px-2 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>
-            🟡 変更 {diffCounts.modified}
-          </span>
-          <span className="px-2 py-0.5 rounded" style={{ background: '#f3f4f6', color: '#6b7280' }}>
-            ⚪ 同一 {diffCounts.unchanged}
-          </span>
-          {diffCounts.protected > 0 && (
-            <span className="px-2 py-0.5 rounded" style={{ background: '#fee2e2', color: '#991b1b' }}>
-              ⚠ 送迎確定済みのためスキップ {diffCounts.protected}
+          style={{ background: removeCount > 0 ? 'var(--gold-pale)' : 'var(--accent-pale)', borderRadius: '6px', color: 'var(--ink-2)' }}>
+          <strong style={{ color: 'var(--ink)' }}>上書き:</strong>
+          <span>この内容で当月の利用表を置き換えます。</span>
+          {removeCount > 0 ? (
+            <span className="px-2 py-0.5 rounded font-semibold" style={{ background: '#fecaca', color: '#7f1d1d' }}>
+              🔴 貼り付けに無い既存 {removeCount} 件を削除（紐づく送迎も連動削除）
             </span>
-          )}
-          {diffCounts.removed > 0 && (
-            <span className="px-2 py-0.5 rounded" style={{ background: '#fecaca', color: '#7f1d1d' }}>
-              🔴 削除 {diffCounts.removed}
-              {diffCounts.removedProtected > 0 && `（うち確定済み ${diffCounts.removedProtected} 件は残存）`}
-            </span>
-          )}
-          {diffCounts.added === 0 && diffCounts.modified === 0 && diffCounts.removed === 0 && (
-            <span style={{ color: 'var(--ink-3)' }}>既存データと完全一致しています</span>
+          ) : (
+            <span style={{ color: 'var(--ink-3)' }}>削除される既存利用はありません</span>
           )}
         </div>
       )}
@@ -521,27 +452,15 @@ function ExcelGridPreview({
                     const entry = cellMap.get(`${childName}_${date}`);
                     const isEditing = editingCell?.child === childName && editingCell?.date === date;
                     const { isWeekend } = formatDay(date);
-                    const dc = diffClassByCell.get(`${childName}_${date}`);
-                    const diffBg =
-                      dc === 'added' ? '#d4f4dd' :
-                      dc === 'modified' ? '#fef3c7' :
-                      dc === 'protected' ? '#fee2e2' :
-                      null;
 
                     return (
                       <td key={date}
                         className="px-0.5 py-0.5 text-center cursor-pointer transition-colors hover:bg-[var(--accent-pale)]"
                         style={{
                           borderBottom: '1px solid var(--rule)', borderRight: '1px solid var(--rule)',
-                          background: diffBg ?? (isWeekend ? 'rgba(0,0,0,0.02)' : 'transparent'),
+                          background: isWeekend ? 'rgba(0,0,0,0.02)' : 'transparent',
                           position: 'relative',
                         }}
-                        title={
-                          dc === 'added' ? '新規' :
-                          dc === 'modified' ? '変更あり' :
-                          dc === 'protected' ? '送迎確定済みのため更新スキップ' :
-                          dc === 'unchanged' ? '変更なし' : undefined
-                        }
                         onClick={() => setEditingCell(entry ? { child: childName, date } : null)}>
                         {entry?.area_label ? (
                           <span className="text-xs" style={{ color: 'var(--accent)' }}>{entry.area_label}</span>

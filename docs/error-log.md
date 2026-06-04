@@ -5,6 +5,22 @@
 
 ---
 
+## 利用表のコピペで前回分（過去の利用）が残り当月に古いデータが混在する → upsert のみで削除が未実装
+
+- **発生日**: 2026-06-04（ユーザー指摘「コピペしても過去の分が残ってめちゃくちゃ迷惑」。実 DB で 🧩パズル 2026-05 に複数回ペースト分が累積していた）
+- **発生箇所**: `components/shift/ScheduleFull.tsx` `handleBulkImport` / `components/shift/ExcelPasteModal.tsx`（差分プレビュー）
+- **フェーズ**: 本番運用中の挙動変更
+- **エラー内容**: 利用表（`schedule_entries`）をコピペ取り込みしても、前回ペーストにあって今回に無い児童×日付の利用が消えず残る。さらにモーダルは「🔴 削除 N」と差分表示するのに**実際には1件も削除していなかった**（表示と挙動の乖離）
+- **原因（真因）**: `handleBulkImport` が `upsert(onConflict: tenant_id,facility_id,child_id,date)` のみで、貼り付けに含まれない既存行を削除する処理が無かった（＝差分マージ）。モーダルの `removeEntries`/`diffCounts.removed` は表示専用で、`onConfirm(parsed)` は parsed しか親に渡さないため削除に結びついていなかった
+- **解決方法**: `handleBulkImport` を完全上書き化。① 貼り付け分を upsert（同 child_id+date は **in-place 更新で id 保持**＝送迎割当 FK 無傷）→ ② 当月 `rawEntries` のうち貼付に無い行を `.in('id', chunk)` 100 件刻みで DELETE（`transport_assignments.schedule_entry_id` の `ON DELETE CASCADE` で送迎も連動削除）。児童名が全不一致のときは誤爆防止で削除せず中断。モーダルの差分4分類は廃止し「削除 N 件」警告のみに。PDF 取込 UI は廃止しコピペ（ボタン名「ペースト」）に一本化。即時の累積分は `scripts/cleanup-schedule-month.mjs` で 🧩パズル 2026-05 をバックアップ取得後に全削除
+- **再発防止**:
+  1. **「差分を画面表示する」だけで「実際に適用する」処理が無い UI を作らない**（表示と DB 反映の乖離はユーザーに「壊れている」と映る）
+  2. 上書き系の取り込みは「全削除→INSERT」ではなく「upsert（id 保持）＋差集合 DELETE」にする。FK が `ON DELETE CASCADE` の子（送迎）を不意に巻き込まないため、再登録分は必ず in-place 更新で id を維持する
+  3. `rawEntries` は当月分（1 施設 < 1000 行）前提。複数施設横断や年跨ぎで使う場合は `fetchAllRows()` ページングに切替（[1000 行上限の同日別エントリ参照](#兼任職員の施設シフト表が途中までしか表示されない--postgrest-の暗黙-max-rows1000-打ち切り)）
+- **横展開**: diletto-new-staffbase / origami も同系の利用表コピペがあれば同根。要確認
+
+---
+
 ## 兼任職員の施設シフト表が「途中まで」しか表示されない → PostgREST の暗黙 max-rows(1000) 打ち切り
 
 - **発生日**: 2026-06-01（ユーザー指摘「社員画面でパレットのシフトが途中までしか表示されない」）
