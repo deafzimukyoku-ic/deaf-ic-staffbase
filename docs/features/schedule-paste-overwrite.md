@@ -92,7 +92,12 @@
 - 異常系: 児童名全不一致 → 「児童名が一致しませんでした」で**削除せず**中断（誤爆防止）。DELETE 失敗 → 日本語 alert ＋ UI 再取得。
 - 境界値: 空の月へのペースト → 削除0・全件挿入。1児童モード貼付でも当月の他児童が消えうる点を警告表示で明示。
 - ローカル確認: `npm run build` 通過。PC幅でボタン「ペースト」単独表示、PDFボタン消失。
-- 将来対応（分離）: PDF解析バックエンドの物理削除は別タスク。送迎の自動再生成はやらない（人手で再生成）。
+- 将来対応（分離）: ~~PDF解析バックエンドの物理削除は別タスク~~ → **2026-06-04 撤去完了**（下記 実装メモ）。送迎の自動再生成はやらない（人手で再生成）。
 
 ## 実装メモ（実装後追記）
-- （実装後に記載）
+- 2026-06-04 完全上書き＋ペースト改名を実装（commit dbb4050）。
+- 2026-06-04 PDF解析バックエンドを撤去:
+  - 削除: `components/shift/PdfImportModal.tsx` / `app/api/shifts/import-pdf/route.ts` / `lib/anthropic/parsePdf.ts`（`lib/anthropic/` は空になり消滅）。
+  - 温存: `lib/pdf/{generate-pdf,resolve-pdf-values,pdf-utils,bulk-pdf-zip}.ts`（書類PDF生成系で `lib/issued-documents`・`app/api/documents/*` が共有）。
+  - `PDF_PARSE_MODEL` は実コードに定数なし（CLAUDE.md 記述のみ）→ constants.ts 変更なし。CLAUDE.md §8/§10 の PDF 解析記述は stale（編集はユーザー判断）。
+  - ハマり: ルート削除後 `.next/types` / `.next/dev/types` の stale validator が `tsc`/`build` を落とす。dev 停止中は `.next/dev` 削除→再ビルドで解消（error-log 記録済）。

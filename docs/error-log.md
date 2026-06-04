@@ -5,6 +5,21 @@
 
 ---
 
+## ルート/ページを削除すると `.next/types` `.next/dev/types` の stale validator で `tsc`/`build` が落ちる
+
+- **発生日**: 2026-06-04（`app/api/shifts/import-pdf/route.ts` 撤去後）
+- **発生箇所**: `npx tsc --noEmit` / `npm run build` の型チェック。`.next/dev/types/validator.ts` / `.next/types/validator.ts`
+- **フェーズ**: 孤児コード撤去
+- **エラー内容**: `error TS2307: Cannot find module '../../../app/api/shifts/import-pdf/route.js'`。ソースからは全参照を消したのに型チェックだけ失敗。`next build` は「✓ Compiled successfully」の後に「Failed to type check」で落ちる
+- **原因（真因）**: `tsconfig.json` の `include` が `.next/types/**/*.ts` と **`.next/dev/types/**/*.ts` の両方**を含む。Next.js が各ルートを列挙する `validator.ts` を生成するが、これは**削除しても自動では再生成されない**。特に `.next/dev/types/` は `next dev` 由来で、dev サーバ停止中は誰も更新しないため**削除済みルートを参照したまま残る**。`next build` は `.next/types/` を再生成するが `.next/dev/types/` には手を付けないため、stale な dev validator で型チェックが落ちる
+- **解決方法**: dev サーバが停止中であることを確認（`Get-NetTCPConnection -LocalPort 6001`）した上で `Remove-Item .next/dev -Recurse -Force` → `npm run build` 再実行で解消。dev サーバ稼働中なら保存トリガで再生成される
+- **再発防止**:
+  1. **ルート/ページ/route handler を削除したら、`.next/dev`（と必要なら `.next/types`）の stale validator を消してから tsc/build を回す**
+  2. 「Compiled successfully なのに Failed to type check」かつ TS2307 が `.next/.../validator.ts` 由来なら、ソースではなく生成キャッシュを疑う（ソース grep で参照ゼロを先に確認）
+  3. dev サーバ稼働中の削除なら、保存し直し（再生成トリガ）で直ることが多い
+
+---
+
 ## 利用表のコピペで前回分（過去の利用）が残り当月に古いデータが混在する → upsert のみで削除が未実装
 
 - **発生日**: 2026-06-04（ユーザー指摘「コピペしても過去の分が残ってめちゃくちゃ迷惑」。実 DB で 🧩パズル 2026-05 に複数回ペースト分が累積していた）

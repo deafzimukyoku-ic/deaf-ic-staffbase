@@ -1154,7 +1154,7 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 |---|---|
 | `components/shift/ScheduleFull.tsx` | `handleBulkImport` を完全上書き化（upsert 後、当月 `rawEntries` のうち貼付に無い行を `.in('id', chunk)` で 100 件刻み DELETE）。📋ボタンを「📋 ペースト」(accent) に改名、📄PDF ボタン・`<PdfImportModal>`・`pdfModalOpen`・`pickupAreas`/`dropoffAreas`・`facility_shift_settings` 取得・未使用型 `Facility`/`AreaLabel` を除去 |
 | `components/shift/ExcelPasteModal.tsx` | 差分4分類（`DiffClass`）と死配線 `confirmedTransportEntryIds` を除去。代わりに「上書きで既存 N 件削除」警告のみ表示。タイトル「利用表をペースト」 |
-| `components/shift/PdfImportModal.tsx` | UI からの参照を全て除去（**ファイル自体は残置=孤児**。解析バックエンド物理削除は別タスク） |
+| `components/shift/PdfImportModal.tsx` | UI からの参照を全て除去。**後続で物理削除済**（下記「PDF解析バックエンド撤去」参照） |
 
 ### 核心メカニズム（送迎を壊さない理由）
 - `transport_assignments.schedule_entry_id` は `ON DELETE CASCADE`（migration 100/112）。
@@ -1168,3 +1168,16 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 ### 運用クリーンアップ（一時）
 - `scripts/probe-schedule-entries.mjs`（facility×月の件数・送迎影響を可視化。1000行上限のため range ページング必須）
 - `scripts/cleanup-schedule-month.mjs`（指定 facility×月の `schedule_entries` 全削除＝即時上書き。実行前に `docs/cleanup-backup-*.json` へバックアップ）。2026-06-04 に 🧩パズル 2026-05（利用249/送迎225 draft）を実行
+
+### PDF解析バックエンド撤去（2026-06-04・上の続き）
+コピペ一本化で孤児化した PDF 利用予定解析を物理削除（書類テンプレ系 `lib/pdf/*` は共有のため**温存**）。
+
+| 削除ファイル | 削除可の根拠（grep 確認） |
+|---|---|
+| `components/shift/PdfImportModal.tsx` | 参照は自身のみ（ScheduleFull から import 除去済） |
+| `app/api/shifts/import-pdf/route.ts` | 呼び出し元は PdfImportModal の `fetch` のみ |
+| `lib/anthropic/parsePdf.ts`（`parsePdfToSchedule`）| import 元は import-pdf route のみ。`lib/anthropic/` は空になり消滅 |
+
+- **温存**: `lib/pdf/{generate-pdf,resolve-pdf-values,pdf-utils,bulk-pdf-zip}.ts` は `lib/issued-documents` / `app/api/documents/*`（書類PDF生成）が使用。
+- `PDF_PARSE_MODEL` は実コードに定数として存在せず（CLAUDE.md 記述のみ）→ constants.ts 変更なし。CLAUDE.md §8/§10 の PDF 解析記述は stale（編集はユーザー判断）。
+- 検証: `npm run build` / `npx tsc --noEmit` 通過。ルート削除後は `.next/types` と `.next/dev/types` の stale validator が残るため、dev 停止中は `.next/dev` を削除してから再ビルドする（[error-log 参照](./error-log.md)）。
