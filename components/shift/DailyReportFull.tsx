@@ -197,6 +197,8 @@ export default function DailyReportFull({ role: _role }: Props) {
   const childById = useMemo(() => new Map(children.map((c) => [c.id, c])), [children]);
   const staffById = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
+  const [exporting, setExporting] = useState(false);
+
   /* 事業所として児発児童が「1 人でも登録されているか」で左右ルールを切替える。
      - 登録あり: 左 = 児童発達支援 / 右 = 放課後等デイサービス（固定）
      - 登録なし: 放デイ専門事業所なので 左から流し込み（左 12 名超なら右へ）
@@ -211,6 +213,288 @@ export default function DailyReportFull({ role: _role }: Props) {
     if (!facility) return '';
     return (facility.name || '').replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}‍️]/gu, '').trim();
   }, [facility]);
+
+  /* 日付ごとに「印刷描画 / Excel 出力」両方で使う前処理を一本化（useMemo で再計算最小化）。
+     以前は JSX map 内に直書きしていたが、Excel 出力ボタンが付くにあたって同じデータを 2 箇所
+     で組み立てるとズレが入りやすいため。 */
+  type DayData = {
+    date: string;
+    y: string;
+    md: string;
+    preschool: { entry: ScheduleEntryRow; child: ChildRow }[];
+    afterSchool: { entry: ScheduleEntryRow; child: ChildRow }[];
+    staffRows: { staff: StaffRow; time: string; displayOrder: number }[];
+  };
+  const daysData = useMemo<DayData[]>(() => {
+    return dates.map((d) => {
+      const dayEntries = entries.filter((e) => e.date === d);
+      const dayShifts = shifts.filter((s) => s.date === d);
+
+      const enriched = dayEntries.map((e) => {
+        const c = childById.get(e.child_id);
+        return c ? { entry: e, child: c, kind: classifyService(c.grade_type) } : null;
+      }).filter((x): x is NonNullable<typeof x> => x !== null);
+
+      const preschool = enriched.filter((x) => x.kind === '児童発達')
+        .sort((a, b) => a.child.name.localeCompare(b.child.name, 'ja'))
+        .map(({ entry, child }) => ({ entry, child }));
+      const afterSchool = enriched.filter((x) => x.kind === '放課後')
+        .sort((a, b) => a.child.name.localeCompare(b.child.name, 'ja'))
+        .map(({ entry, child }) => ({ entry, child }));
+
+      const empToShifts = new Map<string, ShiftAssignmentRow[]>();
+      for (const sa of dayShifts) {
+        if (sa.assignment_type !== 'normal') continue;
+        if (!empToShifts.has(sa.employee_id)) empToShifts.set(sa.employee_id, []);
+        empToShifts.get(sa.employee_id)!.push(sa);
+      }
+      const staffRows = Array.from(empToShifts.entries())
+        .map(([empId, sas]) => {
+          const s = staffById.get(empId);
+          if (!s) return null;
+          const sorted = sas.slice().sort((a, b) => (a.segment_order ?? 0) - (b.segment_order ?? 0));
+          const timeStr = sorted
+            .map((sa) => `${trimSeconds(sa.start_time)}〜${trimSeconds(sa.end_time)}`)
+            .join(' / ');
+          return { staff: s, time: timeStr, displayOrder: s.shift_display_order ?? 9999 };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null)
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+
+      const { y, md } = formatJapaneseDate(d);
+      return { date: d, y, md, preschool, afterSchool, staffRows };
+    });
+  }, [dates, entries, shifts, childById, staffById]);
+
+  /* 日 1 シート分の xlsx 配列バッファを生成。印刷と同じレイアウト（縦長 1 ページ A4 想定）。
+     列構成:
+       A: 利用者氏名 / B: 出欠席 / C: 備考 / D: 利用者氏名 / E: 出欠席 / F: 備考
+       出勤職員も 4 列 (氏名 / 出勤 / 氏名 / 出勤) で同シートに続けて配置。 */
+  const buildDayXlsxBuffer = useCallback(async (day: DayData): Promise<ArrayBuffer> => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '名古屋ろう国際センター 職員ステーション';
+
+    const sheetName = day.date; // 'YYYY-MM-DD' (Excel シート名 31 文字以内 OK)
+    const ws = wb.addWorksheet(sheetName);
+
+    /* 列幅（A4 縦 6 列構成。氏名 34% / 出欠席 10% / 備考 6% × 2、合計 100%） */
+    ws.getColumn(1).width = 22;
+    ws.getColumn(2).width = 8;
+    ws.getColumn(3).width = 5;
+    ws.getColumn(4).width = 22;
+    ws.getColumn(5).width = 8;
+    ws.getColumn(6).width = 5;
+
+    /* タイトル行: 施設名 + 業務日報 (A:F 結合) */
+    ws.mergeCells(1, 1, 1, 6);
+    const titleCell = ws.getCell(1, 1);
+    titleCell.value = `${facilityDisplayName}業務日報`;
+    titleCell.font = { size: 18, bold: true };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 28;
+
+    /* 日付行（A:F 結合、上下太線で囲む） */
+    ws.mergeCells(2, 1, 2, 6);
+    const dateCell = ws.getCell(2, 1);
+    dateCell.value = `${day.y}  ${day.md}`;
+    dateCell.font = { size: 12, bold: true };
+    dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    dateCell.border = {
+      top: { style: 'medium' },
+      bottom: { style: 'medium' },
+    };
+    ws.getRow(2).height = 22;
+
+    /* 利用者ヘッダー (row 4) */
+    const childHeaderRow = ws.addRow([]); // row 3 空 (区切り)
+    void childHeaderRow;
+    const headerRow = ws.addRow([
+      '利用者氏名', '出欠席', '備考',
+      '利用者氏名', '出欠席', '備考',
+    ]);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'medium' }, right: { style: 'thin' },
+      };
+    });
+
+    /* 利用者本体: 12 行固定。事業所に preschool 児童が登録されているか で左右ルールを切替（印刷と同仕様） */
+    const ROWS_CHILD = 12;
+    type Cell = { entry: ScheduleEntryRow; child: ChildRow } | null;
+    let left: Cell[];
+    let right: Cell[];
+    if (facilityHasPreschool) {
+      left = [...day.preschool, ...Array<Cell>(Math.max(0, ROWS_CHILD - day.preschool.length)).fill(null)].slice(0, ROWS_CHILD);
+      right = [...day.afterSchool, ...Array<Cell>(Math.max(0, ROWS_CHILD - day.afterSchool.length)).fill(null)].slice(0, ROWS_CHILD);
+    } else {
+      const all: Cell[] = day.afterSchool.slice(0, ROWS_CHILD * 2);
+      while (all.length < ROWS_CHILD * 2) all.push(null);
+      left = all.slice(0, ROWS_CHILD);
+      right = all.slice(ROWS_CHILD, ROWS_CHILD * 2);
+    }
+    for (let i = 0; i < ROWS_CHILD; i++) {
+      const l = left[i];
+      const r = right[i];
+      const row = ws.addRow([
+        l?.child.name ?? '', l ? attendanceLabel(l.entry.attendance_status) : '', l?.entry.note ?? '',
+        r?.child.name ?? '', r ? attendanceLabel(r.entry.attendance_status) : '', r?.entry.note ?? '',
+      ]);
+      row.eachCell((cell, col) => {
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        cell.alignment = { horizontal: col === 2 || col === 5 ? 'center' : 'left', vertical: 'middle' };
+      });
+      row.height = 18;
+    }
+
+    /* 児童発達 / 放課後 / 合計 行 */
+    const sumRow1 = ws.addRow([
+      '児童発達支援', '計', '名',
+      '放課後等デイサービス', '計', '名',
+    ]);
+    sumRow1.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAFA' } };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    const sumRow2 = ws.addRow(['', '', '', '合計', '', '名']);
+    sumRow2.getCell(4).font = { bold: true };
+    sumRow2.eachCell((cell) => {
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'medium' }, right: { style: 'thin' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAFA' } };
+    });
+
+    /* 出勤職員セクションヘッダー (4 列を A:F の 6 列に合わせて 3 列ペアで結合: A+B / C / D+E / F) */
+    ws.addRow([]); // 空行
+    const staffTitleRow = ws.addRow(['出 勤 職 員']);
+    ws.mergeCells(staffTitleRow.number, 1, staffTitleRow.number, 6);
+    staffTitleRow.getCell(1).font = { bold: true, size: 12 };
+    staffTitleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    staffTitleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+    staffTitleRow.getCell(1).border = {
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' },
+    };
+    staffTitleRow.height = 22;
+
+    /* 4 列ヘッダー (氏名 / 出勤 / 氏名 / 出勤) を A / B+C / D / E+F に振り分ける。
+       マージ方向: 「氏名 = col 1 単独（width 22）」「出勤 = col 2+3 マージ（width 8+5=13）」
+       こうしないと出勤時刻 "09:30〜18:00" (11 文字) が col 3 単独(width 5) に入って切れる。
+       分割シフト "08:30〜12:00 / 13:00〜17:30" も wrapText で複数行表示できるよう row height は本体側で広めに取る。 */
+    const sHeaderRowNum = ws.addRow([]).number;
+    const sH = ws.getRow(sHeaderRowNum);
+    ws.mergeCells(sHeaderRowNum, 2, sHeaderRowNum, 3);
+    ws.mergeCells(sHeaderRowNum, 5, sHeaderRowNum, 6);
+    sH.getCell(1).value = '氏　　名';
+    sH.getCell(2).value = '出勤';
+    sH.getCell(4).value = '氏　　名';
+    sH.getCell(5).value = '出勤';
+    [1, 2, 4, 5].forEach((c) => {
+      sH.getCell(c).font = { bold: true };
+      sH.getCell(c).alignment = { horizontal: 'center', vertical: 'middle' };
+      sH.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+      sH.getCell(c).border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'medium' }, right: { style: 'thin' },
+      };
+    });
+    sH.height = 18;
+
+    /* 出勤職員本体: 9 行固定 × 2 列。マージはヘッダーと同じ A / B+C / D / E+F。 */
+    const ROWS_STAFF = 9;
+    const padded: ({ staff: StaffRow; time: string } | null)[] = [];
+    for (let i = 0; i < ROWS_STAFF * 2; i++) padded[i] = day.staffRows[i] ?? null;
+    const sLeft = padded.slice(0, ROWS_STAFF);
+    const sRight = padded.slice(ROWS_STAFF, ROWS_STAFF * 2);
+    for (let i = 0; i < ROWS_STAFF; i++) {
+      const l = sLeft[i];
+      const r = sRight[i];
+      const rowNum = ws.addRow([]).number;
+      const row = ws.getRow(rowNum);
+      ws.mergeCells(rowNum, 2, rowNum, 3);
+      ws.mergeCells(rowNum, 5, rowNum, 6);
+      row.getCell(1).value = l ? staffDisplayName(l.staff) : '';
+      row.getCell(2).value = l?.time ?? '';
+      row.getCell(4).value = r ? staffDisplayName(r.staff) : '';
+      row.getCell(5).value = r?.time ?? '';
+      [1, 2, 4, 5].forEach((c) => {
+        row.getCell(c).border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' },
+        };
+        row.getCell(c).alignment = {
+          horizontal: c === 2 || c === 5 ? 'center' : 'left',
+          vertical: 'middle',
+          /* 分割シフト時刻 "08:30〜12:00 / 13:00〜17:30" が 1 行に収まらないとき折り返す */
+          wrapText: c === 2 || c === 5,
+        };
+      });
+      row.height = 20;
+    }
+
+    /* 活動内容 / 連絡事項枠 */
+    ws.addRow([]);
+    const actHeaderRowNum = ws.addRow(['活動内容／連絡事項']).number;
+    ws.mergeCells(actHeaderRowNum, 1, actHeaderRowNum, 6);
+    const ah = ws.getRow(actHeaderRowNum);
+    ah.getCell(1).font = { bold: true };
+    ah.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    ah.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+    ah.getCell(1).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    ah.height = 20;
+
+    const actBodyRowNum = ws.addRow([facility?.daily_report_template ?? ' ']).number;
+    ws.mergeCells(actBodyRowNum, 1, actBodyRowNum, 6);
+    const ab = ws.getRow(actBodyRowNum);
+    ab.getCell(1).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+    ab.getCell(1).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    ab.height = 120; // 活動枠は広めに
+
+    /* 印刷時 A4 縦に近づける */
+    ws.pageSetup = {
+      paperSize: 9, // A4
+      orientation: 'portrait',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+    };
+
+    return await wb.xlsx.writeBuffer() as ArrayBuffer;
+  }, [facility, facilityDisplayName, facilityHasPreschool]);
+
+  /* 期間内の全日について .xlsx を生成し JSZip で一括 .zip ダウンロード。
+     ファイル名は ZIP 内が `YYYY-MM-DD_業務日報.xlsx`（日付ソート用に先頭に日付）、
+     ZIP 自体は `{施設名}_業務日報_{from}_{to}.zip`。 */
+  const handleExportExcelZip = useCallback(async () => {
+    if (daysData.length === 0) return;
+    setExporting(true);
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      for (const day of daysData) {
+        const buf = await buildDayXlsxBuffer(day);
+        zip.file(`${day.date}_業務日報.xlsx`, buf);
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const fname = `${facilityDisplayName || '事業所'}_業務日報_${dateFrom}_${dateTo}.zip`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
+    }
+  }, [daysData, buildDayXlsxBuffer, facilityDisplayName, dateFrom, dateTo]);
 
   if (!facilityId) {
     return (
@@ -244,6 +528,9 @@ export default function DailyReportFull({ role: _role }: Props) {
           />
         </label>
         <Button onClick={() => window.print()}>🖨️ 印刷 / PDF</Button>
+        <Button onClick={handleExportExcelZip} disabled={exporting || daysData.length === 0}>
+          {exporting ? 'Excel 生成中…' : '📊 Excel (Zip)'}
+        </Button>
       </div>
 
       {loading && <p className="p-8 text-center text-sm text-brand-gray-light">読み込み中...</p>}
@@ -253,61 +540,28 @@ export default function DailyReportFull({ role: _role }: Props) {
         <p className="p-8 text-center text-sm text-brand-gray-light">期間が不正です。</p>
       )}
 
-      {/* 印刷本体 */}
+      {/* 印刷本体（データ準備は daysData useMemo に集約。Excel 出力と同じソースを使う） */}
       <div className="report-root">
-        {dates.map((d) => {
-          const dayEntries = entries.filter((e) => e.date === d);
-          const dayShifts = shifts.filter((s) => s.date === d);
+        {daysData.map((day) => (
+          <section key={day.date} className="report-page">
+            {/* タイトル要素は <header> を使わない。globals.css の @media print で
+               `header { display: none !important; }` がレイアウトのトップバー除去のために
+               効いており、ここを <header> にすると業務日報のタイトルまで消える。 */}
+            <div className="report-title">
+              <span className="title-text">{facilityDisplayName}業務日報</span>
+              <div className="title-date">
+                <span>{day.y}</span>
+                <span className="ml-4">{day.md}</span>
+              </div>
+            </div>
 
-          /* 児童を 児童発達 / 放課後 で分割。出欠は absent も「✗」で表示するので除外しない。 */
-          const enriched = dayEntries.map((e) => {
-            const c = childById.get(e.child_id);
-            return c ? { entry: e, child: c, kind: classifyService(c.grade_type) } : null;
-          }).filter((x): x is NonNullable<typeof x> => x !== null);
+            <ChildrenTable preschool={day.preschool} afterSchool={day.afterSchool} facilityHasPreschool={facilityHasPreschool} />
 
-          const preschool = enriched.filter((x) => x.kind === '児童発達').sort((a, b) => a.child.name.localeCompare(b.child.name, 'ja'));
-          const afterSchool = enriched.filter((x) => x.kind === '放課後').sort((a, b) => a.child.name.localeCompare(b.child.name, 'ja'));
+            <StaffTable rows={day.staffRows} />
 
-          /* 出勤職員: assignment_type='normal' のみ、segment_order でソート、同じ employee は時間連結 */
-          const empToShifts = new Map<string, ShiftAssignmentRow[]>();
-          for (const sa of dayShifts) {
-            if (sa.assignment_type !== 'normal') continue;
-            if (!empToShifts.has(sa.employee_id)) empToShifts.set(sa.employee_id, []);
-            empToShifts.get(sa.employee_id)!.push(sa);
-          }
-          const staffRows = Array.from(empToShifts.entries())
-            .map(([empId, sas]) => {
-              const s = staffById.get(empId);
-              if (!s) return null;
-              const sorted = sas.slice().sort((a, b) => (a.segment_order ?? 0) - (b.segment_order ?? 0));
-              const timeStr = sorted
-                .map((sa) => `${trimSeconds(sa.start_time)}〜${trimSeconds(sa.end_time)}`)
-                .join(' / ');
-              return { staff: s, time: timeStr, displayOrder: s.shift_display_order ?? 9999 };
-            })
-            .filter((x): x is NonNullable<typeof x> => x !== null)
-            .sort((a, b) => a.displayOrder - b.displayOrder);
-
-          const { y, md } = formatJapaneseDate(d);
-
-          return (
-            <section key={d} className="report-page">
-              <header className="report-title">
-                <span className="title-text">{facilityDisplayName}業務日報</span>
-                <div className="title-date">
-                  <span>{y}</span>
-                  <span className="ml-4">{md}</span>
-                </div>
-              </header>
-
-              <ChildrenTable preschool={preschool} afterSchool={afterSchool} facilityHasPreschool={facilityHasPreschool} />
-
-              <StaffTable rows={staffRows} />
-
-              <ActivityBox template={facility?.daily_report_template ?? ''} />
-            </section>
-          );
-        })}
+            <ActivityBox template={facility?.daily_report_template ?? ''} />
+          </section>
+        ))}
       </div>
 
       <style jsx global>{`
@@ -348,8 +602,37 @@ export default function DailyReportFull({ role: _role }: Props) {
         }
         @media print {
           .report-root { background: white; padding: 0; }
-          .report-page { border: none; margin: 0; box-shadow: none; }
+          /* 1 日 1 ページに厳密化: min-height ではなく height で固定し overflow:hidden で
+             はみ出しをクリップ。activity-box が flex:1 で残余領域を吸って 1 ページに収まる。 */
+          .report-page {
+            border: none;
+            margin: 0;
+            box-shadow: none;
+            height: 281mm;
+            min-height: 0;
+            overflow: hidden;
+            page-break-after: always;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
           .report-page:last-child { page-break-after: auto; }
+          /* 業務日報のタイトル: globals.css の @media print で <header> 一律非表示と
+             される副作用を避けるため <div> 化したが、念のため明示で可視化を強制する。 */
+          .report-page .report-title { display: block !important; }
+          /* 印刷時のみ少し詰めて、活動内容の本文が増えても 1 枚に収まりやすくする。 */
+          .report-table th, .report-table td {
+            height: 19px;
+            padding: 1px 3px;
+            line-height: 1.35;
+          }
+          .report-title .title-text { font-size: 24px; letter-spacing: 1.5px; }
+          .report-title .title-date { font-size: 13px; }
+          .activity-box {
+            min-height: 36mm;
+            padding: 6px;
+            font-size: 11px;
+            line-height: 1.55;
+          }
         }
 
         .report-title {
@@ -515,13 +798,16 @@ function ChildrenTable({
   return (
     <table className="report-table" style={{ marginTop: 6 }}>
       <thead>
+        {/* 列幅再配分: 備考 10%→6%、氏名 30%→34%。
+           備考はもともと 10% でも 2 文字程度しか書けないため、ユーザー許諾の上で
+           氏名側に振り、長めの利用児童名（4〜5 文字＋括弧書き）も折返さず収まるようにする。 */}
         <tr>
-          <th style={{ width: '30%' }}>利用者氏名</th>
+          <th style={{ width: '34%' }}>利用者氏名</th>
           <th style={{ width: '10%' }}>出欠席</th>
-          <th style={{ width: '10%' }}>備考</th>
-          <th style={{ width: '30%' }}>利用者氏名</th>
+          <th style={{ width: '6%' }}>備考</th>
+          <th style={{ width: '34%' }}>利用者氏名</th>
           <th style={{ width: '10%' }}>出欠席</th>
-          <th style={{ width: '10%' }}>備考</th>
+          <th style={{ width: '6%' }}>備考</th>
         </tr>
       </thead>
       <tbody>

@@ -168,6 +168,43 @@ export async function fetchEmployeeIdsForFacilities(
 }
 
 /**
+ * 社員シフト表 (/my/requests?tab=facility-shift) 用の最小列セット。
+ * migration 217 の RPC `get_my_facility_shift_view_employees` の戻り値型。
+ *
+ * employees の RLS は「自分のみ」かつ既存 `get_facility_members` は employee を弾くため、
+ * 社員視点で同 facility の同僚を取得するには専用 RPC が必要だった。
+ */
+export interface FacilityShiftViewEmployee {
+  id: string;
+  last_name: string | null;
+  first_name: string | null;
+  facility_id: string | null;
+  shift_display_order: number | null;
+  default_start_time: string | null;
+  default_end_time: string | null;
+}
+
+/**
+ * 自分の所属 facility に居る全社員 (主+兼任) の「シフト表描画に必要な最小限の列」を返す。
+ * 全ロール (admin/manager/shift_manager/employee) 対応。SECURITY DEFINER で RLS バイパス。
+ * 機密情報 (email / 連絡先 / 資格 / 給与) は一切返さない。
+ */
+export async function fetchFacilityShiftViewEmployees(
+  supabase: SupabaseClient,
+  facilityIds: string[],
+): Promise<FacilityShiftViewEmployee[]> {
+  if (facilityIds.length === 0) return [];
+  const { data, error } = await supabase.rpc('get_my_facility_shift_view_employees', {
+    p_facility_ids: facilityIds,
+  });
+  if (error) {
+    console.error('[fetchFacilityShiftViewEmployees] RPC error', error);
+    return [];
+  }
+  return (data ?? []) as FacilityShiftViewEmployee[];
+}
+
+/**
  * PostgREST の暗黙の max-rows(=1000) で結果が黙って打ち切られるのを防ぐページング取得。
  *
  * 背景（2026-06-01 バグ）: 兼任職員が施設シフト表 (MyFacilityShiftView) を開くと

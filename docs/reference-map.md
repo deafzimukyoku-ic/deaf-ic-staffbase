@@ -89,6 +89,7 @@
 - **新規 migration / API / RLS なし**（`shift_change_requests` + RLS `scr_insert` + 承認 `ApprovalQueueFull` / `[id]` PATCH は既存）
 - `components/shift/ShiftChangeRequestForm.tsx` 復元（git `5c274a9^` 由来。deaf-ic=brand- / diletto=diletto-）。直接 INSERT
 - `components/employee/MyFacilityShiftView.tsx`: 自分の行(`e.id===employeeId`)のセル `onClick` → `openChangeRequest` → モーダル。凡例下にヒント
+- **2026-06-08**: employees の直接 SELECT は RLS「自分のみ」+ 既存 `get_facility_members` RPC が employee を弾く設計のため、自分しか表示されないバグ。migration 217 で SECURITY DEFINER RPC `get_my_facility_shift_view_employees(uuid[])` を新設（全ロール対応・最小列のみ）、`lib/multi-facility.ts` `fetchFacilityShiftViewEmployees` 経由に置換
 - `components/shift/MyRequestsView.tsx`: 締切バナーを「施設のシフト」タブ誘導へ修正
 
 ### ② ダッシュボードのシフトカード遷移修正（2026-06-01）
@@ -876,14 +877,14 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | **supabase/migrations/124_attendance_waitlist.sql** | **CHECK に 'waitlist' 追加 / `waitlist_order smallint` 列追加（範囲 1-10、status='waitlist' 以外で NULL 強制）/ RPC を `(uuid, text, smallint default null)` で再定義** |
 | lib/types.ts | `AttendanceStatus` union に 'waitlist' / `ScheduleEntryRow.waitlist_order: number \| null` |
 | components/shift/ScheduleFull.tsx | RPC 呼び出しに `p_waitlist_order` 追加、4 ボタン + 5×2 順番ピッカー + 注意書き、`waitlist_order` state 管理、carry-over（waitlist→他→waitlist で番号復元） |
-| components/shift/ScheduleGridFull.tsx | セル「キャ待 ①」表示、利用数行の下にキャンセル待ち件数行、`hasAnyWaitlist` で行を出し分け |
+| components/shift/ScheduleGridFull.tsx | セル「キャ待 ①」表示、利用数行の下にキャンセル待ち件数行、`hasAnyWaitlist` で行を出し分け。氏名 sticky 列に児童ごとの月間「出{N}/待{M}」集計を追加（2026-06-08、`isAttended`/`isWaitlist` で日別カウントも一元化） |
 | components/shift/TransportFull.tsx | 通常テーブルから waitlist 除外、`currentDayWaitlist` memo + 集約バー + 「利用に変える」確認モーダル、ヘッダ「⏳ 待 N人」バッジ、generate 入力から除外、staff area marks ループから除外 |
 | components/shift/ShiftFull.tsx | `childrenCountByDate` から waitlist 除外、新規 `childrenWaitlistCountByDate` |
 | components/shift/ShiftGridFull.tsx | 日付ヘッダに「待 N」バッジ |
 | lib/logic/generateShift.ts | `dailyChildCount` 集計から waitlist 除外（必要職員数の過剰見積もり防止） |
 | components/shift/DailyOutputFull.tsx | `slots` 構築から waitlist 除外、`activeChildCount` から除外、`waitlistChildren` memo + 右カラム「キャンセル待ち」セクション（旧「休憩」セクション置換）、ヘッダに「キャンセル待ち N 名」併記 |
 | components/shift/WeeklyTransportFull.tsx | フィルタに waitlist 除外を追加 |
-| components/shift/DailyReportFull.tsx | `attendanceLabel` の case に 'waitlist' → '待' 追加 |
+| components/shift/DailyReportFull.tsx | `attendanceLabel` の case に 'waitlist' → '待' 追加。2026-06-08: タイトル `<header>` を `<div>` 化（globals.css の @media print が `header` を一律非表示にする副作用回避）。印刷時 `.report-page` を `height:281mm; overflow:hidden; page-break-inside:avoid` で1日1ページ厳格化。備考列 10→6%、氏名列 30→34%。`daysData` useMemo にデータ準備を集約し、印刷描画と Excel 出力で共有。「📊 Excel (Zip)」ボタンで日ごとの .xlsx を JSZip 一括ダウンロード（ExcelJS 動的 import） |
 
 ### 設計判断
 - **uniq 制約なし**: 兄弟で同日 ① が 2 人ありえるため、`(date, waitlist_order)` の uniq は付けない
@@ -994,7 +995,7 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 - **公文代は児童ごとの自由入力**: `kumon_monthly_fee integer null`。施設・児童で金額が違うため固定定数化しない（null = 計上しない）
 - **無償化判定**: 全国 = `nursery_3/4/5`、名古屋市のみ追加で `preschool` も対象（市町村文字列の完全一致）
 - **イベント参加判定**: 月締め時に手動チェック前提。schedule_entries の `attendance_status='present'` から自動推測はしない（present 以外でも イベントには参加した、という運用例があるため）
-- **月次集計の永続化**: `billing_summaries` に snapshot 保存。再印刷時に同じ数字が出る（月内に児童属性が変わっても紙の数字は守られる）
+- **月次集計の永続化**: `billing_summaries` に保存。copay（手動上書き）/ イベント参加 / 受取日 / 児童名・市町村スナップショットは保存値を保持（月内に児童属性が変わっても紙の数字を守る）。**ただし出席日数・おやつ代・請求額はスナップショット固定せず、表示/印刷/Excel とも常に利用表 `schedule_entries` のライブカウント（`isAttended`）を正とする（2026-06-08〜「利用表＝正」化）。保存済みでもライブ値とズレていれば `dirty` 表示し「保存」で `billing_summaries` を最新化できる。`billing_summaries` を読むのは `BillingFull` のみ**
 - **shift_only_mode との関係**: シフトのみ事業所はそもそも利用料金表を使わない（児童不在）。サイドバーから 利用料金表 / 児童管理 / イベント設定 はフィルタで除外
 
 ---

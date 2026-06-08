@@ -12,6 +12,7 @@
 import React, { useEffect, useRef } from 'react';
 import { format, getDaysInMonth, getDay } from 'date-fns';
 import type { AttendanceStatus } from '@/lib/types';
+import { isAttended, isWaitlist } from '@/lib/logic/attendance';
 
 type ScheduleChild = {
   id: string;
@@ -80,20 +81,39 @@ export default function ScheduleGridFull({
     cellMap.set(`${c.child_id}_${c.date}`, c);
   });
 
+  /* 出席判定は lib/logic/attendance.ts の isAttended / isWaitlist に一元化
+     （CLAUDE.md §10「deaf-ic 出席判定（一元化・Phase 66-E 以降）」）。
+     ScheduleCellData は pickup_time/dropoff_time/attendance_status を持つので
+     そのまま渡せる（AttendanceCheckable と構造的に互換）。 */
+  const toCheckable = (cell: ScheduleCellData) => ({
+    pickup_time: cell.pickup_time,
+    dropoff_time: cell.dropoff_time,
+    attendance_status: cell.attendance_status ?? null,
+  });
+
   const dailyCounts = new Map<string, number>();
   /* Phase 64: 日別キャンセル待ち件数（同日内重複可、cell 単位カウント） */
   const dailyWaitlistCounts = new Map<string, number>();
+  /* 児童ごとの月間出席日数・待機日数（氏名列に「出席Nd / 待機Md」で表示） */
+  const childAttendedDays = new Map<string, number>();
+  const childWaitlistDays = new Map<string, number>();
+
   dates.forEach((d) => {
     let count = 0;
     let waitlistCount = 0;
     children.forEach((child) => {
       const cell = cellMap.get(`${child.id}_${d.dateStr}`);
       if (!cell) return;
-      if (cell.attendance_status === 'waitlist') {
+      const checkable = toCheckable(cell);
+      if (isWaitlist(checkable)) {
         waitlistCount++;
+        childWaitlistDays.set(child.id, (childWaitlistDays.get(child.id) ?? 0) + 1);
         return;
       }
-      if (cell.pickup_time || cell.dropoff_time) count++;
+      if (isAttended(checkable)) {
+        count++;
+        childAttendedDays.set(child.id, (childAttendedDays.get(child.id) ?? 0) + 1);
+      }
     });
     dailyCounts.set(d.dateStr, count);
     dailyWaitlistCounts.set(d.dateStr, waitlistCount);
@@ -193,6 +213,21 @@ export default function ScheduleGridFull({
               >
                 <div className="group-hover:text-[var(--accent)] transition-colors">{child.name}</div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--ink-3)', marginTop: '2px' }}>{child.grade_label}</div>
+                {(() => {
+                  const a = childAttendedDays.get(child.id) ?? 0;
+                  const w = childWaitlistDays.get(child.id) ?? 0;
+                  if (a === 0 && w === 0) return null;
+                  return (
+                    <div
+                      style={{ fontSize: '0.68rem', marginTop: '2px', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}
+                      title={`今月: 出席 ${a} 日 / 待機 ${w} 日`}
+                    >
+                      {a > 0 && <span style={{ color: 'var(--green)', fontWeight: 600 }}>出{a}</span>}
+                      {a > 0 && w > 0 && <span style={{ color: 'var(--ink-3)', margin: '0 3px' }}>/</span>}
+                      {w > 0 && <span style={{ color: 'var(--ink-2)', fontWeight: 600 }}>待{w}</span>}
+                    </div>
+                  );
+                })()}
               </td>
               {dates.map((d) => {
                 const cell = cellMap.get(`${child.id}_${d.dateStr}`);

@@ -9,7 +9,7 @@ import ShiftChangeRequestForm from '@/components/shift/ShiftChangeRequestForm';
 import { createClient } from '@/lib/supabase/client';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
 import { todayStr } from '@/lib/date/isToday';
-import { fetchMyFacilityIds, fetchAllRows } from '@/lib/multi-facility';
+import { fetchMyFacilityIds, fetchAllRows, fetchFacilityShiftViewEmployees } from '@/lib/multi-facility';
 import type { ShiftAssignmentType } from '@/lib/types';
 
 /**
@@ -172,8 +172,13 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
          自分の facility のみ取得される。ready は「仮（確認中）」として表示する。
          shift_assignments は兼任(複数 facility × 1ヶ月)で 1000 行を超えうるため
          fetchAllRows でページング取得し、PostgREST の暗黙 max-rows(1000) 打ち切りを回避する
-         （2026-06-01 「兼任職員の表が途中までしか出ない」バグの修正）。 */
-      const [shiftData, { data: empData }, { data: facData }] = await Promise.all([
+         （2026-06-01 「兼任職員の表が途中までしか出ない」バグの修正）。
+
+         employees は RLS が「自分のみ」かつ get_facility_members RPC が employee 役割を弾いて
+         いるため、直接 SELECT すると自分しか返らない。migration 217 で追加した SECURITY DEFINER
+         RPC `get_my_facility_shift_view_employees` を経由して同 facility の同僚を取得する。
+         戻り値は機密情報を含まない最小列 (id / 氏名 / facility / 並び順 / 既定開始終了)。 */
+      const [shiftData, empData, { data: facData }] = await Promise.all([
         fetchAllRows<ShiftRow>(() =>
           supabase
             .from('shift_assignments')
@@ -184,12 +189,7 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
             .lte('date', to)
             .order('date', { ascending: true }),
         ),
-        supabase
-          .from('employees')
-          .select('id, last_name, first_name, facility_id, shift_display_order, default_start_time, default_end_time')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'active')
-          .in('facility_id', facIds),
+        fetchFacilityShiftViewEmployees(supabase, facIds),
         supabase
           .from('facilities')
           .select('id, name')
@@ -198,7 +198,16 @@ export default function MyFacilityShiftView({ employeeId, tenantId, facilityId }
 
       if (cancelled) return;
       setShifts(shiftData);
-      setEmployees((empData ?? []) as EmployeeRow[]);
+      /* RPC 戻り値の last_name / first_name は nullable だが、表示前提として空文字で埋める。 */
+      setEmployees(empData.map((e) => ({
+        id: e.id,
+        last_name: e.last_name ?? '',
+        first_name: e.first_name ?? '',
+        facility_id: e.facility_id,
+        shift_display_order: e.shift_display_order,
+        default_start_time: e.default_start_time,
+        default_end_time: e.default_end_time,
+      })));
       setFacilities((facData ?? []) as FacilityRow[]);
       setMyFacilityIds(facIds);
       setLoading(false);

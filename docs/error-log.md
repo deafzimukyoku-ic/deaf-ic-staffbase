@@ -5,6 +5,62 @@
 
 ---
 
+## /my/requests?tab=facility-shift で employee が自分しか見えない → employees RLS「自分のみ」+ 既存 RPC が employee を弾く
+
+- **発生日**: 2026-06-08（ユーザー指摘「社員だと自分だけしか見れない」）
+- **発生箇所**: `components/employee/MyFacilityShiftView.tsx` の `.from('employees').select(...).in('facility_id', facIds)`
+- **フェーズ**: 本番運用中の権限バグ
+- **エラー内容**: /my/requests?tab=facility-shift で employee がアクセスすると、同 facility の他社員のシフトが見えず、自分の行だけが表示される（shift_assignments 自体は他人分も RLS で許可されているのに表に並ばない）
+- **原因（真因）**: 2 段階の制限が重なっていた
+  1. `employees` の RLS は `migration 000` の「employee can read self」(`auth_user_id = auth.uid()`) のみで、employee が同テナント他社員を SELECT する経路が存在しない
+  2. 補完用の SECURITY DEFINER RPC `get_facility_members`(migration 155) は冒頭で `if v_role not in ('admin','manager','shift_manager') then return; end if;` と書かれており、**employee 役割を明示的に弾く設計**になっていた（当時は manager/shift_manager の RLS 再 SELECT 弾き対策として作られたため）
+  - 結果: shift_assignments は employee 視点でも他社員分まで返るのに（160/216 で許可済み）、employees 行は自分しか返らず表が 1 行しか描画されない
+- **解決方法**: migration 217 で新 SECURITY DEFINER RPC `get_my_facility_shift_view_employees(p_facility_ids uuid[])` を追加。全ロール (admin/manager/shift_manager/employee) 対応で、role ごとに見える facility 集合と引数 p_facility_ids の積集合を求め、その facility に居る active 社員（主+兼任）の**最小列**のみ返す（id / 氏名 / facility_id / shift_display_order / 既定開始終了時刻）。住所・電話・birth_date・銀行・保険番号などは含まない（CLAUDE.md §9・§10 のろう者納品仕様＋既存「壁掲示相当の情報」運用に沿う）。`lib/multi-facility.ts` に `fetchFacilityShiftViewEmployees` ヘルパー、`MyFacilityShiftView.tsx` の employees fetch をこの RPC 経由に置換。本番 DB 適用時に🎨パレット employee の視点で 1件→16件（主14+兼任2）に増えることを確認
+- **再発防止**:
+  1. SECURITY DEFINER RPC で role を弾くときは「現時点で要らない role を入れない」のではなく「**将来要りそうなら個別 if 分岐で残す**」。今回 `get_facility_members` の冒頭弾きが employee 機能の追加で初めて顕在化した（社員シフト閲覧機能は当時無かった）
+  2. 「画面で見える＝RLS で取れている」と思い込まない。複数テーブルを跨ぐ画面は **どのテーブルの RLS で削られて見えなくなっているか**を切り分ける（今回も shift_assignments は見えていて employees で削られていた）。employee 機能を増やすときは employees / facilities / 関連 RLS の 3 つを必ず touch チェックする
+  3. 「壁掲示と同等の情報範囲」を返す RPC を別途用意することで、employees の RLS を素のまま温存しつつ機能要件を満たせる（住所・銀行口座は今でも employee からは見えない）
+
+---
+
+## 業務日報の施設名・日付タイトルが印刷時に消える → globals.css が `header` 要素を一律非表示
+
+- **発生日**: 2026-06-08（ユーザー指摘「業務日報が施設名と日付が出ません」+ スクショ：印刷プレビュー先頭が利用者氏名テーブルから始まっている）
+- **発生箇所**: `components/shift/DailyReportFull.tsx`（`<header className="report-title">`）+ `app/globals.css`（@media print の `header { display: none !important; }`）
+- **フェーズ**: 本番運用中の挙動修正（業務日報出力）
+- **エラー内容**: 業務日報の印刷プレビューに施設名と日付タイトルが表示されない。1日1ページのはずがコンテンツが溢れて 2 ページに分割され印刷枚数が倍増
+- **原因（真因）**:
+  1. **タイトル消失**: `globals.css:272-276` が @media print で `aside, header, .print-hide` を一律 `display:none`。レイアウトのトップバー（admin/manager layout の `<header>`）を消す目的だが、セレクタが広すぎてコンテンツ側で意味的に使われた `<header className="report-title">` まで巻き込んでいた
+  2. **複数ページ化**: `.report-page` が `min-height: 281mm`（max ではない）で、`activity-box` の `flex: 1` + 長い `daily_report_template` で 281mm を超えるとそのまま次ページに溢れる。`page-break-inside: avoid` も無かった
+- **解決方法**:
+  1. DailyReportFull の `<header className="report-title">` を `<div>` に変更（セマンティクスより印刷可視性優先、コメントで globals.css の制約を明示）
+  2. @media print に防御として `.report-page .report-title { display: block !important; }` を追加（将来 globals.css がさらに広くなっても守れる）
+  3. 印刷時のみ `.report-page` を `height: 281mm; overflow: hidden; page-break-inside: avoid` に変更し 1 日 1 ページを厳格化（はみ出しは activity-box 内でクリップ）
+  4. テーブル行高 22px→19px、`activity-box` min-height 60mm→36mm、タイトル 28px→24px に詰めて余裕を作る
+  5. 利用者氏名 30% → 34%、備考 10% → 6% に再配分（ユーザー承認済み）
+- **再発防止**:
+  1. `globals.css` の `@media print` の `header { display: none }` は将来も生きる地雷。コンテンツ側で印刷したい見出しは `<header>` ではなく `<div>` か `<h1>` 等にする。または globals.css を `body > header` / `.app-topbar` 等で限定セレクタ化（今回は影響範囲確認の手間を避けて DailyReportFull 側を直したが、いずれグローバル側も狭めるべき）
+  2. 印刷を 1 ページに収めたいセクションは `min-height` ではなく `height: <A4 page height>; overflow: hidden;` を必ずペアで指定する。min-height だけだと内容に応じて伸び、複数ページに分割される
+  3. 「印刷時の見た目」は @media print + 実機印刷プレビューで確認する。スクリーン表示だけで判定しない（globals.css の print 専用ルールが効くのは print 時のみ）
+- **横展開**: 他コンポーネントで `<header>` を印刷対象セクションに使っている箇所は `grep '<header'` で確認済み（DailyReportFull のみ）。billing/daily/transport 等は OK
+
+---
+
+## 保存済み利用料金表が利用表(schedule_entries)の事後変更に追従しない → 出席日数をスナップショット参照していた
+
+- **発生日**: 2026-06-08（ユーザー指摘「保存されていても利用表の回数が正」）
+- **発生箇所**: `components/shift/BillingFull.tsx` `fetchAll()` の row 構築（`attendanceDays` の出どころ分岐）
+- **フェーズ**: 本番運用中の挙動修正（Phase 66 利用料金表）
+- **エラー内容**: 月締めで一度「保存」した月は、その後 利用表 (`schedule_entries`) に出席（時間）を追加・削除しても、料金表の出席日数・おやつ代・請求額が古いまま更新されない。実 DB の 2026-05 に 3 件のズレ（🖌️パステル「グエン」保存=0→実=13 で請求 ¥650 不足、🎨パレット 溝江/中根 各 +¥150、合計 +¥950）
+- **原因（真因）**: BillingFull が出席日数を `existing ? existing.attendance_days : ライブ値` と分岐し、保存済み（`billing_summaries` 行が存在する）月では保存時スナップショット `attendance_days` を表示に使っていた。利用表を直しても `billing_summaries` を無効化/再計算する連動が無く（`ScheduleFull` 側に billing 参照ゼロ）、出席日数列は表示専用で手動更新もできないため、保存後はズレを直す手段が UI に無かった
+- **解決方法**: 出席日数を常に利用表のライブカウント（`presentDaysByChildId` = `isAttended` で集計）を正とするよう変更。`attendanceDays` を無条件にライブ値へ。おやつ代・請求額は `r.attendanceDays` 派生なので自動追従。copay（手動上書き値）/ イベント参加 / 受取日は従来どおり保存値を保持。保存済みでライブ値とズレる月は `dirty: !existing || existing.attendance_days !== attendanceDays` で「保存」を有効化し `billing_summaries` も最新化可能に。`billing_summaries` を読むのは BillingFull のみ（grep 済み）なので表示ライブ化で恒久的に「利用表＝正」が成立し、SQL/DBトリガーは不要。既存ズレ 3 件もページを開くだけで正値表示
+- **再発防止**:
+  1. 「保存＝スナップショット」設計を入れるなら、ソース（ここでは利用表）が後から変わる列はどれか・誰がそのテーブルを読むかを先に確定する。読み手が 1 画面だけなら、スナップショット保存より表示時ライブ計算の方が連動バグを生まない
+  2. 集計値を別テーブルにコピー保存したら「元データ変更時の再計算/無効化トリガー」をセットで設計する（無ければスナップショットは必ず腐る）
+  3. 出席判定は `lib/logic/attendance.ts` の `isAttended` に一元化済み。表示・保存・印刷で同じ関数を通す（料金表で出席判定をコピペし直さない）
+
+---
+
 ## ルート/ページを削除すると `.next/types` `.next/dev/types` の stale validator で `tsc`/`build` が落ちる
 
 - **発生日**: 2026-06-04（`app/api/shifts/import-pdf/route.ts` 撤去後）

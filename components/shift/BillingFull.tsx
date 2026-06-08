@@ -222,13 +222,17 @@ export default function BillingFull({ scope }: Props) {
           childName: c.name,
           municipality: c.municipality ?? null,
           child: childInput,
-          attendanceDays: existing ? existing.attendance_days : attendanceDays,
+          /* 出席日数は常に利用表 (schedule_entries) のライブカウントを正とする。
+             保存値で固定しないので、保存後に利用表を直しても表示/印刷/Excel が追従する
+             （おやつ代・請求額も r.attendanceDays から派生するので自動で追従）。 */
+          attendanceDays,
           copayAmount: initialCopay,
           receivedAt: existing?.received_at ?? null,
           participations,
           summaryId: existing?.id ?? null,
-          /* 新規月＝最初から dirty にして「保存」ボタンを有効化（自動初期値をワンクリックで永続化） */
-          dirty: !existing,
+          /* 新規月、または保存済みでも出席日数が利用表とズレている月は dirty にして
+             「保存」で billing_summaries も最新化できるようにする（料金表を読むのはこの画面のみ）。 */
+          dirty: !existing || existing.attendance_days !== attendanceDays,
         };
       });
       setRows(newRows);
