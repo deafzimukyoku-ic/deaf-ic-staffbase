@@ -841,21 +841,19 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
               <CardHeader><CardTitle className="text-base font-bold">振込先口座</CardTitle></CardHeader>
               <CardContent className="space-y-1.5 text-sm">
                 <EditableRow label="銀行名" editing={basicEditing} value={basicEditing ? basicDraft.bank_name : employee.bank_name} onChange={(v) => updBasic('bank_name', String(v))} />
-                <EditableRow label={(employee.bank_name || '').includes('ゆうちょ') ? '記号' : '支店名'} editing={basicEditing} value={basicEditing ? basicDraft.bank_branch_name : employee.bank_branch_name} onChange={(v) => updBasic('bank_branch_name', String(v))} />
-                {!(employee.bank_name || '').includes('ゆうちょ') && (
-                  <EditableRow
-                    label="口座種別"
-                    editing={basicEditing}
-                    value={basicEditing ? basicDraft.bank_account_type : (employee.bank_account_type === 'ordinary' ? '普通' : employee.bank_account_type === 'current' ? '当座' : employee.bank_account_type === 'savings' ? '貯蓄' : '')}
-                    onChange={(v) => updBasic('bank_account_type', String(v) as Employee['bank_account_type'])}
-                    options={[
-                      { value: 'ordinary', label: '普通' },
-                      { value: 'current', label: '当座' },
-                      { value: 'savings', label: '貯蓄' },
-                    ]}
-                  />
-                )}
-                <EditableRow label={(employee.bank_name || '').includes('ゆうちょ') ? '番号' : '口座番号'} editing={basicEditing} value={basicEditing ? basicDraft.bank_account_number : employee.bank_account_number} onChange={(v) => updBasic('bank_account_number', String(v))} />
+                <EditableRow label="支店名" editing={basicEditing} value={basicEditing ? basicDraft.bank_branch_name : employee.bank_branch_name} onChange={(v) => updBasic('bank_branch_name', String(v))} />
+                <EditableRow
+                  label="口座種別"
+                  editing={basicEditing}
+                  value={basicEditing ? basicDraft.bank_account_type : (employee.bank_account_type === 'ordinary' ? '普通' : employee.bank_account_type === 'current' ? '当座' : employee.bank_account_type === 'savings' ? '貯蓄' : '')}
+                  onChange={(v) => updBasic('bank_account_type', String(v) as Employee['bank_account_type'])}
+                  options={[
+                    { value: 'ordinary', label: '普通' },
+                    { value: 'current', label: '当座' },
+                    { value: 'savings', label: '貯蓄' },
+                  ]}
+                />
+                <EditableRow label="口座番号" editing={basicEditing} value={basicEditing ? basicDraft.bank_account_number : employee.bank_account_number} onChange={(v) => updBasic('bank_account_number', String(v))} />
                 <EditableRow label="口座名義" editing={basicEditing} value={basicEditing ? basicDraft.bank_account_holder : employee.bank_account_holder} onChange={(v) => updBasic('bank_account_holder', String(v))} />
               </CardContent>
             </Card>

@@ -43,7 +43,7 @@ export const DUMMY_EMPLOYEE: Record<string, unknown> = {
 
   // 振込先口座
   bank_name: 'ゆうちょ銀行',
-  bank_branch_name: '12345',
+  bank_branch_name: '本店',
   bank_account_type: 'ordinary',
   bank_account_number: '12345678',
   bank_account_holder: 'ヤマダ タロウ',

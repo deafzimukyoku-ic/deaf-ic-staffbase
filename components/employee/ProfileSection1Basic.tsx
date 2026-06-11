@@ -37,8 +37,6 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
      シフト・送迎側 (employees.shift_qualifications) でのみ使用するため、ここでは取得不要。 */
   const supabase = createClient();
 
-  const isYucho = (data.bank_name || '').includes('ゆうちょ');
-
   useEffect(() => {
     async function loadMasters() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -209,25 +207,19 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
                   ))}
                 </select>
               </div>
-              {isYucho ? (
-                <Field label="記号" value={data.bank_branch_name || ''} onChange={(v) => update('bank_branch_name', v || null)} placeholder="1XXXX" />
-              ) : (
-                <Field label="支店名" value={data.bank_branch_name || ''} onChange={(v) => update('bank_branch_name', v || null)} placeholder="○○支店" />
-              )}
+              <Field label="支店名" value={data.bank_branch_name || ''} onChange={(v) => update('bank_branch_name', v || null)} placeholder="○○支店" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {!isYucho && (
-                <div className="space-y-2">
-                  <Label>口座種別</Label>
-                  <select className={selectClass} value={data.bank_account_type || ''} onChange={(e) => update('bank_account_type', e.target.value || null)}>
-                    <option value="">未選択</option>
-                    <option value="ordinary">普通</option>
-                    <option value="current">当座</option>
-                    <option value="savings">貯蓄</option>
-                  </select>
-                </div>
-              )}
-              <Field label={isYucho ? '番号' : '口座番号'} value={data.bank_account_number || ''} onChange={(v) => update('bank_account_number', v || null)} placeholder={isYucho ? 'XXXXXXX' : undefined} />
+              <div className="space-y-2">
+                <Label>口座種別</Label>
+                <select className={selectClass} value={data.bank_account_type || ''} onChange={(e) => update('bank_account_type', e.target.value || null)}>
+                  <option value="">未選択</option>
+                  <option value="ordinary">普通</option>
+                  <option value="current">当座</option>
+                  <option value="savings">貯蓄</option>
+                </select>
+              </div>
+              <Field label="口座番号" value={data.bank_account_number || ''} onChange={(v) => update('bank_account_number', v || null)} />
               <Field label="口座名義" value={data.bank_account_holder || ''} onChange={(v) => update('bank_account_holder', v || null)} placeholder="カナ名義" />
             </div>
           </CardContent>

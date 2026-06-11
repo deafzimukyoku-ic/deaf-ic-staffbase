@@ -41,9 +41,9 @@ export const employeeFields: FieldOption[] = [
   /* tenant.bank_name は会社情報の社員選択銀行を返す既存タグ。
      こちらは employees テーブル直の口座情報（プロフィール基本タブの「振込先口座」カード）。 */
   { value: 'bank_name', label: '振込先銀行' },
-  { value: 'bank_branch_name', label: '支店名（ゆうちょは記号）' },
+  { value: 'bank_branch_name', label: '支店名' },
   { value: 'bank_account_type', label: '口座種別' },
-  { value: 'bank_account_number', label: '口座番号（ゆうちょは番号）' },
+  { value: 'bank_account_number', label: '口座番号' },
   { value: 'bank_account_holder', label: '口座名義' },
   // マイカー通勤
   { value: 'car_model', label: '車種' },
