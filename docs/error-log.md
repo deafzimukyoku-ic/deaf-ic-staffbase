@@ -5,6 +5,21 @@
 
 ---
 
+## 動画/PDF アップロードが「The object exceeded the maximum allowed size」で 50MB 超だけ失敗
+
+- **発生日**: 2026-06-12（ユーザー指摘「PDF/動画のアップロードでエラーが何か所か出てる」）
+- **発生箇所**: `components/admin/BlockEditor.tsx`（Storage 直アップロード）/ `scripts/migrate-drive-to-storage.mjs`（Drive→Storage 移行）
+- **フェーズ**: 本番運用中（マニュアル/研修の動画・PDF 投稿）
+- **エラー内容**: `documents`/`videos` バケットへ 50MB 超の PDF・動画をアップロードすると `The object exceeded the maximum allowed size`。Drive→Storage 移行でも 50MB 超の 11 件が同エラーで失敗（`docs/content-media-migration-failures.json`）
+- **原因（真因）**: migration 212/213 でバケット個別の `file_size_limit` を 200MB/500MB に設定済み（実 DB で確認）だが、**Supabase プロジェクト全体の "Storage upload file size limit"（Settings → Storage）が既定の 50MB のまま**で、これがバケット個別上限より優先される。500MB の `videos` バケットへ service_role（RLS 無関係）で 60MB を上げても弾かれることを実機確認（`scripts/probe-effective-upload-limit.mjs`）。実格納オブジェクトの最大が videos 46.9MB / documents 10.4MB で 50MB 超がゼロなのも傍証（`scripts/probe-media-buckets.mjs`）
+- **解決方法**: 当面インフラを触らず、動画/PDF を Storage アップロードから **URL 入力（YouTube / Google Drive）に一本化**（BlockEditor 改修・2026-06-12）。レンダラ（`BlockRenderer`）は元から URL 描画対応のため表示は無改修。**根本対処（グローバル上限の引き上げ）は未実施** — 実施するなら Pro 前提で Dashboard Settings → Storage か Management API で 500MB 以上に変更し移行スクリプトを再実行
+- **再発防止**:
+  1. バケットの `file_size_limit` を上げても、プロジェクト全体の Storage グローバル上限がボトルネックになる。**migration SQL では直せない設定**であることを忘れない（DB オブジェクトではないので CLAUDE.md §16 の Dashboard 禁止対象外）
+  2. 「migration 適用済み＝意図どおり機能する」と思い込まない。バケット設定は `probe-media-buckets.mjs`、実効上限は `probe-effective-upload-limit.mjs` で実機確認する
+  3. UI の上限表示（旧「最大 500MB」）と実効上限（50MB）が乖離するとユーザーが混乱する。上限を変えたら表示も合わせる
+
+---
+
 ## /my/requests?tab=facility-shift で employee が自分しか見えない → employees RLS「自分のみ」+ 既存 RPC が employee を弾く
 
 - **発生日**: 2026-06-08（ユーザー指摘「社員だと自分だけしか見れない」）
