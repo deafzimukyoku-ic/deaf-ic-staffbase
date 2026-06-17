@@ -10,7 +10,13 @@
  * 移植元: diletto-shift-maker/src/lib/logic/qualifiedCoverage.ts
  * 機械的変換: shifts[].staff_id → shifts[].employee_id（呼び出し側で employee_id を渡す前提）
  *            ただし内部では staff_id 名で受け取る（後方互換）
+ *
+ * 半休対応（migration 218 / shift-halfday-availability-reflection）:
+ *   am_off（午後勤務[14:30,退勤]）/ pm_off（午前勤務[出勤,13:30]）も「勤務区間あり」として
+ *   intervals に含める。区間が短いぶんコア帯の一部スロットしかカバーしないため、
+ *   「休みの時間によって人員カウントが変わる」現場ルール（docs/shift-coverage-rule.md）と一致する。
  */
+import type { ShiftAssignmentType } from '@/lib/types';
 
 /* migration 116 で facility_shift_settings.core_start_time / core_end_time を導入。
    呼び出し側で設定値を渡す。未指定時は従来通り 10:30〜16:30 をフォールバックで使用。 */
@@ -63,7 +69,7 @@ export function calculateCoverage(params: {
     date: string;
     start_time: string | null;
     end_time: string | null;
-    assignment_type: 'normal' | 'public_holiday' | 'requested_off' | 'paid_leave' | 'off';
+    assignment_type: ShiftAssignmentType;
   }>;
   staffQualifiedMap: Map<string, boolean>;
   scheduleCount: number;
@@ -74,11 +80,13 @@ export function calculateCoverage(params: {
   const CORE_START_MIN = parseTimeToMin(params.coreStartTime ?? null) ?? DEFAULT_CORE_START_MIN;
   const CORE_END_MIN = parseTimeToMin(params.coreEndTime ?? null) ?? DEFAULT_CORE_END_MIN;
 
-  /* normal 以外（休み・公休・有給）は除外 */
+  /* 勤務系（normal / am_off / pm_off）のみ区間化。休み・公休・有給・希望休は不在。
+     半休(am_off/pm_off)は start/end が午後/午前に限定されており、コア帯の一部スロットのみカウントされる。 */
+  const WORKING_TYPES: ShiftAssignmentType[] = ['normal', 'am_off', 'pm_off'];
   const intervals: ShiftInterval[] = [];
   for (const s of shifts) {
     if (s.date !== date) continue;
-    if (s.assignment_type !== 'normal') continue;
+    if (!WORKING_TYPES.includes(s.assignment_type)) continue;
     const start = parseTimeToMin(s.start_time);
     const end = parseTimeToMin(s.end_time);
     if (start === null || end === null || end <= start) continue;

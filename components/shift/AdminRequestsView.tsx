@@ -234,8 +234,16 @@ export default function AdminRequestsView({ forceFacilityId }: Props) {
                 {detailSummary.reqs.some((r) => r.notes) && (
                   <div className="rounded-md bg-brand-beige p-2 text-xs">
                     <div className="font-bold mb-0.5">補足メモ</div>
-                    {detailSummary.reqs.filter((r) => r.notes).map((r) => (
-                      <div key={r.id}>{r.notes}</div>
+                    {/* 補足メモ重複バグ対策: 行をまたいでフレーズ単位で重複排除し1回だけ表示 */}
+                    {[
+                      ...new Set(
+                        detailSummary.reqs
+                          .flatMap((r) => (r.notes ? r.notes.split(' / ') : []))
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      ),
+                    ].map((phrase, i) => (
+                      <div key={i}>{phrase}</div>
                     ))}
                   </div>
                 )}

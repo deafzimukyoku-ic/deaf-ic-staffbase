@@ -5,6 +5,28 @@
 
 ---
 
+## 休み希望「補足メモ」が保存のたびに指数増殖して同一文が何度も表示される
+
+- **発生日**: 2026-06-17（落合良子さん本部7月で「29日は父の一周忌法要のため」が27回表示）
+- **発生箇所**: `components/shift/MyRequestsView.tsx`（保存 L230-240 / 読込 L100-106）+ `components/shift/AdminRequestsView.tsx`（表示 L234-241）
+- **エラー内容**: 補足メモが同一フレーズで多数回繰り返し保存・表示される（落合さん=各 request_type 行に同一フレーズ×9）
+- **原因（構造的真因）**: メモは「社員×月」で1つなのに、`shift_requests` の **request_type 別の各行に冗長保存**していた。
+  - 保存(MyRequestsView): `notes: trimmedNotes` を**全行**に書込
+  - 読込(MyRequestsView): `setNotes(allNotes.join(' / '))` で**全行の notes を ' / ' 連結**
+  - → 保存のたびに `X` → `X / X / X`（行数分）→ 次回さらに連結 と**指数増殖**。重複排除が無いのが真因
+- **解決方法**:
+  - 保存: メモは**先頭1行のみ**に保存（`idx === 0 ? trimmedNotes : null`）。単一ソース化
+  - 読込: フレーズ単位で重複排除（`split(' / ')` → `Set` → `join`）
+  - 表示(AdminRequestsView): 行をまたいでフレーズ重複排除し1回だけ表示
+  - データ片付け: `scripts/cleanup-shift-request-notes.mjs` で①行内フレーズ重複圧縮 ②(employee,month)単位で先頭行へ集約・他行 NULL。deaf-ic で 7行圧縮+13行 NULL、フレーズ重複ゼロを確認
+- **再発防止**:
+  - 「読込=全行結合・保存=全行書込」の循環を構造的に断つ（メモは1行のみ＝仕組みで防止）
+  - 表示側もフレーズ重複排除で二重防御
+  - diletto は同一コードのため同修正を適用（diletto DB は notes 0件で増殖未発生だが将来防止）
+- **教訓**: 「1対多テーブルに、本来1つの値（メモ）を全子行へ冗長コピー」+「読込で全子行を連結」は増殖バグの定番。1つの値は単一行に持たせる
+
+---
+
 ## 動画/PDF アップロードが「The object exceeded the maximum allowed size」で 50MB 超だけ失敗
 
 - **発生日**: 2026-06-12（ユーザー指摘「PDF/動画のアップロードでエラーが何か所か出てる」）

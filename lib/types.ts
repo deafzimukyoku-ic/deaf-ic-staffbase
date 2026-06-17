@@ -853,7 +853,10 @@ export interface ShiftRequestRow {
 // --- Shift: 確定 ---
 // public_holiday = 公休（管理者がシフト作成画面で決める休み）
 // requested_off  = 希望休（社員の休み希望由来。generateShift が shift_requests から生成）
-export type ShiftAssignmentType = 'normal' | 'public_holiday' | 'requested_off' | 'paid_leave' | 'off';
+// am_off = AM休（午前休→午後勤務 [14:30,退勤]） / pm_off = PM休（午後休→午前勤務 [出勤,13:30]）
+//   migration 218 で追加。休み希望(shift_requests)の am_off/pm_off と対称化
+//   （docs/features/shift-halfday-availability-reflection.md）
+export type ShiftAssignmentType = 'normal' | 'public_holiday' | 'requested_off' | 'paid_leave' | 'off' | 'am_off' | 'pm_off';
 
 export interface ShiftAssignmentRow {
   id: string;

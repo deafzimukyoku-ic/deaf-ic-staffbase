@@ -56,6 +56,8 @@ const ASSIGNMENT_LABELS: Record<ShiftAssignmentType, string> = {
   requested_off: '希望休',
   paid_leave: '有給',
   off: '休み',
+  am_off: 'AM休',
+  pm_off: 'PM休',
 };
 
 export default function ShiftChangeRequestForm({

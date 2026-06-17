@@ -103,7 +103,12 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
         if (r.notes) allNotes.push(r.notes);
       }
       setDayStatuses(map);
-      setNotes(allNotes.join(' / '));
+      /* メモはフレーズ単位で重複排除して表示。旧データは全行に同一メモが冗長保存され、
+         さらに保存ごとに ' / ' 連結で増殖していたため、ここで畳んで増殖を遮断する。 */
+      const uniquePhrases = [
+        ...new Set(allNotes.flatMap((n) => n.split(' / ')).map((s) => s.trim()).filter(Boolean)),
+      ];
+      setNotes(uniquePhrases.join(' / '));
 
       // 既にシフトが ready/published になっていたら締切扱い（読み取り専用）
       const from = `${targetMonth}-01`;
@@ -227,14 +232,17 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
 
       if (groups.size > 0) {
         const trimmedNotes = notes.trim() || null;
-        const rows = Array.from(groups, ([request_type, dates]) => ({
+        const rows = Array.from(groups, ([request_type, dates], idx) => ({
           tenant_id: tenantId,
           facility_id: facilityId,
           employee_id: employeeId,
           month: targetMonth,
           request_type,
           dates: dates.sort(),
-          notes: trimmedNotes,
+          /* メモは「社員×月」で1つ。全 request_type 行に冗長保存すると、読込=全行結合・
+             保存=全行書込 の循環で ' / ' 連結が指数増殖する（補足メモ重複バグ）。
+             先頭1行にのみ保存して単一ソースにする。 */
+          notes: idx === 0 ? trimmedNotes : null,
           submitted_by: employeeId,
         }));
         const { error: insErr } = await supabase.from('shift_requests').insert(rows);

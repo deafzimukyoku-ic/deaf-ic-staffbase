@@ -69,6 +69,9 @@ const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; bg: string; colo
   requested_off:  { label: '希望休', bg: 'bg-amber-50',         color: 'text-amber-700' },
   paid_leave:     { label: '有給',   bg: 'bg-emerald-50',       color: 'text-emerald-700' },
   off:            { label: '休み',   bg: 'bg-gray-50',          color: 'text-brand-gray' },
+  /* 半休（migration 218）: AM休=午後勤務 / PM休=午前勤務 */
+  am_off:         { label: 'AM休',   bg: 'bg-blue-50',          color: 'text-blue-700' },
+  pm_off:         { label: 'PM休',   bg: 'bg-indigo-50',        color: 'text-indigo-700' },
 };
 
 const DOW_SHORT = ['日', '月', '火', '水', '木', '金', '土'];

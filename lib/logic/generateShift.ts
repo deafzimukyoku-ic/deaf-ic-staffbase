@@ -61,11 +61,21 @@ export function generateShiftAssignments(
 
   const daysInMonth = new Date(year, month, 0).getDate();
 
-  // 休み希望をマップ化: employee_id → { requestedOffs, paidLeaves, availableDays }
+  // 休み希望をマップ化: employee_id → { requestedOffs, paidLeaves, fullAvails, amOffs, pmOffs }
   // requestedOffs = 希望休（社員が出した休み希望。migration 157 で public_holiday から改名）
+  // fullAvails = 一日出勤可 / amOffs = AM休 / pmOffs = PM休
+  //   一日出勤可を1つでも出した人は opt-in（申告日のみ出勤・空白は休み）になる。常勤・パート問わず。
+  //   旧実装は full_day_available/am_off/pm_off を availableDays に丸めて半休を消していた。
+  //   migration 218 で shift_assignments に am_off/pm_off を追加し、ここで分離して対称化する。
   const requestMap = new Map<
     string,
-    { requestedOffs: Set<string>; paidLeaves: Set<string>; availableDays: Set<string> }
+    {
+      requestedOffs: Set<string>;
+      paidLeaves: Set<string>;
+      fullAvails: Set<string>;
+      amOffs: Set<string>;
+      pmOffs: Set<string>;
+    }
   >();
 
   for (const req of shiftRequests) {
@@ -73,21 +83,18 @@ export function generateShiftAssignments(
       requestMap.set(req.employee_id, {
         requestedOffs: new Set(),
         paidLeaves: new Set(),
-        availableDays: new Set(),
+        fullAvails: new Set(),
+        amOffs: new Set(),
+        pmOffs: new Set(),
       });
     }
     const entry = requestMap.get(req.employee_id)!;
     for (const d of req.dates) {
       if (req.request_type === 'requested_off') entry.requestedOffs.add(d);
-      if (req.request_type === 'paid_leave') entry.paidLeaves.add(d);
-      // full_day_available / am_off / pm_off は「出勤可」扱い（部分的でも勤務枠あり）
-      if (
-        req.request_type === 'full_day_available' ||
-        req.request_type === 'am_off' ||
-        req.request_type === 'pm_off'
-      ) {
-        entry.availableDays.add(d);
-      }
+      else if (req.request_type === 'paid_leave') entry.paidLeaves.add(d);
+      else if (req.request_type === 'full_day_available') entry.fullAvails.add(d);
+      else if (req.request_type === 'am_off') entry.amOffs.add(d);
+      else if (req.request_type === 'pm_off') entry.pmOffs.add(d);
     }
   }
 
@@ -117,21 +124,51 @@ export function generateShiftAssignments(
       const requests = requestMap.get(s.id);
       let assignmentType: ShiftAssignmentType = 'normal';
 
-      // 休み希望の反映。社員の希望休は requested_off（希望休）として生成する。
-      // 公休（public_holiday）は管理者がシフト作成画面で明示的にマークするもので、ここでは生成しない。
+      const hasAm = requests?.amOffs.has(dateStr) ?? false;
+      const hasPm = requests?.pmOffs.has(dateStr) ?? false;
+      /* opt-in 判定: 一日出勤可(full_day_available)を1つでも出した人は
+         「申告した日だけ出勤、未記入の空白日は休み」になる（常勤・パート問わず）。 */
+      const optInAvailability = (requests?.fullAvails.size ?? 0) > 0;
+
+      // 優先順位: 終日休(希望休>有給) > 半休(AM休/PM休) > 一日出勤可 > 空白(opt-in/パート/常勤日曜は休み)。
+      // 公休（public_holiday）は管理者がシフト作成画面で明示マークするもので、ここでは生成しない。
       if (requests?.requestedOffs.has(dateStr)) {
         assignmentType = 'requested_off';
       } else if (requests?.paidLeaves.has(dateStr)) {
         assignmentType = 'paid_leave';
-      } else if (s.employment_type === 'part_time') {
-        // パートはデフォルト off。本人が「1日出勤可 / AM休 / PM休」を申請した日のみ normal で出勤割当する。
-        assignmentType = requests?.availableDays.has(dateStr) ? 'normal' : 'off';
-      } else if (dow === 0) {
-        // 常勤: 日曜は全員休み（デフォルト）
+      } else if (hasAm && hasPm) {
+        // 同日に AM休 と PM休 が両方 = 矛盾 → 終日休(希望休)に丸める
+        assignmentType = 'requested_off';
+      } else if (hasAm) {
+        assignmentType = 'am_off';
+      } else if (hasPm) {
+        assignmentType = 'pm_off';
+      } else if (requests?.fullAvails.has(dateStr)) {
+        // 一日出勤可を申告した日は出勤
+        assignmentType = 'normal';
+      } else if (optInAvailability || s.employment_type === 'part_time' || dow === 0) {
+        // 空白日: opt-in の人 / パート / 常勤の日曜 は休み
         assignmentType = 'off';
       }
+      // 上記いずれにも該当しない（常勤・一日出勤可なし・平日）は初期値 normal のまま
 
-      const isWorking = assignmentType === 'normal';
+      // 勤務時間区間: normal=職員デフォルト / pm_off=午前[出勤,13:30] / am_off=午後[14:30,退勤]
+      let startTime: string | null = null;
+      let endTime: string | null = null;
+      if (assignmentType === 'normal') {
+        startTime = s.default_start_time || '09:00';
+        endTime = s.default_end_time || '17:00';
+      } else if (assignmentType === 'pm_off') {
+        startTime = s.default_start_time || '09:30';
+        endTime = '13:30';
+      } else if (assignmentType === 'am_off') {
+        startTime = '14:30';
+        endTime = s.default_end_time || '18:00';
+      }
+
+      // 出勤系(normal/am_off/pm_off)はカバレッジ用の在席として数える（精密判定は qualifiedCoverage 側）
+      const isWorking =
+        assignmentType === 'normal' || assignmentType === 'am_off' || assignmentType === 'pm_off';
 
       if (isWorking) {
         assignedCount++;
@@ -143,8 +180,8 @@ export function generateShiftAssignments(
         facility_id: facilityId,
         employee_id: s.id,
         date: dateStr,
-        start_time: isWorking ? (s.default_start_time || '09:00') : null,
-        end_time: isWorking ? (s.default_end_time || '17:00') : null,
+        start_time: startTime,
+        end_time: endTime,
         assignment_type: assignmentType,
         is_confirmed: false,
         publish_status: 'draft',

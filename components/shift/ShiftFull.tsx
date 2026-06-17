@@ -90,6 +90,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   // 月全体の publish_status を集約。「全行 published」なら published、「全行 ready」なら ready、
   // 「全行 draft」なら draft、混在なら mixed。
   const [monthStatus, setMonthStatus] = useState<PublishStatus | 'mixed' | 'empty'>('empty');
+  /* D(shift-halfday-availability-reflection): 希望提出がシフト生成より新しい月は「要再生成」 */
+  const [needsRegen, setNeedsRegen] = useState(false);
 
   /* migration 130: 兼任職員が他施設で勤務している cell を「○○ 勤務」と表示するためのマップ。
      key = `${staff_id}_${date}`、value = 他施設名。本施設に assignment が無い cell でのみ表示。 */
@@ -277,6 +279,18 @@ export default function ShiftFull({ role }: ShiftFullProps) {
           setMonthStatus('mixed');
         }
       }
+
+      /* D: 希望提出 (shift_requests.submitted_at) がシフト生成 (shift_assignments.created_at) より
+         新しい月は draft が古い = 要再生成。生成済 (assigns あり) のときだけ判定する。 */
+      const maxSubmitted = (reqs ?? []).reduce<string>((mx, r) => {
+        const v = (r.submitted_at as string | null) ?? '';
+        return v > mx ? v : mx;
+      }, '');
+      const maxCreated = assignsArr.reduce<string>((mx, a) => {
+        const v = (a.created_at as string | null) ?? '';
+        return v > mx ? v : mx;
+      }, '');
+      setNeedsRegen(assignsArr.length > 0 && !!maxSubmitted && maxSubmitted > maxCreated);
     } catch (e) {
       setError(e instanceof Error ? e.message : '読み込み失敗');
     } finally {
@@ -425,7 +439,9 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       (editType === 'normal' ||
         editType === 'public_holiday' ||
         editType === 'requested_off' ||
-        editType === 'off') &&
+        editType === 'off' ||
+        editType === 'am_off' ||
+        editType === 'pm_off') &&
       editNote.trim()
         ? editNote.trim()
         : null;
@@ -454,8 +470,18 @@ export default function ShiftFull({ role }: ShiftFullProps) {
           { start_time: seg1.start, end_time: seg1.end, assignment_type: 'normal', note: noteForSave },
         ];
       }
+    } else if (editType === 'am_off') {
+      /* AM休: 午後勤務 [14:30, 18:00] の 1 コマ（migration 218 / 半休） */
+      segments = [
+        { start_time: '14:30', end_time: '18:00', assignment_type: 'am_off', note: noteForSave },
+      ];
+    } else if (editType === 'pm_off') {
+      /* PM休: 午前勤務 [09:30, 13:30] の 1 コマ */
+      segments = [
+        { start_time: '09:30', end_time: '13:30', assignment_type: 'pm_off', note: noteForSave },
+      ];
     } else {
-      /* normal 以外（公休 / 有給 / 休み）は時刻なしの 1 行のみ */
+      /* 公休 / 有給 / 希望休 / 休み は時刻なしの 1 行のみ */
       segments = [
         { start_time: null, end_time: null, assignment_type: editType, note: noteForSave },
       ];
@@ -603,6 +629,12 @@ export default function ShiftFull({ role }: ShiftFullProps) {
           {monthStatus === 'ready' && <Badge variant="warning">仮シフト（職員確認中）</Badge>}
           {monthStatus === 'draft' && <Badge variant="neutral">下書き</Badge>}
           {monthStatus === 'mixed' && <Badge variant="warning">部分公開（混在）</Badge>}
+          {/* D: 希望提出がシフト生成より新しい = 要再生成 */}
+          {needsRegen && (
+            <span title="この月のシフト作成後に休み希望が提出/変更されています。自動生成し直すと最新の希望が反映されます。">
+              <Badge variant="warning">⚠ 要再生成（新しい休み希望あり）</Badge>
+            </span>
+          )}
           {monthStatus !== 'empty' && (
             <MonthStatusBadge
               status={
@@ -855,18 +887,22 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                     requested_off: '希望休',
                     paid_leave: '有給',
                     off: '休み',
+                    am_off: 'AM休',
+                    pm_off: 'PM休',
                   } as Record<string, string>)[editingCellData.assignment_type]
                 : '-'}
             </p>
 
             <div className="grid grid-cols-2 gap-2">
-              {(['normal', 'public_holiday', 'requested_off', 'paid_leave', 'off'] as const).map((type) => {
+              {(['normal', 'public_holiday', 'requested_off', 'paid_leave', 'off', 'am_off', 'pm_off'] as const).map((type) => {
                 const labels: Record<ShiftAssignmentType, string> = {
                   normal: '出勤',
                   public_holiday: '公休',
                   requested_off: '希望休',
                   paid_leave: '有給',
                   off: '休み',
+                  am_off: 'AM休',
+                  pm_off: 'PM休',
                 };
                 const colors: Record<ShiftAssignmentType, string> = {
                   normal: 'var(--ink)',
@@ -874,6 +910,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                   requested_off: 'var(--gold)',
                   paid_leave: 'var(--green)',
                   off: 'var(--ink-3)',
+                  am_off: '#2563eb',
+                  pm_off: '#4f46e5',
                 };
                 const isActive = editType === type;
                 return (

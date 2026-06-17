@@ -30,6 +30,8 @@
 | 216 | `216_shift_confirmations.sql` | 2026-05-31 | 2han2be4han@gmail.com | `scripts/apply-migration-216.mjs`（新テーブル `shift_confirmations` + RLS 5本 + `sa_employee_facility_shifts`(160) を ready 含むよう drop&recreate。シフト「確認しました」機能。apply 時に employee 視点 probe で published 6月=318件（回帰なし）を確認。storage 非変更のため snapshot 不要。docs/features/shift-confirmation-and-badge.md） |
 | 217 | `217_facility_shift_view_employees_rpc.sql` | 2026-06-08 | 2han2be4han@gmail.com | `scripts/apply-migration-217.mjs`（新 SECURITY DEFINER RPC `get_my_facility_shift_view_employees(uuid[])`。/my/requests?tab=facility-shift で employee が自分しか見えなかった真因＝employees の RLS「自分のみ」+ 既存 `get_facility_members` が employee を弾く設計、を解消。全ロール対応・最小列のみ。apply 時にパレットの実 employee 視点で 1件→16件（主14+兼任2）に増えるのを確認。storage 非変更のため snapshot 不要） |
 
+| 218 | `218_shift_assignment_halfday.sql` | 2026-06-17 | 2han2be4han@gmail.com | `scripts/apply-migration-218.mjs`（`shift_assignments_assignment_type_check` に `am_off`/`pm_off` 追加。半休をシフト割当でも表現可能にする。apply時に am_off の INSERT が制約を通過することを rollback付きで実証。storage非変更のため snapshot不要。docs/features/shift-halfday-availability-reflection.md） |
+
 ## 既知の不整合 (適用済 ≠ migration ファイル)
 
 | 領域 | 内容 | 発覚日 | 対応 |

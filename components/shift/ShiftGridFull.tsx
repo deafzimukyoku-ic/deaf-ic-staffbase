@@ -70,6 +70,10 @@ const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; color: string; b
   requested_off: { label: '希望休', color: 'var(--gold)', bg: 'var(--gold-pale)' },
   paid_leave: { label: '有給', color: 'var(--green)', bg: 'var(--green-pale)' },
   off: { label: '休', color: 'var(--ink-3)', bg: 'rgba(0,0,0,0.03)' },
+  /* 半休（migration 218）: 休み希望UIの AM休=青系 / PM休=藍系 に合わせる。
+     AM休=午後勤務[14:30,退勤] / PM休=午前勤務[出勤,13:30] */
+  am_off: { label: 'AM休', color: '#2563eb', bg: '#eff6ff' },
+  pm_off: { label: 'PM休', color: '#4f46e5', bg: '#eef2ff' },
 };
 
 const DOW_SHORT = ['日', '月', '火', '水', '木', '金', '土'];
@@ -128,7 +132,8 @@ export default function ShiftGridFull({
     const rec = countsByStaff.get(staffId);
     if (!rec) return;
     const type = pickPrimary(segs)?.assignment_type;
-    if (type === 'normal') rec.work++;
+    // 半休(am_off/pm_off)も出勤日として work に計上（半日でも出勤日）
+    if (type === 'normal' || type === 'am_off' || type === 'pm_off') rec.work++;
     else if (type === 'public_holiday') rec.ph++;
     else if (type === 'requested_off') rec.ro++;
     else if (type === 'paid_leave') rec.pl++;
@@ -146,7 +151,8 @@ export default function ShiftGridFull({
     let count = 0;
     staff.forEach((s) => {
       const segs = cellSegmentsMap.get(`${s.id}_${d.dateStr}`);
-      if (segs && segs.some((c) => c.assignment_type === 'normal')) count++;
+      // 半休(am_off/pm_off)も在席日として日次出勤数に含める
+      if (segs && segs.some((c) => c.assignment_type === 'normal' || c.assignment_type === 'am_off' || c.assignment_type === 'pm_off')) count++;
     });
     dailyWorkingCount.set(d.dateStr, count);
   });
