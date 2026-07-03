@@ -41,6 +41,12 @@ interface ShiftWarning {
   message: string;
 }
 
+/** 兼任職員の他施設勤務（先方要望④）。name=施設名（複数なら「・」連結）、detail=勤務時刻帯 */
+export interface CrossFacilityWork {
+  name: string;
+  detail: string;
+}
+
 interface ShiftGridProps {
   year: number;
   month: number;
@@ -59,9 +65,18 @@ interface ShiftGridProps {
   minQualifiedStaff?: number;
   /** migration 130: 現在表示中の facility id。兼任職員判定で primary_facility_id と比較する。 */
   currentFacilityId?: string | null;
-  /** migration 130: 兼任職員が他施設で勤務している cell の表示用マップ。
-       key=`${staff_id}_${date}`、value=他施設名。assignment 未設定 cell でのみ「○○ 勤務」と表示。 */
-  crossFacilityWorkByCell?: Map<string, string>;
+  /** migration 130 → 先方要望④で拡張: 兼任職員が他施設で勤務している cell の表示用マップ。
+       key=`${staff_id}_${date}`。休みセルは「○○ 勤務」バッジ、出勤系セルは ⚠ 重複マーカーを表示
+       （従来は本施設に行が 1 つでもあると非表示になり、生成後は事実上見えなかった）。 */
+  crossFacilityWorkByCell?: Map<string, CrossFacilityWork>;
+  /** migration 219: 日別メモ2行（学校行事・施設行事・会議など）。key=`${date}_${rowNo}` */
+  dayNotes?: Map<string, string>;
+  /** メモ編集の保存（blur 時）。未指定ならメモ行自体を描画しない */
+  onDayNoteSave?: (date: string, rowNo: 1 | 2, text: string) => void;
+  /** 先方要望②: セルの右クリック（Excel風コピー/貼り付けメニュー起動）。clientX/Y で表示位置を渡す */
+  onCellContextMenu?: (staffId: string, date: string, clientX: number, clientY: number) => void;
+  /** 貼り付けモード中のコピー元セル key=`${staffId}_${date}`。うっすらハイライトして所在を示す */
+  copiedCellKey?: string | null;
 }
 
 const TYPE_CONFIG: Record<ShiftAssignmentType, { label: string; color: string; bg: string }> = {
@@ -92,6 +107,10 @@ export default function ShiftGridFull({
   minQualifiedStaff = 2,
   currentFacilityId = null,
   crossFacilityWorkByCell,
+  dayNotes,
+  onDayNoteSave,
+  onCellContextMenu,
+  copiedCellKey,
 }: ShiftGridProps) {
   const daysInMonth = getDaysInMonth(new Date(year, month - 1));
   const dates: { day: number; dow: number; dateStr: string }[] = [];
@@ -280,6 +299,74 @@ export default function ShiftGridFull({
           </tr>
         </thead>
         <tbody>
+          {/* 日別メモ2行（migration 219 / 先方要望①）: 日付ヘッダと職員行の間。
+              入力は非制御 (defaultValue + onBlur 保存) — 制御化すると 31日×2行の入力の
+              たびにグリッド全体が再レンダされ重くなるため。key に保存値を含めて
+              refetch 後の値変化時のみ remount して同期する。 */}
+          {onDayNoteSave &&
+            ([1, 2] as const).map((rowNo) => (
+              <tr key={`day-note-${rowNo}`}>
+                <td
+                  className="shift-grid-sticky-staff sticky left-0 z-30 px-4 py-1 whitespace-nowrap"
+                  style={{
+                    borderBottom: rowNo === 2 ? '2px solid var(--rule-strong)' : '1px solid var(--rule)',
+                    borderRight: '2px solid var(--rule-strong)',
+                    color: 'var(--ink-2)',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    boxShadow: '4px 0 6px rgba(0,0,0,0.02)',
+                  }}
+                  title="学校行事・施設行事・会議などを自由に記入できます（シフト作成用メモ。職員には公開されません）"
+                >
+                  📝 メモ {rowNo}
+                </td>
+                {dates.map((d) => {
+                  const noteKey = `${d.dateStr}_${rowNo}`;
+                  const value = dayNotes?.get(noteKey) ?? '';
+                  const isTodayCol = d.dateStr === today;
+                  return (
+                    <td
+                      key={d.dateStr}
+                      className="p-0 align-middle"
+                      style={{
+                        borderBottom: rowNo === 2 ? '2px solid var(--rule-strong)' : '1px solid var(--rule)',
+                        borderRight: isTodayCol ? '2px solid var(--accent)' : '1px solid var(--rule)',
+                        borderLeft: isTodayCol ? '2px solid var(--accent)' : undefined,
+                        background: getCellBg(d.dow),
+                      }}
+                    >
+                      <input
+                        type="text"
+                        key={`${noteKey}_${value}`}
+                        defaultValue={value}
+                        maxLength={50}
+                        onBlur={(e) => {
+                          const v = e.currentTarget.value.trim();
+                          if (v !== value) onDayNoteSave(d.dateStr, rowNo, v);
+                        }}
+                        onKeyDown={(e) => {
+                          // Enter で確定（blur → 保存）。キーボードのみでも編集を完結できるように
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        className="day-note-input w-full text-center outline-none focus:bg-[var(--accent-pale)]"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          fontSize: '0.62rem',
+                          fontWeight: 600,
+                          color: 'var(--accent)',
+                          padding: '4px 2px',
+                          minWidth: 0,
+                        }}
+                        aria-label={`${month}月${d.day}日 メモ${rowNo}`}
+                        title={value || undefined}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+
           {staff.map((s) => (
             <tr
               key={s.id}
@@ -339,28 +426,45 @@ export default function ShiftGridFull({
                 const cell = pickPrimary(segs);
                 const type = cell?.assignment_type || 'off';
                 const config = TYPE_CONFIG[type];
-                /* migration 130: 本施設に assignment が無く、かつ他施設で勤務している cell は
-                   「○○ 勤務」と表示する（cell の type は 'off' のまま） */
-                const crossFacilityName = (segs.length === 0 && crossFacilityWorkByCell)
-                  ? crossFacilityWorkByCell.get(`${s.id}_${d.dateStr}`)
-                  : undefined;
-                const baseTitle =
-                  type === 'normal'
-                    ? segs
-                        .filter((c) => c.assignment_type === 'normal')
-                        .map((c) => `${c.start_time}〜${c.end_time}`)
-                        .join(' / ')
-                    : crossFacilityName
-                    ? `${crossFacilityName} で勤務予定`
-                    : config.label;
+                /* 先方要望④（全施設同時作成の相互反映）。判定は【時間が入っているか】:
+                   crossWork は「他施設に時間ありの勤務がある」ときだけ存在する（ShiftFull 側で
+                   start_time NULL は除外済＝公休/希望休/有給/休みは他施設勤務に数えない）。
+                   - 自施設が休(off)/未設定 → 「○○ 勤務」バッジに置き換え
+                   - 自施設も時間あり(normal/am_off/pm_off) → 二重アサイン ⚠（赤）
+                   - 自施設が公休/希望休/有給（時間なしの明示休暇）→ 他施設バッジは出さない（そのラベルのみ） */
+                const crossWork = crossFacilityWorkByCell?.get(`${s.id}_${d.dateStr}`);
+                /* 自施設で時間が入っている = ここで勤務している（normal/am_off/pm_off はいずれも時刻を持つ） */
+                const selfHasTime = type === 'normal' || type === 'am_off' || type === 'pm_off';
+                const showCrossBadge = !!crossWork && type === 'off';
+                const crossTitle = crossWork
+                  ? `${crossWork.name} で勤務予定${crossWork.detail ? `（${crossWork.detail}）` : ''}`
+                  : '';
+                const titleBits: string[] = [];
+                if (type === 'normal') {
+                  titleBits.push(
+                    segs
+                      .filter((c) => c.assignment_type === 'normal')
+                      .map((c) => `${c.start_time}〜${c.end_time}`)
+                      .join(' / ')
+                  );
+                } else if (!showCrossBadge) {
+                  titleBits.push(config.label);
+                }
+                /* crossWork をツールチップに出すのは「休みセルのバッジ」または「自施設も勤務=重複」のときだけ。
+                   公休/希望休/有給には出さない（先方要望: これらは空）。 */
+                if (crossWork && (showCrossBadge || selfHasTime)) {
+                  titleBits.push(selfHasTime ? `⚠ ${crossTitle} — 重複に注意` : crossTitle);
+                }
+                const baseTitle = titleBits.filter(Boolean).join('\n') || config.label;
                 const normalSegs = segs.filter((c) => c.assignment_type === 'normal');
 
                 const cellBg = type !== 'normal'
-                  ? (crossFacilityName ? 'var(--accent-pale)' : config.bg)
+                  ? (showCrossBadge ? 'var(--accent-pale)' : config.bg)
                   : s.is_qualified
                   ? 'var(--gold-pale, #fdf6e3)'
                   : getCellBg(d.dow);
                 const isTodayCol = d.dateStr === today;
+                const isCopiedCell = copiedCellKey === `${s.id}_${d.dateStr}`;
                 return (
                   <td
                     key={d.dateStr}
@@ -371,8 +475,19 @@ export default function ShiftGridFull({
                       borderLeft: isTodayCol ? '2px solid var(--accent)' : undefined,
                       background: cellBg,
                       position: 'relative',
+                      /* コピー元セルは Excel の「点線マーキー」風に破線枠でハイライト */
+                      outline: isCopiedCell ? '2px dashed var(--accent)' : undefined,
+                      outlineOffset: isCopiedCell ? '-2px' : undefined,
                     }}
                     onClick={() => onCellClick(s.id, d.dateStr)}
+                    onContextMenu={
+                      onCellContextMenu
+                        ? (e) => {
+                            e.preventDefault();
+                            onCellContextMenu(s.id, d.dateStr, e.clientX, e.clientY);
+                          }
+                        : undefined
+                    }
                     title={baseTitle}
                   >
                     {type === 'normal' ? (
@@ -412,10 +527,18 @@ export default function ShiftGridFull({
                             )}
                           </>
                         )}
+                        {/* 自施設で勤務(時間あり)なのに他施設でも勤務 = 二重アサイン警告（色+アイコン+施設名） */}
+                        {crossWork && (
+                          <span
+                            className="font-bold"
+                            style={{ color: 'var(--red)', fontSize: '0.58rem', lineHeight: 1.1 }}
+                          >
+                            ⚠{crossWork.name}
+                          </span>
+                        )}
                       </div>
-                    ) : crossFacilityName ? (
-                      /* migration 130: 他施設で勤務する日 — 本施設シフト編集はクリックで可能だが
-                         デフォルト表示は「○○ 勤務」のバッジ */
+                    ) : showCrossBadge ? (
+                      /* 他施設で勤務する日（本施設は休み扱い） — クリックで本施設シフトの編集は可能 */
                       <div className="flex flex-col gap-0.5 leading-tight py-0.5">
                         <span
                           className="font-semibold"
@@ -425,7 +548,7 @@ export default function ShiftGridFull({
                             lineHeight: 1.1,
                           }}
                         >
-                          {crossFacilityName}
+                          {crossWork?.name}
                         </span>
                         <span style={{ color: 'var(--accent)', fontSize: '0.6rem', lineHeight: 1.1 }}>勤務</span>
                       </div>
@@ -446,6 +569,16 @@ export default function ShiftGridFull({
                         <span className="font-semibold" style={{ color: config.color, fontSize: '0.7rem' }}>
                           {config.label}
                         </span>
+                        {/* 自施設も時間あり(半休 am_off/pm_off)のときだけ ⚠重複。
+                            公休/希望休/有給(時間なし)には他施設バッジを出さない（先方要望: 空）。 */}
+                        {crossWork && selfHasTime && (
+                          <span
+                            className="font-bold"
+                            style={{ color: 'var(--red)', fontSize: '0.58rem', lineHeight: 1.1 }}
+                          >
+                            ⚠{crossWork.name}
+                          </span>
+                        )}
                       </div>
                     )}
                   </td>

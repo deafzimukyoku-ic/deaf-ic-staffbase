@@ -355,6 +355,19 @@ export interface EventRow {
   created_at: string;
 }
 
+/* シフト表の日別メモ2行 (migration 219)。学校行事・施設行事・会議など。
+   公開フロー(publish_status)非連動 = 管理側の作成支援メモ。 */
+export interface ShiftDayNoteRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  date: string; // YYYY-MM-DD
+  row_no: 1 | 2;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChildRow {
   id: string;
   tenant_id: string;

@@ -129,8 +129,12 @@ export function generateShiftAssignments(
       /* opt-in 判定: 一日出勤可(full_day_available)を1つでも出した人は
          「申告した日だけ出勤、未記入の空白日は休み」になる（常勤・パート問わず）。 */
       const optInAvailability = (requests?.fullAvails.size ?? 0) > 0;
+      /* 兼任判定: 主所属が生成対象 facility と異なる職員（応援で来る人）は、
+         空白日を出勤で埋めない。全施設が同時にシフトを作ると兼任者が
+         両施設フル出勤の二重アサインになるため（先方要望④）。勤務日は手動/コピペで設定する。 */
+      const isCrossFacility = !!s.facility_id && s.facility_id !== facilityId;
 
-      // 優先順位: 終日休(希望休>有給) > 半休(AM休/PM休) > 一日出勤可 > 空白(opt-in/パート/常勤日曜は休み)。
+      // 優先順位: 終日休(希望休>有給) > 半休(AM休/PM休) > 一日出勤可 > 空白(opt-in/パート/兼任/常勤日曜は休み)。
       // 公休（public_holiday）は管理者がシフト作成画面で明示マークするもので、ここでは生成しない。
       if (requests?.requestedOffs.has(dateStr)) {
         assignmentType = 'requested_off';
@@ -146,8 +150,8 @@ export function generateShiftAssignments(
       } else if (requests?.fullAvails.has(dateStr)) {
         // 一日出勤可を申告した日は出勤
         assignmentType = 'normal';
-      } else if (optInAvailability || s.employment_type === 'part_time' || dow === 0) {
-        // 空白日: opt-in の人 / パート / 常勤の日曜 は休み
+      } else if (optInAvailability || s.employment_type === 'part_time' || isCrossFacility || dow === 0) {
+        // 空白日: opt-in の人 / パート / 兼任（主所属が他施設）/ 常勤の日曜 は休み
         assignmentType = 'off';
       }
       // 上記いずれにも該当しない（常勤・一日出勤可なし・平日）は初期値 normal のまま

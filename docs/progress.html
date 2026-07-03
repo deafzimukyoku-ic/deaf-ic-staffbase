@@ -47,7 +47,26 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-26（Drive 動画 proxy 撤去 + constraints.md §1 新設 完了） / 全体完了率: 約 98%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-07-03（先方要望 シフト表3機能 実装完了・ローカル確認済） / 全体完了率: 約 98%</p>
+
+<!-- 2026-07-03 先方要望①②④: シフト表3機能 -->
+<div class="phase">
+  <h2>シフト表3機能: 行事メモ2行 / セルコピペ / 兼任相互反映（先方要望①②④, 2026-07-03） <span class="phase-pct">コード実装完了 / ローカル確認済 / push 待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">仕様書 docs/features/shift-notes-copypaste-crossfacility.md。migration 219 適用済。②③はコピペで対応（当初B案の左クリック→ユーザー指摘でExcel風の右クリックメニューに変更）。③(選択式プリセット)は保留。</td></tr>
+      <tr><td>① 日別メモ2行テーブル + RLS</td><td class="files">supabase/migrations/219_shift_day_notes.sql, scripts/apply-migration-219.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shift_day_notes(date,row_no 1|2,content) UNIQUE + RLS2本。apply時 upsert→update→delete を rollback付き実証</td></tr>
+      <tr><td>① メモ行の描画・インライン編集・印刷</td><td class="files">components/shift/ShiftGridFull.tsx, components/shift/ShiftFull.tsx, lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>日付ヘッダ直下に「📝メモ1/2」。非制御input(onBlur upsert/空はDELETE)。employee不可視。印刷は値のみ印字</td></tr>
+      <tr><td>② セルのコピー&ペースト（Excel風 右クリック）</td><td class="files">components/shift/ShiftFull.tsx, ShiftGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>セル右クリック→メニュー「📋コピー」「📥貼り付け」。左クリックは従来通り編集モーダル(挙動不変)。コピー元は破線枠。バナー＋Esc/外側クリック/スクロールで閉じる。分割/半休/休暇もコピー可。公開済み月は二重ガードで不可</td></tr>
+      <tr><td>④ 兼任の他施設勤務を全施設同時作成(draft)でも相互反映</td><td class="files">lib/logic/generateShift.ts, components/shift/ShiftFull.tsx, ShiftGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>判定は【時間が入っているか】(isAttended哲学)。他施設に時間あり→「○○勤務」/自施設も時間あり→⚠赤重複/公休・希望休・有給(時間なし)→他施設バッジ空。fetchは.not(start_time,is,null)。生成は兼任者を空白日off</td></tr>
+      <tr><td>④ RLS: 他施設draft可視の実証</td><td class="files">scripts/probe-rls-cross-facility-draft.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>manager になりすまし RLS 適用下で他施設 draft 行を SELECT 可能を確認（寺田→本部draft39, 田中→本部draft39）。既存 sa_manager_cross_facility_select は publish_status 無制限</td></tr>
+      <tr><td>型チェック / build</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc --noEmit 0エラー / next build 成功</td></tr>
+      <tr><td>ローカル確認 / push</td><td class="files">—</td><td><span class="status todo">進行中</span></td><td class="pct">70%</td><td>dev(6001)起動・保護ルート/loginリダイレクト・コンソールエラー0。職員ログインでのUI実操作確認と push は指示待ち</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① メモ入力→blur→リロードで残る/空で消える/manager自施設のみ/employee不可視 ② コピペ: セル右クリック→コピー→別セル右クリック→貼り付け。出勤(単発/分割)・公休・半休を複製/左クリックは編集モーダルのまま/Esc・外側クリックで閉じる/公開済み不可④ 兼任者が他施設でdraft出勤の日、自施設グリッドのoffセルに「○○勤務」・出勤セルに⚠が(リロード後)出るか / 主所属側の通常スケジュールは従来どおりか</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-05-26 計画 #10: Drive 動画 proxy 撤去（Fast Origin Transfer 直撃 + 再生開始 10秒+ の構造修正） -->
 <div class="phase">

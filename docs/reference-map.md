@@ -59,6 +59,38 @@
 | 214 | 214_shift_manager_staff_edit_rpc.sql | **shift_manager 職員編集 RPC 2 本**。`update_staff_shift_fields(...)`（シフト系9項目のみ更新、role/給与/氏名は不可）+ `reorder_staff_shift_orders(uuid[])`（shift_display_order 一括）。SECURITY DEFINER、admin=テナント内 / manager・shift_manager=自管轄施設(主所属 or 兼任)。StaffSettingsFull が shift_manager のときのみ RPC 経由。児童編集は children の既存 RLS 許可分をフロント解除（ChildrenSettingsFull の assertWritable 撤去）。施設セレクタ・社員画面リンクは shift_manager / 兼務なし manager で非表示（layout.tsx）。docs/features/shift-manager-children-staff-edit.md | ✅ 適用済 |
 | 215 | 215_notification_queue_first_scheduled_default.sql | **シフト通知 enqueue 全失敗の真因修正（再発防止ガード）**。`notification_queue.first_scheduled_at` に `DEFAULT now()` を付与。180 で NOT NULL 化された同列を `app/api/shifts/transition` の enqueue INSERT が設定し忘れ → NOT NULL 違反で全失敗 → shift_ready/shift_publish 通知ゼロ（握り潰し）。docs/features/shift-publish-notification-and-default-month.md | ✅ 適用済 |
 | 216 | 216_shift_confirmations.sql | **シフト「確認しました」機能 + ready 可視化**。新テーブル `shift_confirmations(tenant_id, facility_id, employee_id, month, confirmed_count, confirmed_at)` UNIQUE(employee,facility,month) + RLS 5本（本人 SELECT/INSERT/UPDATE、manager/admin DELETE）。`sa_employee_facility_shifts`(160) を `published` → `('ready','published')` に drop&recreate（職員が施設全員分の仮シフトをレビュー可に）。docs/features/shift-confirmation-and-badge.md | ✅ 適用済 |
+| 217 | 217_facility_shift_view_employees_rpc.sql | **`get_my_facility_shift_view_employees(uuid[])` RPC 新設**。/my/requests?tab=facility-shift で employee が自分しか見えなかった件の解消。全ロール対応・最小列のみ返す SECURITY DEFINER | ✅ 適用済 |
+| 218 | 218_shift_assignment_halfday.sql | **`shift_assignments_assignment_type_check` に `am_off`/`pm_off` 追加**。半休をシフト割当でも表現可能に。docs/features/shift-halfday-availability-reflection.md | ✅ 適用済 |
+| 219 | 219_shift_day_notes.sql | **シフト表 日別メモ2行 (先方要望①)**。新テーブル `shift_day_notes(tenant_id, facility_id, date, row_no 1\|2, content)` UNIQUE(tenant,facility,date,row_no) + set_updated_at トリガ + RLS 2本（admin=テナント全域 / manager・shift_manager=管轄施設。employee ポリシーなし）。publish_status 非連動の作成支援メモ。docs/features/shift-notes-copypaste-crossfacility.md | ✅ 適用済 |
+
+---
+
+## 0.18 シフト表3機能: 行事メモ2行 / セルコピペ / 兼任相互反映（先方要望①②④, 2026-07-03）
+
+仕様: [docs/features/shift-notes-copypaste-crossfacility.md](features/shift-notes-copypaste-crossfacility.md)
+
+### ① 日別メモ2行（`shift_day_notes` / migration 219）
+- 日付ヘッダ直下に「📝 メモ1/2」行を追加。学校行事・施設行事・会議などを自由記入
+- 非制御 input（defaultValue + onBlur upsert / 空文字は DELETE）でグリッド全再レンダを避ける
+- RLS: employee 不可視。印刷時は枠を消して値だけ印字（`.day-note-input` print CSS）
+
+### ② セルのコピー&ペースト（Excel風 右クリックメニュー / DB変更なし）
+- セルを**右クリック**→メニュー「📋 コピー」「📥 貼り付け」。左クリックは従来どおり編集モーダル（挙動不変）
+- `ShiftGridFull` の `<td>` に `onCellContextMenu`（preventDefault + 座標）、`ShiftFull` が fixed メニュー描画。コピー元は破線 outline
+- コピー中バナー + Esc/外側クリック/スクロールで閉じる。月/施設切替で解除。公開済み月は二重ガードで不可
+- パート職員の同一勤務時間の再入力を省力化
+
+### ④ 兼任の他施設勤務を「全施設同時作成(draft混在)」でも相互反映
+- **真因**: 表示条件が `segs.length === 0`（本施設に行が1つでもあると非表示）。全施設が同時生成すると兼任者にも本施設行ができるためバッジが消えていた。加えて生成が兼任者を非主所属施設でフル出勤(normal)で埋め、二重アサインを量産
+- **判定基準（先方指摘で確定）**: 「他施設勤務」は **他施設セルに時間(start_time)が入っているか** で判定（`isAttended` と同哲学）。公休/希望休/有給/休みは時間 NULL なので他施設勤務に数えない
+- **修正**: (a) `generateShift.ts` で兼任職員（`s.facility_id ≠ 生成facility`）の空白日を `off` に。(b) 他施設 fetch を `.not('start_time','is',null)`（時間ありのみ）に。(c) 表示: 自施設 off/未設定→「○○ 勤務」、自施設も時間あり→ ⚠赤 重複、自施設が公休/希望休/有給→ 他施設バッジ非表示（空）。値を `{name, detail(時刻)}` に集約
+- RLS は既存の `sa_manager_cross_facility_select`(131/140) が publish_status 無制限 = draft も可視。`scripts/probe-rls-cross-facility-draft.mjs` で「manager が他施設 draft 行を RLS 越しに SELECT 可能」を実証済
+
+### 参照テーブル・カラム・型・関数
+- テーブル: `shift_day_notes`(新) / `shift_assignments`(cross fetch) / `employee_facilities`(兼任) / `facilities`(名称)
+- 型: `ShiftDayNoteRow`(新, lib/types.ts) / `CrossFacilityWork`(新, ShiftGridFull.tsx export)
+- 関数: `replaceShiftDay`(lib/api/shiftAssignments.ts) / `get_my_managed_facility_ids`・`employee_in_my_managed_facilities`(RLS)
+- 編集ファイル: `lib/logic/generateShift.ts` / `components/shift/ShiftFull.tsx` / `components/shift/ShiftGridFull.tsx` / `lib/types.ts` / `supabase/migrations/219_shift_day_notes.sql`
 
 ---
 

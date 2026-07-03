@@ -6,7 +6,7 @@ import { format, getDaysInMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import MonthStepper from '@/components/shift/MonthStepper';
 import { MonthStatusBadge } from '@/components/shift/MonthStatusBadge';
-import ShiftGridFull from '@/components/shift/ShiftGridFull';
+import ShiftGridFull, { type CrossFacilityWork } from '@/components/shift/ShiftGridFull';
 import ApprovalQueueFull from '@/components/shift/ApprovalQueueFull';
 import Button from '@/components/shift-compat/Button';
 import Badge from '@/components/shift-compat/Badge';
@@ -93,9 +93,26 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   /* D(shift-halfday-availability-reflection): 希望提出がシフト生成より新しい月は「要再生成」 */
   const [needsRegen, setNeedsRegen] = useState(false);
 
-  /* migration 130: 兼任職員が他施設で勤務している cell を「○○ 勤務」と表示するためのマップ。
-     key = `${staff_id}_${date}`、value = 他施設名。本施設に assignment が無い cell でのみ表示。 */
-  const [crossFacilityWorkByCell, setCrossFacilityWorkByCell] = useState<Map<string, string>>(new Map());
+  /* migration 130 → 先方要望④で拡張: 兼任職員が他施設で勤務している cell の表示マップ。
+     key = `${staff_id}_${date}`。draft 含む全 publish_status を対象にし（全施設同時作成でも
+     相互反映）、休みセルは「○○ 勤務」バッジ / 出勤系セルは ⚠ 重複マーカーに使う。 */
+  const [crossFacilityWorkByCell, setCrossFacilityWorkByCell] = useState<Map<string, CrossFacilityWork>>(new Map());
+
+  /* migration 219 / 先方要望①: 日別メモ2行。key = `${date}_${rowNo}` */
+  const [dayNotes, setDayNotes] = useState<Map<string, string>>(new Map());
+
+  /* 先方要望②: Excel 風の右クリック コピー&ペースト。
+     - セルを右クリック → メニュー（コピー / 貼り付け）
+     - 左クリックは従来どおり編集モーダル（挙動を変えない）
+     copiedDay は「コピー中」の内容。sourceKey はコピー元セル（点線ハイライト用）。 */
+  const [copiedDay, setCopiedDay] = useState<
+    { segments: ShiftSegmentInput[]; label: string; sourceKey: string } | null
+  >(null);
+  const [pasteCount, setPasteCount] = useState(0);
+  /* 右クリックメニューの表示状態（対象セル + 画面座標） */
+  const [cellMenu, setCellMenu] = useState<
+    { staffId: string; date: string; x: number; y: number } | null
+  >(null);
 
   const [editingCell, setEditingCell] = useState<{ staffId: string; date: string } | null>(null);
   const [editType, setEditType] = useState<ShiftAssignmentType>('normal');
@@ -212,19 +229,21 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         .gte('date', from)
         .lte('date', to);
 
-      // migration 130: 兼任職員の他施設での勤務 (assignment_type='normal') を fetch して
-      // 本施設シフト表で「○○ 勤務」と表示する
+      // migration 130 → 先方要望④: 兼任職員の他施設での勤務を fetch して相互反映する。
+      // 「他施設勤務」の判定は assignment_type ではなく【時間(start_time)が入っているか】で行う
+      // （公休/希望休/有給/休みは時間 NULL なので対象外。isAttended と同じ「時間があれば勤務」哲学）。
+      // publish_status は絞らない（全施設が同時に draft 作成中でも見える。RLS は 131/140 で担保）。
       const memberIds = emps.map((e) => e.id);
       const { data: crossAssigns } = memberIds.length === 0
         ? { data: [] }
         : await supabase
             .from('shift_assignments')
-            .select('employee_id, date, facility_id, assignment_type')
+            .select('employee_id, date, facility_id, start_time, end_time')
             .neq('facility_id', facilityId)
             .in('employee_id', memberIds)
             .gte('date', from)
             .lte('date', to)
-            .eq('assignment_type', 'normal');
+            .not('start_time', 'is', null);
 
       // facility 名のマップを作成（バッジ表示用）
       const { data: facsList } = await supabase
@@ -233,12 +252,43 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         .eq('tenant_id', emps && emps.length > 0 ? emps[0].tenant_id : '');
       const facilityNames = new Map((facsList ?? []).map((f) => [f.id, f.name as string]));
 
-      const crossMap = new Map<string, string>();
-      for (const a of (crossAssigns ?? []) as Array<{ employee_id: string; date: string; facility_id: string }>) {
+      /* 同一職員・同一日に複数施設/複数コマがあり得るので集約してから map 化。
+         時間が入っている行のみ（= 実勤務）を「他施設勤務」として扱う。 */
+      const crossAgg = new Map<string, { names: Set<string>; times: string[] }>();
+      for (const a of (crossAssigns ?? []) as Array<{
+        employee_id: string; date: string; facility_id: string;
+        start_time: string | null; end_time: string | null;
+      }>) {
+        if (!a.start_time) continue; // 時間なしは勤務とみなさない（二重ガード）
         const key = `${a.employee_id}_${a.date}`;
-        crossMap.set(key, facilityNames.get(a.facility_id) ?? '他施設');
+        const rec = crossAgg.get(key) ?? { names: new Set<string>(), times: [] };
+        rec.names.add(facilityNames.get(a.facility_id) ?? '他施設');
+        rec.times.push(
+          a.end_time ? `${a.start_time.slice(0, 5)}-${a.end_time.slice(0, 5)}` : a.start_time.slice(0, 5)
+        );
+        crossAgg.set(key, rec);
       }
+      const crossMap = new Map<string, CrossFacilityWork>();
+      crossAgg.forEach((rec, key) => {
+        crossMap.set(key, {
+          name: Array.from(rec.names).join('・'),
+          detail: rec.times.sort().join(' / '),
+        });
+      });
       setCrossFacilityWorkByCell(crossMap);
+
+      // migration 219: 日別メモ2行
+      const { data: noteRows } = await supabase
+        .from('shift_day_notes')
+        .select('date, row_no, content')
+        .eq('facility_id', facilityId)
+        .gte('date', from)
+        .lte('date', to);
+      const notesMap = new Map<string, string>();
+      for (const n of (noteRows ?? []) as Array<{ date: string; row_no: number; content: string }>) {
+        notesMap.set(`${n.date}_${n.row_no}`, n.content);
+      }
+      setDayNotes(notesMap);
 
       // facility_shift_settings: コアタイム + 有資格者基準（migration 116）
       const { data: fss } = await supabase
@@ -302,6 +352,77 @@ export default function ShiftFull({ role }: ShiftFullProps) {
     void fetchAll();
   }, [fetchAll]);
 
+  /* 貼り付けモードは月・施設をまたいで持ち越さない（誤爆防止） */
+  useEffect(() => {
+    setCopiedDay(null);
+    setPasteCount(0);
+  }, [facilityId, monthStr]);
+
+  /* Esc: 右クリックメニューを閉じる／コピー中なら解除。キーボードのみでも操作を中断できるように */
+  useEffect(() => {
+    if (!copiedDay && !cellMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (cellMenu) setCellMenu(null);
+        else {
+          setCopiedDay(null);
+          setPasteCount(0);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [copiedDay, cellMenu]);
+
+  /* 右クリックメニューは、外側クリック・スクロールで閉じる（Excel の文脈メニューと同じ体感） */
+  useEffect(() => {
+    if (!cellMenu) return;
+    const close = () => setCellMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [cellMenu]);
+
+  /* migration 219: 日別メモの保存（blur 時）。空文字は行削除でゴミレコードを残さない */
+  const handleDayNoteSave = useCallback(
+    async (date: string, rowNo: 1 | 2, text: string) => {
+      if (!facilityId || !tenantId) return;
+      const content = text.trim().slice(0, 50);
+      const key = `${date}_${rowNo}`;
+      try {
+        if (!content) {
+          const { error: e } = await supabase
+            .from('shift_day_notes')
+            .delete()
+            .eq('facility_id', facilityId)
+            .eq('date', date)
+            .eq('row_no', rowNo);
+          if (e) throw new Error(e.message);
+          setDayNotes((prev) => {
+            const m = new Map(prev);
+            m.delete(key);
+            return m;
+          });
+        } else {
+          const { error: e } = await supabase.from('shift_day_notes').upsert(
+            { tenant_id: tenantId, facility_id: facilityId, date, row_no: rowNo, content },
+            { onConflict: 'tenant_id,facility_id,date,row_no' }
+          );
+          if (e) throw new Error(e.message);
+          setDayNotes((prev) => new Map(prev).set(key, content));
+        }
+      } catch (e) {
+        toast.error(`メモの保存に失敗しました: ${e instanceof Error ? e.message : '不明なエラー'}`);
+      }
+    },
+    [supabase, facilityId, tenantId]
+  );
+
   const handleGenerate = async () => {
     if (!facilityId || !tenantId) {
       alert('施設または職員情報が読み込まれていません');
@@ -363,6 +484,122 @@ export default function ShiftFull({ role }: ShiftFullProps) {
     }
     setWarnings(result.warnings);
     await fetchAll();
+  };
+
+  /* 兼任職員の他施設勤務との重複を保存後に警告（保存はブロックしない）。
+     モーダル保存と貼り付けの両経路で使う。判定は【時間が入っているか】で統一。 */
+  const warnCrossFacilityConflict = useCallback(
+    async (staffId: string, date: string) => {
+      if (!facilityId) return;
+      const { data: conflicts } = await supabase
+        .from('shift_assignments')
+        .select('facility_id, start_time, end_time')
+        .eq('employee_id', staffId)
+        .eq('date', date)
+        .not('start_time', 'is', null)
+        .neq('facility_id', facilityId);
+      if (conflicts && conflicts.length > 0) {
+        const { data: facsList } = await supabase
+          .from('facilities')
+          .select('id, name')
+          .in('id', conflicts.map((c) => c.facility_id));
+        const facName = (facsList ?? []).find((f) => f.id === conflicts[0].facility_id)?.name ?? '他事業所';
+        const staffName = staff.find((s) => s.id === staffId)?.name ?? '対象職員';
+        toast.warning(
+          `${staffName} は ${date} に「${facName}」でも勤務予定です。重複に注意してください。`,
+          { duration: 7000 }
+        );
+      }
+    },
+    [supabase, facilityId, staff]
+  );
+
+  /* 先方要望②: コピー元セルの保存済みセグメントから複製データを組み立てる（右クリック「コピー」用） */
+  const buildCopiedDay = (
+    staffId: string,
+    date: string
+  ): { segments: ShiftSegmentInput[]; label: string; sourceKey: string } | null => {
+    const segs = cells
+      .filter((c) => c.staff_id === staffId && c.date === date)
+      .sort((a, b) => (a.segment_order ?? 0) - (b.segment_order ?? 0));
+    if (segs.length === 0) return null;
+    const segments: ShiftSegmentInput[] = segs.map((c) => ({
+      start_time: c.start_time,
+      end_time: c.end_time,
+      assignment_type: c.assignment_type,
+      note: c.note ?? null,
+    }));
+    const typeLabels: Record<ShiftAssignmentType, string> = {
+      normal: '出勤',
+      public_holiday: '公休',
+      requested_off: '希望休',
+      paid_leave: '有給',
+      off: '休み',
+      am_off: 'AM休',
+      pm_off: 'PM休',
+    };
+    const primary = segs.find((c) => c.assignment_type !== 'off') ?? segs[0];
+    const label =
+      primary.assignment_type === 'normal'
+        ? `出勤 ${segs
+            .filter((c) => c.assignment_type === 'normal')
+            .map((c) => `${c.start_time?.slice(0, 5)}〜${c.end_time?.slice(0, 5)}`)
+            .join(' / ')}`
+        : typeLabels[primary.assignment_type];
+    return { segments, label, sourceKey: `${staffId}_${date}` };
+  };
+
+  /* セル右クリック → メニュー表示。公開済み月は編集不可なのでメニュー自体を出さない
+     （コピーだけ許しても貼り付け不可＝月をまたぐと解除されるため意味がない） */
+  const handleCellContextMenu = (staffId: string, date: string, x: number, y: number) => {
+    if (monthStatus === 'published') return;
+    setCellMenu({ staffId, date, x, y });
+  };
+
+  /* 貼り付け: コピー済み内容で対象セルの1日を置換。都度の全 refetch は重いのでローカル反映 */
+  const pasteDay = async (staffId: string, date: string) => {
+    if (!copiedDay || !facilityId || !tenantId) return;
+    if (monthStatus === 'published') {
+      alert('公開済みシフトは編集できません。「公開取消」で ready に戻してから貼り付けてください。');
+      return;
+    }
+    const currentPublish: PublishStatus = monthStatus === 'ready' ? 'ready' : 'draft';
+    const result = await replaceShiftDay({
+      supabase,
+      tenantId,
+      facilityId,
+      employeeId: staffId,
+      date,
+      segments: copiedDay.segments,
+      // published は上で return 済みなので ready のときだけ確定扱い
+      isConfirmed: monthStatus === 'ready',
+      publishStatus: currentPublish,
+    });
+    if (!result.ok) {
+      alert(result.error);
+      return;
+    }
+    setCells((prev) => [
+      ...prev.filter((c) => !(c.staff_id === staffId && c.date === date)),
+      ...copiedDay.segments.map<ShiftCell>((s, idx) => ({
+        staff_id: staffId,
+        date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        assignment_type: s.assignment_type,
+        segment_order: idx,
+        note: s.note ?? null,
+        publish_status: currentPublish,
+      })),
+    ]);
+    setPasteCount((c) => c + 1);
+    if (
+      copiedDay.segments.some(
+        (s) => s.assignment_type === 'normal' || s.assignment_type === 'am_off' || s.assignment_type === 'pm_off'
+      )
+    ) {
+      void warnCrossFacilityConflict(staffId, date);
+    }
   };
 
   const handleCellClick = (staffId: string, date: string) => {
@@ -502,29 +739,10 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       return;
     }
 
-    /* migration 130 / Phase 9: 同職員・同日に他施設で勤務 (assignment_type='normal') が
-       既に登録されている場合、警告トーストを表示（保存自体はブロックしない）。
-       兼任職員のシフトを別施設で組んだ際、二重アサインに気付けるようにする。 */
-    if (editType === 'normal') {
-      const { data: conflicts } = await supabase
-        .from('shift_assignments')
-        .select('facility_id, start_time, end_time')
-        .eq('employee_id', editingCell.staffId)
-        .eq('date', editingCell.date)
-        .eq('assignment_type', 'normal')
-        .neq('facility_id', facilityId);
-      if (conflicts && conflicts.length > 0) {
-        const { data: facsList } = await supabase
-          .from('facilities')
-          .select('id, name')
-          .in('id', conflicts.map((c) => c.facility_id));
-        const facName = (facsList ?? []).find((f) => f.id === conflicts[0].facility_id)?.name ?? '他事業所';
-        const staffName = staff.find((s) => s.id === editingCell.staffId)?.name ?? '対象職員';
-        toast.warning(
-          `${staffName} は ${editingCell.date} に「${facName}」でも勤務予定です。重複に注意してください。`,
-          { duration: 7000 }
-        );
-      }
+    /* migration 130 / Phase 9: 同職員・同日に他施設で勤務が既に登録されている場合、
+       警告トーストを表示（保存自体はブロックしない）。半休も半日勤務なので対象。 */
+    if (editType === 'normal' || editType === 'am_off' || editType === 'pm_off') {
+      await warnCrossFacilityConflict(editingCell.staffId, editingCell.date);
     }
 
     setEditingCell(null);
@@ -601,6 +819,13 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                 width: 110px !important;
                 min-width: 110px !important;
                 padding: 6px 4px !important;
+              }
+              /* 日別メモ行: 画面用 input をそのまま印字（値は印刷される）。枠や余白は消す */
+              .shift-print-root .day-note-input {
+                border: none !important;
+                background: transparent !important;
+                font-size: 7pt !important;
+                padding: 1px !important;
               }
               .shift-print-root .sticky,
               .shift-print-root [class*="sticky"] {
@@ -700,6 +925,92 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         </div>
       </div>
 
+      {/* 先方要望②: コピー中バナー。スクロール領域の外に置き常時見える。
+          視覚のみで通知（音なし）: アイコン + テキスト + 件数 + 終了ボタン + Esc */}
+      {copiedDay && (
+        <div
+          className="mx-6 mb-1.5 px-4 py-2 rounded-lg flex items-center gap-3 flex-wrap print-hide"
+          style={{ background: 'var(--accent-pale)', border: '1.5px solid var(--accent)' }}
+          role="status"
+        >
+          <span className="text-sm font-bold" style={{ color: 'var(--accent)' }}>
+            📋 コピー中: {copiedDay.label}
+          </span>
+          <span className="text-xs" style={{ color: 'var(--ink-2)' }}>
+            貼り付け先のセルを右クリック →「貼り付け」
+            {pasteCount > 0 ? `（${pasteCount}件 貼り付け済み）` : ''}
+          </span>
+          <div className="flex-1" />
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCopiedDay(null);
+              setPasteCount(0);
+            }}
+          >
+            コピー解除（Esc）
+          </Button>
+        </div>
+      )}
+
+      {/* 先方要望②: セル右クリックの Excel 風メニュー（コピー / 貼り付け）。
+          fixed 配置。画面端でははみ出さないよう clamp。外側クリック / Esc / スクロールで閉じる。 */}
+      {cellMenu && (() => {
+        const canCopy = buildCopiedDay(cellMenu.staffId, cellMenu.date) !== null;
+        const canPaste = !!copiedDay;
+        const MENU_W = 168;
+        const left = Math.min(cellMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 9999) - MENU_W - 8);
+        const top = Math.min(cellMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 9999) - 96);
+        return (
+          <div
+            className="fixed z-[95] rounded-md py-1 print-hide"
+            style={{
+              left: Math.max(8, left),
+              top: Math.max(8, top),
+              width: MENU_W,
+              background: 'var(--white)',
+              border: '1px solid var(--rule-strong)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
+            }}
+            /* メニュー内クリックで「外側クリック閉じ」に伝播させない */
+            onClick={(e) => e.stopPropagation()}
+            role="menu"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!canCopy}
+              onClick={() => {
+                const copied = buildCopiedDay(cellMenu.staffId, cellMenu.date);
+                if (copied) {
+                  setCopiedDay(copied);
+                  setPasteCount(0);
+                }
+                setCellMenu(null);
+              }}
+              className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-[var(--accent-pale)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              style={{ color: 'var(--ink)' }}
+            >
+              📋 コピー
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!canPaste}
+              onClick={() => {
+                void pasteDay(cellMenu.staffId, cellMenu.date);
+                setCellMenu(null);
+              }}
+              className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-[var(--accent-pale)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              style={{ color: 'var(--ink)' }}
+              title={canPaste ? undefined : 'まず「コピー」でセルをコピーしてください'}
+            >
+              📥 貼り付け{copiedDay ? `（${copiedDay.label}）` : ''}
+            </button>
+          </div>
+        );
+      })()}
+
       <div className="flex-1 overflow-auto px-6 pb-6 pt-0">
         {/* admin のみ承認キュー表示 */}
         {role === 'admin' && (
@@ -781,6 +1092,10 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                 minQualifiedStaff={minQualifiedStaff}
                 currentFacilityId={facilityId}
                 crossFacilityWorkByCell={crossFacilityWorkByCell}
+                dayNotes={dayNotes}
+                onDayNoteSave={handleDayNoteSave}
+                onCellContextMenu={handleCellContextMenu}
+                copiedCellKey={copiedDay?.sourceKey ?? null}
               />
             </div>
 
@@ -1037,6 +1352,14 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                   style={{ background: 'var(--bg)', border: '1px solid var(--rule)', color: 'var(--ink)' }}
                 />
               </div>
+            )}
+
+            {/* 先方要望②: コピー&貼り付けは Excel 風にセルの右クリックから行う。
+                同じ勤務時間が続くパート職員の入力を省力化するための導線ヒント。 */}
+            {editingCellData && (
+              <p className="text-xs px-1" style={{ color: 'var(--ink-3)' }}>
+                💡 セルを<b>右クリック</b>すると、この日の内容をコピーして他の日へ貼り付けできます
+              </p>
             )}
 
             <div className="flex gap-2 mt-4">

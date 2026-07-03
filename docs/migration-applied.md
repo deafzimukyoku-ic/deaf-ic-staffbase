@@ -31,6 +31,7 @@
 | 217 | `217_facility_shift_view_employees_rpc.sql` | 2026-06-08 | 2han2be4han@gmail.com | `scripts/apply-migration-217.mjs`（新 SECURITY DEFINER RPC `get_my_facility_shift_view_employees(uuid[])`。/my/requests?tab=facility-shift で employee が自分しか見えなかった真因＝employees の RLS「自分のみ」+ 既存 `get_facility_members` が employee を弾く設計、を解消。全ロール対応・最小列のみ。apply 時にパレットの実 employee 視点で 1件→16件（主14+兼任2）に増えるのを確認。storage 非変更のため snapshot 不要） |
 
 | 218 | `218_shift_assignment_halfday.sql` | 2026-06-17 | 2han2be4han@gmail.com | `scripts/apply-migration-218.mjs`（`shift_assignments_assignment_type_check` に `am_off`/`pm_off` 追加。半休をシフト割当でも表現可能にする。apply時に am_off の INSERT が制約を通過することを rollback付きで実証。storage非変更のため snapshot不要。docs/features/shift-halfday-availability-reflection.md） |
+| 219 | `219_shift_day_notes.sql` | 2026-07-03 | 2han2be4han@gmail.com | `scripts/apply-migration-219.mjs`（新テーブル `shift_day_notes`（シフト表 日別メモ2行, 先方要望①）+ UNIQUE + set_updated_at トリガ + RLS 2本（admin=テナント全域 / manager・shift_manager=管轄施設、employee ポリシーなし）。apply時に upsert→onConflict update→delete を rollback付きで実証。接続は pooler 経由（constraints §2）。storage非変更のため snapshot不要。docs/features/shift-notes-copypaste-crossfacility.md） |
 
 ## 既知の不整合 (適用済 ≠ migration ファイル)
 
