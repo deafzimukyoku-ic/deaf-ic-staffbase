@@ -32,6 +32,7 @@
 
 | 218 | `218_shift_assignment_halfday.sql` | 2026-06-17 | 2han2be4han@gmail.com | `scripts/apply-migration-218.mjs`（`shift_assignments_assignment_type_check` に `am_off`/`pm_off` 追加。半休をシフト割当でも表現可能にする。apply時に am_off の INSERT が制約を通過することを rollback付きで実証。storage非変更のため snapshot不要。docs/features/shift-halfday-availability-reflection.md） |
 | 219 | `219_shift_day_notes.sql` | 2026-07-03 | 2han2be4han@gmail.com | `scripts/apply-migration-219.mjs`（新テーブル `shift_day_notes`（シフト表 日別メモ2行, 先方要望①）+ UNIQUE + set_updated_at トリガ + RLS 2本（admin=テナント全域 / manager・shift_manager=管轄施設、employee ポリシーなし）。apply時に upsert→onConflict update→delete を rollback付きで実証。接続は pooler 経由（constraints §2）。storage非変更のため snapshot不要。docs/features/shift-notes-copypaste-crossfacility.md） |
+| 220 | `220_shift_day_notes_3rows_and_labels.sql` | 2026-07-07 | 2han2be4han@gmail.com | `scripts/apply-migration-220.mjs`（(A) `shift_day_notes.row_no` CHECK を (1,2)→(1,2,3) に拡張＝メモ3行化 / (B) 新テーブル `shift_day_note_labels`（施設×月×行番号→名称, UNIQUE + set_updated_at + RLS 2本）＝メモ行名称を月ごとに変更可。apply時に row_no=3 INSERT と labels upsert→update を rollback付きで実証。storage非変更のため snapshot不要。docs/features/shift-notes-copypaste-crossfacility.md） |
 
 ## 既知の不整合 (適用済 ≠ migration ファイル)
 

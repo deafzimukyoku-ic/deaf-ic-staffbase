@@ -65,6 +65,30 @@
 
 ---
 
+## 0.19 シフト表3機能の追補: 他施設勤務を所属で分岐 / メモ3行+名称変更 / 半休の時刻・メモ編集（先方要望, 2026-07-07）
+
+仕様: [docs/features/shift-notes-copypaste-crossfacility.md](features/shift-notes-copypaste-crossfacility.md)
+
+### ① 他施設勤務バッジを「現在所属している施設の勤務のみ」に限定
+- **真因**: 兼任(employee_facilities)を外しても過去の shift_assignments は残り、`.neq(facility_id)` だけで拾うと外した施設の勤務バッジが残る（金田さん=主パズルのみ、パステル残存1行）
+- **修正**: `ShiftFull.tsx` の cross fetch 後、各職員の現所属集合（主 `employees.facility_id` ∪ 兼任 `employee_facilities`）を作り、`memberFacilities.get(emp).has(a.facility_id)` で絞る。所属を外せば即バッジ消滅
+- `employee_facilities` は `ef_tenant_read`(130) で同テナント read 可。`scripts/probe-membership-filter-after.mjs` で金田さんのパステル残存が除外されることを実証
+
+### ② メモ 2行→3行 + 行名称の変更（migration 220）
+- `shift_day_notes.row_no` を (1,2,3) に拡張。新テーブル `shift_day_note_labels(tenant,facility,month,row_no,label)` UNIQUE + RLS 2本（219 と同型）
+- 名称は**施設×月**で保存（毎月変えられる）。未設定は「メモN」表示。`ShiftGridFull` 左端セルを非制御 input（onBlur upsert / 空は DELETE）に
+
+### ③ AM休/PM休 で勤務時間・メモを編集可能に
+- 従来は固定時刻（AM休14:30-18:00 / PM休09:30-13:30）。セル編集モーダルで時刻入力欄とメモ欄を半休でも表示
+- `handleCellClick` が半休の保存済み時刻を復元、区分ボタン切替で半休の初期時刻をセット（分割は解除）、`handleSave` が入力値で保存。DB変更なし（`shift_assignments` は既に start/end/note 保有）
+
+### 参照テーブル・型・関数（追補）
+- テーブル: `shift_day_note_labels`(新, 220) / `employee_facilities`(所属判定) / `shift_assignments`(半休 start/end/note)
+- 型: `ShiftDayNoteRow.row_no` 1|2|3 に / `ShiftDayNoteLabelRow`(新, lib/types.ts)
+- 編集: `lib/types.ts` / `components/shift/ShiftFull.tsx` / `components/shift/ShiftGridFull.tsx` / `supabase/migrations/220_shift_day_notes_3rows_and_labels.sql`
+
+---
+
 ## 0.18 シフト表3機能: 行事メモ2行 / セルコピペ / 兼任相互反映（先方要望①②④, 2026-07-03）
 
 仕様: [docs/features/shift-notes-copypaste-crossfacility.md](features/shift-notes-copypaste-crossfacility.md)

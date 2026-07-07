@@ -355,15 +355,28 @@ export interface EventRow {
   created_at: string;
 }
 
-/* シフト表の日別メモ2行 (migration 219)。学校行事・施設行事・会議など。
+/* シフト表の日別メモ (migration 219 / 220 で3行に拡張)。学校行事・施設行事・会議など。
    公開フロー(publish_status)非連動 = 管理側の作成支援メモ。 */
 export interface ShiftDayNoteRow {
   id: string;
   tenant_id: string;
   facility_id: string;
   date: string; // YYYY-MM-DD
-  row_no: 1 | 2;
+  row_no: 1 | 2 | 3;
   content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/* 日別メモ行の名称ラベル (migration 220)。施設×月×行番号で1つ。
+   未設定時はアプリ側で「メモN」をデフォルト表示。 */
+export interface ShiftDayNoteLabelRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  month: string; // YYYY-MM
+  row_no: 1 | 2 | 3;
+  label: string;
   created_at: string;
   updated_at: string;
 }

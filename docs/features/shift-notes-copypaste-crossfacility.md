@@ -132,3 +132,21 @@ shift_assignments 側の権限は既存のまま（コピペは既存 RLS の範
   - コピペは 1 セルずつクリック方式（範囲ドラッグは未実装）。要望文の「コピー&ペースト」に対する最小充足。将来、複数日一括や勤務時間プリセット（②A 案）を足す余地あり。
   - ④ は「勤務のある月だけ兼任行を表示」までは含まない（要望④後半）。別途承認後に対応。
 - **未実施**: 職員ログインでの UI 実操作確認（テスト資格情報が無く本セッションでは未実施）/ 本番 push（指示待ち）。
+
+## 追補実装（2026-07-07）
+
+先方フィードバックによる 3 点の追加対応。migration 220 適用済。
+
+### ① 他施設勤務バッジを「現在所属している施設の勤務のみ」に限定
+- 兼任(employee_facilities)を外しても過去の `shift_assignments` は残るため、`.neq(facility_id)` だけで拾うと外した施設の勤務バッジが残っていた（金田さん=主パズルのみで、パステル残存1行）。
+- `ShiftFull.fetchAll` で各職員の現所属集合（主 `employees.facility_id` ∪ `employee_facilities`）を作り、cross 勤務を `memberFacilities.get(emp).has(a.facility_id)` で絞る。`scripts/probe-membership-filter-after.mjs` で除外を実証。
+
+### ② メモ 2行 → 3行 + 行名称の変更（施設×月）
+- migration 220: `shift_day_notes.row_no` を (1,2,3) に拡張 + 新テーブル `shift_day_note_labels(tenant,facility,month,row_no,label)`（219 と同型 RLS）。
+- `ShiftGridFull`: `[1,2]`→`[1,2,3]`、左端セルを非制御 input のラベル編集に（onBlur upsert / 空は DELETE）。未設定は「メモN」表示。名称は月ごとに保存（`ShiftFull.handleDayNoteLabelSave` / fetch は `monthStr` で）。
+
+### ③ AM休/PM休 で勤務時間・メモを編集可能に
+- 従来固定だった半休時刻を編集可能に。モーダルの時刻入力欄・メモ欄を `am_off`/`pm_off` でも表示（分割トグルは通常出勤のみ）。
+- `handleCellClick` が半休の保存済み時刻を復元、区分ボタン切替で半休の初期時刻（AM休=14:30-18:00 / PM休=09:30-13:30）をセット、`handleSave` が入力値で保存。DB 変更なし。
+- **セル表示順（先方要望）**: 休む時間帯の位置に合わせて上下を並べる。AM休(午前休→午後勤務)=「AM休」を上・勤務時間を下。PM休(午後休→午前勤務)=勤務時間を上・「PM休」を下。`ShiftGridFull` に am_off/pm_off 専用分岐を追加。
+- 未実施: 職員ログインでの UI 実操作確認（ユーザーがローカルで確認）。

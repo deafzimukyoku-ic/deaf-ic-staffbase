@@ -98,8 +98,10 @@ export default function ShiftFull({ role }: ShiftFullProps) {
      相互反映）、休みセルは「○○ 勤務」バッジ / 出勤系セルは ⚠ 重複マーカーに使う。 */
   const [crossFacilityWorkByCell, setCrossFacilityWorkByCell] = useState<Map<string, CrossFacilityWork>>(new Map());
 
-  /* migration 219 / 先方要望①: 日別メモ2行。key = `${date}_${rowNo}` */
+  /* migration 219/220 / 先方要望①②: 日別メモ3行。key = `${date}_${rowNo}` */
   const [dayNotes, setDayNotes] = useState<Map<string, string>>(new Map());
+  /* migration 220: メモ行の名称ラベル（施設×月）。key = row_no（1|2|3）。未設定は「メモN」表示 */
+  const [dayNoteLabels, setDayNoteLabels] = useState<Map<number, string>>(new Map());
 
   /* 先方要望②: Excel 風の右クリック コピー&ペースト。
      - セルを右クリック → メニュー（コピー / 貼り付け）
@@ -245,6 +247,25 @@ export default function ShiftFull({ role }: ShiftFullProps) {
             .lte('date', to)
             .not('start_time', 'is', null);
 
+      /* 先方要望①: 「他施設勤務」を出すのは、その職員が【今その施設に所属している】場合のみ。
+         兼任(employee_facilities)を外しても過去の shift_assignments は残るため、所属で絞らないと
+         外した施設の勤務バッジが残り続ける（金田さんの事例）。各職員の現所属集合(主+兼任)を作る。 */
+      const { data: efRows } = memberIds.length === 0
+        ? { data: [] }
+        : await supabase
+            .from('employee_facilities')
+            .select('employee_id, facility_id')
+            .in('employee_id', memberIds);
+      const memberFacilities = new Map<string, Set<string>>();
+      for (const e of emps) {
+        const set = new Set<string>();
+        if (e.facility_id) set.add(e.facility_id); // 主所属
+        memberFacilities.set(e.id, set);
+      }
+      for (const r of (efRows ?? []) as Array<{ employee_id: string; facility_id: string }>) {
+        memberFacilities.get(r.employee_id)?.add(r.facility_id); // 兼任先
+      }
+
       // facility 名のマップを作成（バッジ表示用）
       const { data: facsList } = await supabase
         .from('facilities')
@@ -253,13 +274,15 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       const facilityNames = new Map((facsList ?? []).map((f) => [f.id, f.name as string]));
 
       /* 同一職員・同一日に複数施設/複数コマがあり得るので集約してから map 化。
-         時間が入っている行のみ（= 実勤務）を「他施設勤務」として扱う。 */
+         時間が入っている行のみ（= 実勤務）かつ【その職員が現在所属している施設】のみを扱う。 */
       const crossAgg = new Map<string, { names: Set<string>; times: string[] }>();
       for (const a of (crossAssigns ?? []) as Array<{
         employee_id: string; date: string; facility_id: string;
         start_time: string | null; end_time: string | null;
       }>) {
         if (!a.start_time) continue; // 時間なしは勤務とみなさない（二重ガード）
+        // 所属を外した施設の残存勤務はバッジに出さない（要望①の分岐点）
+        if (!memberFacilities.get(a.employee_id)?.has(a.facility_id)) continue;
         const key = `${a.employee_id}_${a.date}`;
         const rec = crossAgg.get(key) ?? { names: new Set<string>(), times: [] };
         rec.names.add(facilityNames.get(a.facility_id) ?? '他施設');
@@ -277,7 +300,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       });
       setCrossFacilityWorkByCell(crossMap);
 
-      // migration 219: 日別メモ2行
+      // migration 219/220: 日別メモ3行 + 行名称ラベル（施設×月）
       const { data: noteRows } = await supabase
         .from('shift_day_notes')
         .select('date, row_no, content')
@@ -289,6 +312,17 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         notesMap.set(`${n.date}_${n.row_no}`, n.content);
       }
       setDayNotes(notesMap);
+
+      const { data: labelRows } = await supabase
+        .from('shift_day_note_labels')
+        .select('row_no, label')
+        .eq('facility_id', facilityId)
+        .eq('month', monthStr);
+      const labelsMap = new Map<number, string>();
+      for (const l of (labelRows ?? []) as Array<{ row_no: number; label: string }>) {
+        labelsMap.set(l.row_no, l.label);
+      }
+      setDayNoteLabels(labelsMap);
 
       // facility_shift_settings: コアタイム + 有資格者基準（migration 116）
       const { data: fss } = await supabase
@@ -388,9 +422,9 @@ export default function ShiftFull({ role }: ShiftFullProps) {
     };
   }, [cellMenu]);
 
-  /* migration 219: 日別メモの保存（blur 時）。空文字は行削除でゴミレコードを残さない */
+  /* migration 219/220: 日別メモの保存（blur 時）。空文字は行削除でゴミレコードを残さない */
   const handleDayNoteSave = useCallback(
-    async (date: string, rowNo: 1 | 2, text: string) => {
+    async (date: string, rowNo: 1 | 2 | 3, text: string) => {
       if (!facilityId || !tenantId) return;
       const content = text.trim().slice(0, 50);
       const key = `${date}_${rowNo}`;
@@ -421,6 +455,40 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       }
     },
     [supabase, facilityId, tenantId]
+  );
+
+  /* migration 220: メモ行名称の保存（施設×月×行）。空文字は削除して「メモN」表示に戻す */
+  const handleDayNoteLabelSave = useCallback(
+    async (rowNo: 1 | 2 | 3, text: string) => {
+      if (!facilityId || !tenantId) return;
+      const label = text.trim().slice(0, 20);
+      try {
+        if (!label) {
+          const { error: e } = await supabase
+            .from('shift_day_note_labels')
+            .delete()
+            .eq('facility_id', facilityId)
+            .eq('month', monthStr)
+            .eq('row_no', rowNo);
+          if (e) throw new Error(e.message);
+          setDayNoteLabels((prev) => {
+            const m = new Map(prev);
+            m.delete(rowNo);
+            return m;
+          });
+        } else {
+          const { error: e } = await supabase.from('shift_day_note_labels').upsert(
+            { tenant_id: tenantId, facility_id: facilityId, month: monthStr, row_no: rowNo, label },
+            { onConflict: 'tenant_id,facility_id,month,row_no' }
+          );
+          if (e) throw new Error(e.message);
+          setDayNoteLabels((prev) => new Map(prev).set(rowNo, label));
+        }
+      } catch (e) {
+        toast.error(`メモ名称の保存に失敗しました: ${e instanceof Error ? e.message : '不明なエラー'}`);
+      }
+    },
+    [supabase, facilityId, tenantId, monthStr]
   );
 
   const handleGenerate = async () => {
@@ -628,8 +696,16 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       setEditNote('');
     }
 
-    /* 1 コマ目（または単発時の勤務時間）*/
-    const seg1 = normalSegs[0] ?? (primaryCell?.assignment_type === 'normal' ? primaryCell : null);
+    /* 1 コマ目（または単発時の勤務時間）。
+       半休(am_off/pm_off)も時刻を持つので、保存済みの時刻を復元対象にする（先方要望③）。 */
+    const seg1 =
+      normalSegs[0] ??
+      (primaryCell &&
+      (primaryCell.assignment_type === 'normal' ||
+        primaryCell.assignment_type === 'am_off' ||
+        primaryCell.assignment_type === 'pm_off')
+        ? primaryCell
+        : null);
     if (seg1?.start_time) {
       const [h, m] = seg1.start_time.split(':');
       setStartH(h);
@@ -707,15 +783,16 @@ export default function ShiftFull({ role }: ShiftFullProps) {
           { start_time: seg1.start, end_time: seg1.end, assignment_type: 'normal', note: noteForSave },
         ];
       }
-    } else if (editType === 'am_off') {
-      /* AM休: 午後勤務 [14:30, 18:00] の 1 コマ（migration 218 / 半休） */
+    } else if (editType === 'am_off' || editType === 'pm_off') {
+      /* 半休（先方要望③で時刻編集可に）: AM休=午後勤務 / PM休=午前勤務 の 1 コマ。
+         時刻はモーダルの入力値を使う（デフォルトは AM休 14:30-18:00 / PM休 09:30-13:30）。 */
       segments = [
-        { start_time: '14:30', end_time: '18:00', assignment_type: 'am_off', note: noteForSave },
-      ];
-    } else if (editType === 'pm_off') {
-      /* PM休: 午前勤務 [09:30, 13:30] の 1 コマ */
-      segments = [
-        { start_time: '09:30', end_time: '13:30', assignment_type: 'pm_off', note: noteForSave },
+        {
+          start_time: `${startH.padStart(2, '0')}:${startM.padStart(2, '0')}`,
+          end_time: `${endH.padStart(2, '0')}:${endM.padStart(2, '0')}`,
+          assignment_type: editType,
+          note: noteForSave,
+        },
       ];
     } else {
       /* 公休 / 有給 / 希望休 / 休み は時刻なしの 1 行のみ */
@@ -1094,6 +1171,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                 crossFacilityWorkByCell={crossFacilityWorkByCell}
                 dayNotes={dayNotes}
                 onDayNoteSave={handleDayNoteSave}
+                dayNoteLabels={dayNoteLabels}
+                onDayNoteLabelSave={handleDayNoteLabelSave}
                 onCellContextMenu={handleCellContextMenu}
                 copiedCellKey={copiedDay?.sourceKey ?? null}
               />
@@ -1232,7 +1311,16 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                 return (
                   <button
                     key={type}
-                    onClick={() => setEditType(type)}
+                    onClick={() => {
+                      setEditType(type);
+                      /* 半休に切り替えたら、その勤務コマの初期時刻をセット（先方要望③）。
+                         AM休=午後 / PM休=午前。半休は1コマなので分割は解除。 */
+                      if (type === 'am_off') {
+                        setStartH('14'); setStartM('30'); setEndH('18'); setEndM('30'); setIsSplit(false);
+                      } else if (type === 'pm_off') {
+                        setStartH('09'); setStartM('30'); setEndH('13'); setEndM('30'); setIsSplit(false);
+                      }
+                    }}
                     className="px-4 py-3 text-sm font-semibold rounded-md transition-all"
                     style={{
                       background: isActive ? colors[type] : 'var(--bg)',
@@ -1246,24 +1334,32 @@ export default function ShiftFull({ role }: ShiftFullProps) {
               })}
             </div>
 
-            {editType === 'normal' && (
+            {(editType === 'normal' || editType === 'am_off' || editType === 'pm_off') && (
               <div className="flex flex-col gap-4 mt-2 p-4 rounded-lg" style={{ background: 'var(--bg)' }}>
-                {/* Phase 66+: 分割シフトトグル（午前・午後など 2 コマに分割） */}
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={isSplit}
-                    onChange={(e) => setIsSplit(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer"
-                  />
-                  <span className="text-sm font-semibold" style={{ color: 'var(--ink-2)' }}>
-                    分割シフト（午前・午後など 2 コマに分けて勤務）
-                  </span>
-                </label>
+                {/* 分割シフトトグルは通常出勤のみ（半休は 1 コマ勤務） */}
+                {editType === 'normal' && (
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isSplit}
+                      onChange={(e) => setIsSplit(e.target.checked)}
+                      className="w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm font-semibold" style={{ color: 'var(--ink-2)' }}>
+                      分割シフト（午前・午後など 2 コマに分けて勤務）
+                    </span>
+                  </label>
+                )}
 
                 <div>
                   <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--ink-2)' }}>
-                    {isSplit ? '1 コマ目' : '勤務時間'}
+                    {editType === 'am_off'
+                      ? '午後の勤務時間（AM休）'
+                      : editType === 'pm_off'
+                      ? '午前の勤務時間（PM休）'
+                      : isSplit
+                      ? '1 コマ目'
+                      : '勤務時間'}
                   </label>
                   <div className="flex items-center gap-2">
                     <input
@@ -1296,7 +1392,7 @@ export default function ShiftFull({ role }: ShiftFullProps) {
                   </div>
                 </div>
 
-                {isSplit && (
+                {editType === 'normal' && isSplit && (
                   <div>
                     <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--ink-2)' }}>
                       2 コマ目
@@ -1338,7 +1434,9 @@ export default function ShiftFull({ role }: ShiftFullProps) {
             {(editType === 'normal' ||
               editType === 'public_holiday' ||
               editType === 'requested_off' ||
-              editType === 'off') && (
+              editType === 'off' ||
+              editType === 'am_off' ||
+              editType === 'pm_off') && (
               <div>
                 <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--ink-2)' }}>
                   メモ（任意・例: 応援先など）

@@ -49,6 +49,23 @@
 <h1>deaf-ic 統合実装 進捗表</h1>
 <p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-07-03（先方要望 シフト表3機能 実装完了・ローカル確認済） / 全体完了率: 約 98%</p>
 
+<!-- 2026-07-07 先方フィードバック追補: 所属分岐 / メモ3行+名称 / 半休時刻編集 -->
+<div class="phase">
+  <h2>シフト表 追補: 他施設勤務を所属で分岐 / メモ3行+名称変更 / 半休の時刻・メモ編集（2026-07-07） <span class="phase-pct">コード実装完了 / ローカル確認中 / push 待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">先方フィードバック3点。migration 220 適用済。仕様書 docs/features/shift-notes-copypaste-crossfacility.md「追補実装」。</td></tr>
+      <tr><td>① 他施設勤務を「現所属の施設の勤務のみ」に限定</td><td class="files">components/shift/ShiftFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>真因=cross fetchが所属チェックせず過去勤務を拾う(兼任外しても残る)。各職員の現所属集合(主∪兼任)で絞る。probe-membership-filter-after.mjsで金田さんのパステル残存除外を実証</td></tr>
+      <tr><td>② メモ2行→3行 + 行名称を月ごとに変更</td><td class="files">migration 220, ShiftGridFull.tsx, ShiftFull.tsx, lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>row_no(1,2,3)拡張 + shift_day_note_labels(施設×月×行)。左端ラベルを非制御inputに。未設定は「メモN」</td></tr>
+      <tr><td>③ AM休/PM休 で勤務時間・メモを編集可能に + セル表示順</td><td class="files">components/shift/ShiftFull.tsx, ShiftGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>固定時刻→編集可。モーダルの時刻/メモ欄を半休でも表示。セル表示は AM休=「AM休」上・時刻下 / PM休=時刻上・「PM休」下（休む時間帯の位置に合わせる）。DB変更なし</td></tr>
+      <tr><td>型チェック / build</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0エラー / next build 成功 / migration 220 apply検証済</td></tr>
+      <tr><td>ローカル確認 / push</td><td class="files">—</td><td><span class="status todo">進行中</span></td><td class="pct">70%</td><td>dev(6001)起動・コンパイルOK。ユーザーUI確認と push は指示待ち</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 兼任を外すと他施設勤務バッジが消えるか(金田さん・パステル) ② メモ3行目が入力/保存できるか・行名称を変えると当月のみ反映され翌月は「メモN」に戻るか ③ AM休/PM休で時刻を変えて保存→再表示で残るか・メモが入るか・分割トグルが出ないか</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 2026-07-03 先方要望①②④: シフト表3機能 -->
 <div class="phase">
   <h2>シフト表3機能: 行事メモ2行 / セルコピペ / 兼任相互反映（先方要望①②④, 2026-07-03） <span class="phase-pct">コード実装完了 / ローカル確認済 / push 待ち</span></h2>

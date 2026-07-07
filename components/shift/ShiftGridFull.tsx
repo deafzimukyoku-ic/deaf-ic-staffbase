@@ -69,10 +69,14 @@ interface ShiftGridProps {
        key=`${staff_id}_${date}`。休みセルは「○○ 勤務」バッジ、出勤系セルは ⚠ 重複マーカーを表示
        （従来は本施設に行が 1 つでもあると非表示になり、生成後は事実上見えなかった）。 */
   crossFacilityWorkByCell?: Map<string, CrossFacilityWork>;
-  /** migration 219: 日別メモ2行（学校行事・施設行事・会議など）。key=`${date}_${rowNo}` */
+  /** migration 219/220: 日別メモ3行（学校行事・施設行事・会議など）。key=`${date}_${rowNo}` */
   dayNotes?: Map<string, string>;
   /** メモ編集の保存（blur 時）。未指定ならメモ行自体を描画しない */
-  onDayNoteSave?: (date: string, rowNo: 1 | 2, text: string) => void;
+  onDayNoteSave?: (date: string, rowNo: 1 | 2 | 3, text: string) => void;
+  /** migration 220: メモ行の名称ラベル（施設×月×行番号）。key=row_no。未設定時は「メモN」表示 */
+  dayNoteLabels?: Map<number, string>;
+  /** メモ行名称の保存（blur 時）。 */
+  onDayNoteLabelSave?: (rowNo: 1 | 2 | 3, text: string) => void;
   /** 先方要望②: セルの右クリック（Excel風コピー/貼り付けメニュー起動）。clientX/Y で表示位置を渡す */
   onCellContextMenu?: (staffId: string, date: string, clientX: number, clientY: number) => void;
   /** 貼り付けモード中のコピー元セル key=`${staffId}_${date}`。うっすらハイライトして所在を示す */
@@ -109,6 +113,8 @@ export default function ShiftGridFull({
   crossFacilityWorkByCell,
   dayNotes,
   onDayNoteSave,
+  dayNoteLabels,
+  onDayNoteLabelSave,
   onCellContextMenu,
   copiedCellKey,
 }: ShiftGridProps) {
@@ -299,26 +305,53 @@ export default function ShiftGridFull({
           </tr>
         </thead>
         <tbody>
-          {/* 日別メモ2行（migration 219 / 先方要望①）: 日付ヘッダと職員行の間。
-              入力は非制御 (defaultValue + onBlur 保存) — 制御化すると 31日×2行の入力の
+          {/* 日別メモ3行（migration 219/220 / 先方要望①②）: 日付ヘッダと職員行の間。
+              入力は非制御 (defaultValue + onBlur 保存) — 制御化すると 31日×3行の入力の
               たびにグリッド全体が再レンダされ重くなるため。key に保存値を含めて
-              refetch 後の値変化時のみ remount して同期する。 */}
+              refetch 後の値変化時のみ remount して同期する。
+              左端セルは行名称（施設×月で変更可。未設定は「メモN」）。 */}
           {onDayNoteSave &&
-            ([1, 2] as const).map((rowNo) => (
+            ([1, 2, 3] as const).map((rowNo) => {
+              const isLastNote = rowNo === 3;
+              const labelValue = dayNoteLabels?.get(rowNo) ?? '';
+              return (
               <tr key={`day-note-${rowNo}`}>
                 <td
-                  className="shift-grid-sticky-staff sticky left-0 z-30 px-4 py-1 whitespace-nowrap"
+                  className="shift-grid-sticky-staff sticky left-0 z-30 px-2 py-1 whitespace-nowrap"
                   style={{
-                    borderBottom: rowNo === 2 ? '2px solid var(--rule-strong)' : '1px solid var(--rule)',
+                    borderBottom: isLastNote ? '2px solid var(--rule-strong)' : '1px solid var(--rule)',
                     borderRight: '2px solid var(--rule-strong)',
                     color: 'var(--ink-2)',
                     fontSize: '0.7rem',
                     fontWeight: 600,
                     boxShadow: '4px 0 6px rgba(0,0,0,0.02)',
                   }}
-                  title="学校行事・施設行事・会議などを自由に記入できます（シフト作成用メモ。職員には公開されません）"
                 >
-                  📝 メモ {rowNo}
+                  <div className="flex items-center gap-1">
+                    <span aria-hidden>📝</span>
+                    {onDayNoteLabelSave ? (
+                      <input
+                        type="text"
+                        key={`label-${rowNo}_${labelValue}`}
+                        defaultValue={labelValue}
+                        maxLength={20}
+                        placeholder={`メモ${rowNo}`}
+                        onBlur={(e) => {
+                          const v = e.currentTarget.value.trim();
+                          if (v !== labelValue) onDayNoteLabelSave(rowNo, v);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        className="w-[110px] outline-none rounded px-1 focus:bg-[var(--accent-pale)]"
+                        style={{ background: 'transparent', border: '1px dashed var(--rule)', color: 'var(--ink-2)', fontSize: '0.7rem', fontWeight: 600 }}
+                        aria-label={`メモ${rowNo}の名称`}
+                        title="行の名称を変更できます（施設・月ごと。例: 学校行事 / 会議）"
+                      />
+                    ) : (
+                      <span>{labelValue || `メモ${rowNo}`}</span>
+                    )}
+                  </div>
                 </td>
                 {dates.map((d) => {
                   const noteKey = `${d.dateStr}_${rowNo}`;
@@ -329,7 +362,7 @@ export default function ShiftGridFull({
                       key={d.dateStr}
                       className="p-0 align-middle"
                       style={{
-                        borderBottom: rowNo === 2 ? '2px solid var(--rule-strong)' : '1px solid var(--rule)',
+                        borderBottom: isLastNote ? '2px solid var(--rule-strong)' : '1px solid var(--rule)',
                         borderRight: isTodayCol ? '2px solid var(--accent)' : '1px solid var(--rule)',
                         borderLeft: isTodayCol ? '2px solid var(--accent)' : undefined,
                         background: getCellBg(d.dow),
@@ -365,7 +398,8 @@ export default function ShiftGridFull({
                   );
                 })}
               </tr>
-            ))}
+              );
+            })}
 
           {staff.map((s) => (
             <tr
@@ -551,6 +585,37 @@ export default function ShiftGridFull({
                           {crossWork?.name}
                         </span>
                         <span style={{ color: 'var(--accent)', fontSize: '0.6rem', lineHeight: 1.1 }}>勤務</span>
+                      </div>
+                    ) : type === 'am_off' || type === 'pm_off' ? (
+                      /* 半休（先方要望）: 休む時間帯の位置に合わせて上下を並べる。
+                         AM休(午前休→午後勤務) = 「AM休」を上・勤務時間を下。
+                         PM休(午後休→午前勤務) = 勤務時間を上・「PM休」を下。 */
+                      <div className="flex flex-col gap-0.5 leading-tight py-0.5">
+                        {cell?.note && (
+                          <span style={{ color: 'var(--accent)', fontSize: '0.62rem', lineHeight: 1.1, fontWeight: 600 }}>
+                            {cell.note}
+                          </span>
+                        )}
+                        {type === 'am_off' && (
+                          <span className="font-semibold" style={{ color: config.color, fontSize: '0.7rem', lineHeight: 1.1 }}>
+                            {config.label}
+                          </span>
+                        )}
+                        {cell?.start_time && (
+                          <span style={{ color: 'var(--ink-2)', fontSize: '0.62rem', lineHeight: 1.1 }}>
+                            {cell.start_time.slice(0, 5)}{cell.end_time ? `-${cell.end_time.slice(0, 5)}` : ''}
+                          </span>
+                        )}
+                        {type === 'pm_off' && (
+                          <span className="font-semibold" style={{ color: config.color, fontSize: '0.7rem', lineHeight: 1.1 }}>
+                            {config.label}
+                          </span>
+                        )}
+                        {crossWork && selfHasTime && (
+                          <span className="font-bold" style={{ color: 'var(--red)', fontSize: '0.58rem', lineHeight: 1.1 }}>
+                            ⚠{crossWork.name}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col gap-0.5 leading-tight py-0.5">
