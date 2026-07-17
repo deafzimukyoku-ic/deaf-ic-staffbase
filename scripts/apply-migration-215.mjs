@@ -1,7 +1,7 @@
 /* migration 215 を pooler 経由で適用。first_scheduled_at の DEFAULT を before/after 検証。
    さらに shift_publish の dry-run INSERT (ROLLBACK) で「first_scheduled_at を省略しても
    INSERT が通る」ことを確認する（真因の再発防止が効いているかの実証）。 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -12,17 +12,10 @@ const env = Object.fromEntries(
     .split(/\r?\n/).filter(Boolean).filter((l) => !l.startsWith('#'))
     .map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
 );
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-if (!m) throw new Error('DATABASE_URL parse fail');
-const ref = m[3];
 const migrationSql = fs.readFileSync(
   path.resolve(__dirname, '..', 'supabase', 'migrations', '215_notification_queue_first_scheduled_default.sql'), 'utf8');
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com', port: 6543,
-  user: `postgres.${ref}`, password: decodeURIComponent(m[2]),
-  database: 'postgres', ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 async function showDefault(label) {
   const r = await client.query(`

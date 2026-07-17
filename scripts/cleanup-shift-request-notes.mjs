@@ -5,13 +5,13 @@
      1) 各行の notes 内フレーズ重複を圧縮（"X / X / X" → "X"、出現順保持）
      2) (employee_id, month) 単位で notes を先頭1行に集約（残りは NULL）
         ※同一 employee×month の全フレーズの和集合を keep 行へ、他行は NULL */
-import pg from 'pg'; import fs from 'node:fs';
+import { createPgClient } from './_db.mjs';
+import fs from 'node:fs';
 const envPath = process.argv[2];
 const APPLY = process.argv.includes('--apply');
 if (!envPath) { console.error('envPath required'); process.exit(1); }
 const env=Object.fromEntries(fs.readFileSync(envPath,'utf8').split(/\r?\n/).filter(Boolean).filter(l=>!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return[l.slice(0,i).trim(),l.slice(i+1).trim()];}));
-const u=(env.DATABASE_URL||env.SUPABASE_DB_URL).match(/postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const c=new pg.Client({host:`db.${u[3]}.supabase.co`,port:5432,user:'postgres',password:decodeURIComponent(u[2]),database:'postgres',ssl:{rejectUnauthorized:false}});
+const c=createPgClient(env);
 await c.connect();
 console.log(`\n### DB=${u[3]} mode=${APPLY?'APPLY':'DRY-RUN'} ###`);
 try {

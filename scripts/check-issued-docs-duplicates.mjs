@@ -1,18 +1,8 @@
 /* migration 179 適用前の重複検出。pooler 経由で実行。
    結果が 0 行なら INDEX 作成 OK。1 行以上ならユーザーに報告して手を止める。 */
-import pg from 'pg';
-import fs from 'node:fs';
-import path from 'node:path';
-import url from 'node:url';
+import { createPgClient, loadEnv } from './_db.mjs';
 
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, '..', '..', '..', '..', '.env.local');
-const env = Object.fromEntries(
-  fs.readFileSync(envPath, 'utf8').split(/\r?\n/).filter(Boolean).filter(l => !l.startsWith('#')).map(l => {
-    const i = l.indexOf('=');
-    return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-  })
-);
+const env = loadEnv();
 
 const directUrl = env.DATABASE_URL;
 if (!directUrl) {
@@ -25,17 +15,8 @@ if (!m) {
   console.error('DATABASE_URL is not a direct-host Supabase URL. Aborting.');
   process.exit(1);
 }
-const password = decodeURIComponent(m[2]);
-const ref = m[3];
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${ref}`,
-  password,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {

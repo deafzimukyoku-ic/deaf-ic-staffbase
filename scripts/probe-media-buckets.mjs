@@ -2,7 +2,7 @@
    - documents / videos バケットの file_size_limit / allowed_mime_types の実値
    - 各バケットの最大格納オブジェクトサイズ (= グローバル upload 上限が効いているかの判定材料)
    - content_blocks 内に残る旧 Drive 動画/PDF ブロック件数 (移行漏れ) */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -13,17 +13,8 @@ const env = Object.fromEntries(
   fs.readFileSync(path.resolve(projectRoot, '.env.local'), 'utf8').split(/\r?\n/).filter(Boolean)
     .filter(l => !l.startsWith('#')).map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
 );
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-if (!m) throw new Error('DATABASE_URL parse fail');
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${m[3]}`,
-  password: decodeURIComponent(m[2]),
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 const mb = (b) => b == null ? 'null' : `${(Number(b) / 1024 / 1024).toFixed(1)} MB (${b})`;
 

@@ -5,15 +5,10 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
+import { loadEnv } from './_db.mjs';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, '..', '..', '..', '..', '.env.local');
-const env = Object.fromEntries(
-  fs.readFileSync(envPath, 'utf8').split(/\r?\n/).filter(Boolean).filter(l => !l.startsWith('#')).map(l => {
-    const i = l.indexOf('=');
-    return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-  })
-);
+const env = loadEnv();
 
 const url1 = env.NEXT_PUBLIC_SUPABASE_URL ?? `https://${env.DATABASE_URL.match(/db\.([^.]+)\./)[1]}.supabase.co`;
 const serviceRole = env.SUPABASE_SERVICE_ROLE_KEY;

@@ -2,21 +2,15 @@
    - row_no CHECK が (1,2,3) になっていること（row_no=3 の INSERT が通る）
    - shift_day_note_labels の upsert→onConflict update→delete を rollback 付きで実証
    接続は constraints.md §2 に従い pooler 経由。 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs'; import path from 'node:path'; import url from 'node:url';
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const env = Object.fromEntries(
   fs.readFileSync(path.resolve(__dirname,'..','.env.local'),'utf8').split(/\r?\n/).filter(Boolean).filter(l=>!l.startsWith('#'))
     .map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(),l.slice(i+1).trim()];})
 );
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-if (!m) throw new Error('DATABASE_URL parse fail');
 const migrationSql = fs.readFileSync(path.resolve(__dirname,'..','supabase','migrations','220_shift_day_notes_3rows_and_labels.sql'),'utf8');
-const client = new pg.Client({
-  host:'aws-1-ap-southeast-1.pooler.supabase.com', port:6543,
-  user:`postgres.${m[3]}`, password:decodeURIComponent(m[2]),
-  database:'postgres', ssl:{rejectUnauthorized:false},
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {

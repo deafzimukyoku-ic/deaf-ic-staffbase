@@ -1,30 +1,11 @@
 /* 重複の正体調査。テンプレ名 / 発行タイムスタンプ / 発行者 / メッセージ / Storage path を全部出す。
    これで「同じ admin が bulk-issue を 2 回押した」「招待自動発行 + 手動発行が重なった」など原因を切り分ける */
-import pg from 'pg';
-import fs from 'node:fs';
+import { createPgClient, loadEnv } from './_db.mjs';
 import path from 'node:path';
-import url from 'node:url';
 
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, '..', '..', '..', '..', '.env.local');
-const env = Object.fromEntries(
-  fs.readFileSync(envPath, 'utf8').split(/\r?\n/).filter(Boolean).filter(l => !l.startsWith('#')).map(l => {
-    const i = l.indexOf('=');
-    return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-  })
-);
+const env = loadEnv();
 
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const password = decodeURIComponent(m[2]);
-const ref = m[3];
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${ref}`,
-  password,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {

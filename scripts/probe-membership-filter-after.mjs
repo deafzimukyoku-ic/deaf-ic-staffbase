@@ -1,11 +1,10 @@
 /* ①修正の効果確認: 新フィルタ「現所属(主+兼任)の施設の勤務だけをバッジ化」を
    アプリと同じロジックで再現し、金田さんのパステル残存が除外されることを示す。 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs'; import path from 'node:path'; import url from 'node:url';
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const env = Object.fromEntries(fs.readFileSync(path.resolve(__dirname,'..','.env.local'),'utf8').split(/\r?\n/).filter(Boolean).filter(l=>!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(),l.slice(i+1).trim()];}));
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const client = new pg.Client({ host:'aws-1-ap-southeast-1.pooler.supabase.com', port:6543, user:`postgres.${m[3]}`, password:decodeURIComponent(m[2]), database:'postgres', ssl:{rejectUnauthorized:false} });
+const client = createPgClient(env);
 await client.connect();
 try {
   const emp = await client.query(`select id, last_name||' '||first_name name, facility_id from public.employees where last_name like '金田%' limit 1`);

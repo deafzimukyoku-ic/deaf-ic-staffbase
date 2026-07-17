@@ -1,6 +1,6 @@
 /* deaf-ic 本番 DB の storage.objects RLS 現状調査
    manuals 画像アップロード時の「new row violates row-level security policy」真因特定用 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -14,19 +14,8 @@ const env = Object.fromEntries(
     return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
   })
 );
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-if (!m) throw new Error('DATABASE_URL parse fail');
-const password = decodeURIComponent(m[2]);
-const ref = m[3];
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${ref}`,
-  password,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {

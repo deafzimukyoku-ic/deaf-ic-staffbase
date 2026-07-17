@@ -2,7 +2,7 @@
    - public.employees / public.children の RLS policy を実 DB から取得
    - manager / shift_manager が UPDATE/INSERT できる条件を確認
    - RLS ヘルパー関数 (get_my_role / get_my_managed_facility_ids) の定義を確認 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -13,14 +13,8 @@ const env = Object.fromEntries(
     .split(/\r?\n/).filter(Boolean).filter((l) => !l.startsWith('#'))
     .map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
 );
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-if (!m) throw new Error('DATABASE_URL parse fail');
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com', port: 6543,
-  user: `postgres.${m[3]}`, password: decodeURIComponent(m[2]),
-  database: 'postgres', ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {

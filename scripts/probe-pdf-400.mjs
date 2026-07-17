@@ -2,7 +2,7 @@
    - manuals テーブルのどの行を指しているか
    - documents バケットに実在するか
    を確認するワンショット probe。読み取り専用。 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -25,12 +25,7 @@ console.log(`path  : ${STORAGE_PATH}`);
 console.log(`url   : ${SUPABASE_URL}`);
 console.log('');
 
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543, user: `postgres.${m[3]}`, password: decodeURIComponent(m[2]),
-  database: 'postgres', ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 await client.connect();
 try {
   /* 1) どの manuals row が このパスを参照しているか */

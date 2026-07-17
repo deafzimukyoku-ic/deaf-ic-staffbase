@@ -4,12 +4,11 @@
    手法: authenticated ロール + request.jwt.claims の sub を各 manager の auth_user_id に差し替えて
    RLS を実際に適用させる（postgres/service ロールは RLS をバイパスするため不可）。
    これで「draft でも見える＝相互反映できる」ことをアプリと同じ認可経路で立証する。 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs'; import path from 'node:path'; import url from 'node:url';
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const env = Object.fromEntries(fs.readFileSync(path.resolve(__dirname,'..','.env.local'),'utf8').split(/\r?\n/).filter(Boolean).filter(l=>!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(),l.slice(i+1).trim()];}));
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const client = new pg.Client({ host:'aws-1-ap-southeast-1.pooler.supabase.com', port:6543, user:`postgres.${m[3]}`, password:decodeURIComponent(m[2]), database:'postgres', ssl:{rejectUnauthorized:false} });
+const client = createPgClient(env);
 await client.connect();
 
 async function asUser(authUserId, fn) {

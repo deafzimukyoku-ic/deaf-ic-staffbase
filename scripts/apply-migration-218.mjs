@@ -1,21 +1,15 @@
 /* migration 218: shift_assignments.assignment_type に am_off/pm_off を追加 + 検証
    - CHECK制約の新定義を確認
    - am_off/pm_off の INSERT が通る (旧定義では弾かれた) ことを rollback 付きで実証 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs'; import path from 'node:path'; import url from 'node:url';
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const env = Object.fromEntries(
   fs.readFileSync(path.resolve(__dirname,'..','.env.local'),'utf8').split(/\r?\n/).filter(Boolean).filter(l=>!l.startsWith('#'))
     .map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(),l.slice(i+1).trim()];})
 );
-const dbUrl = env.DATABASE_URL || env.SUPABASE_DB_URL;
-const m = dbUrl.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-if (!m) throw new Error('DB URL parse fail');
 const migrationSql = fs.readFileSync(path.resolve(__dirname,'..','supabase','migrations','218_shift_assignment_halfday.sql'),'utf8');
-const client = new pg.Client({
-  host:`db.${m[3]}.supabase.co`, port:5432, user:'postgres',
-  password:decodeURIComponent(m[2]), database:'postgres', ssl:{rejectUnauthorized:false},
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {

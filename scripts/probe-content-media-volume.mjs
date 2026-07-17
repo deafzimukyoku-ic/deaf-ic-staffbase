@@ -8,7 +8,7 @@
    - 既存 Supabase Storage signed URL の検出 (path 抽出可否)
    - Pro プラン Storage 100GB 枠への充足見積もり (Drive ファイル単位サイズは別途 HEAD で取得)
 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -24,17 +24,8 @@ const env = Object.fromEntries(
 );
 const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
 if (!m) throw new Error('DATABASE_URL parse fail (expected db.<ref>.supabase.co form)');
-const password = decodeURIComponent(m[2]);
-const ref = m[3];
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${ref}`,
-  password,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 const TABLES = [
   { table: 'manuals', label: 'マニュアル' },

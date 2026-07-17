@@ -5,30 +5,10 @@
    - pending のうち scheduled_at < now() (即時送信対象)
    - pending のうち scheduled_at < now() - 24h (今回 cancel 予定)
    - 直近 30 日の sent_at 分布 (cron が走っていなかった期間の特定) */
-import pg from 'pg';
-import fs from 'node:fs';
-import path from 'node:path';
-import url from 'node:url';
+import { createPgClient, loadEnv } from './_db.mjs';
 
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, '..', '..', '..', '..', '.env.local');
-const env = Object.fromEntries(
-  fs.readFileSync(envPath, 'utf8').split(/\r?\n/).filter(Boolean).filter(l => !l.startsWith('#')).map(l => {
-    const i = l.indexOf('=');
-    return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-  })
-);
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const password = decodeURIComponent(m[2]);
-const ref = m[3];
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${ref}`,
-  password,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const env = loadEnv();
+const client = createPgClient(env);
 
 await client.connect();
 try {

@@ -2,12 +2,11 @@
    - 各 facility × 月 の publish_status（2026-05 以降）
    - その facility の通知対象人数（employee: ready/publish 共通、admin: publish 用）
    - その facility×月 に shift_ready/shift_publish 通知が enqueue/sent されたか */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs'; import path from 'node:path'; import url from 'node:url';
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const env = Object.fromEntries(fs.readFileSync(path.resolve(__dirname,'..','.env.local'),'utf8').split(/\r?\n/).filter(Boolean).filter(l=>!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(),l.slice(i+1).trim()];}));
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const client = new pg.Client({ host:'aws-1-ap-southeast-1.pooler.supabase.com', port:6543, user:`postgres.${m[3]}`, password:decodeURIComponent(m[2]), database:'postgres', ssl:{rejectUnauthorized:false} });
+const client = createPgClient(env);
 await client.connect();
 try {
   // facility × 月 の publish_status (2026-05 以降、単一 status の月のみ正常想定)

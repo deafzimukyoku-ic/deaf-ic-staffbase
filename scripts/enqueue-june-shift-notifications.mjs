@@ -2,12 +2,11 @@
    shift_publish 通知を enqueue する（pg_cron が新コードで配信 → 職員 + admin）。
    対象: 職員のいる 3 施設のみ（パレット / パステル / パズル）。本部(職員0)は除外。
    二重防止: 既存の未送信 shift_publish(同 facility/2026-06) を delete してから insert。 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs'; import path from 'node:path'; import url from 'node:url';
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const env = Object.fromEntries(fs.readFileSync(path.resolve(__dirname,'..','.env.local'),'utf8').split(/\r?\n/).filter(Boolean).filter(l=>!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(),l.slice(i+1).trim()];}));
-const m = env.DATABASE_URL.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@db\.([^.]+)\.supabase\.co/);
-const client = new pg.Client({ host:'aws-1-ap-southeast-1.pooler.supabase.com', port:6543, user:`postgres.${m[3]}`, password:decodeURIComponent(m[2]), database:'postgres', ssl:{rejectUnauthorized:false} });
+const client = createPgClient(env);
 
 const TARGETS = ['cc92a6de-0b33-4bbd-a805-1e8d95865272', // パレット
                  '38964f31-8d28-4c49-a3b5-aa7c9ff87683', // パステル

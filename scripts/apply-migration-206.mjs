@@ -1,5 +1,5 @@
 /* migration 206 (categories で manager_facilities 兼任を考慮) を pooler 経由で適用 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -18,21 +18,12 @@ if (!m) {
   console.error('DATABASE_URL の形式が想定外です');
   process.exit(1);
 }
-const password = decodeURIComponent(m[2]);
-const ref = m[3];
 const migrationSql = fs.readFileSync(
   path.resolve(projectRoot, 'supabase', 'migrations', '206_category_audience_managed_facilities_fix.sql'),
   'utf8'
 );
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${ref}`,
-  password,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {

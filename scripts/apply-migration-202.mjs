@@ -1,5 +1,5 @@
 /* migration 202 (pg_cron engagement-digest) を pooler 経由で適用 */
-import pg from 'pg';
+import { createPgClient } from './_db.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -18,18 +18,9 @@ if (!m) {
   console.error('DATABASE_URL の形式が想定外です:', env.DATABASE_URL);
   process.exit(1);
 }
-const password = decodeURIComponent(m[2]);
-const ref = m[3];
 const migrationSql = fs.readFileSync(path.resolve(projectRoot, 'supabase', 'migrations', '202_pg_cron_engagement_digest.sql'), 'utf8');
 
-const client = new pg.Client({
-  host: 'aws-1-ap-southeast-1.pooler.supabase.com',
-  port: 6543,
-  user: `postgres.${ref}`,
-  password,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false },
-});
+const client = createPgClient(env);
 
 await client.connect();
 try {
