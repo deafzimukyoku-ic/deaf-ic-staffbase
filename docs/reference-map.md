@@ -29,10 +29,10 @@
 | 112 | 112_transport_employee_ids.sql | transport_assignments: pickup/dropoff_staff_ids → pickup/dropoff_employee_ids 改名 | ✅ |
 | 113 | 113_child_display_order_memory.sql | 児童 DnD 並び順記憶テーブル（slot_signature, child_id, display_order） | ✅ |
 | 114 | 114_employees_qualifications_array_fix.sql | employees.qualifications を text → text[] に変換（104 が `add column if not exists` で skip された型ズレを是正） | ✅ |
-| 115 | 115_remove_departments_and_position_role.sql | (A) departments / employee_departments / manager_departments 完全削除 + employees.department drop / (B) positions.system_role + 同期トリガー削除（役職→ロール自動連動を切断） | 🆕 未適用 |
-| 116 | 116_facility_core_time_and_meta.sql | (A) facility_shift_settings.core_start_time / core_end_time（コアタイム事業所別設定） / (B) facilities に display_order / shift_enabled / transport_enabled 追加（並び順 + シフト/送迎 ON/OFF） | 🆕 未適用 |
-| 130 | 130_employee_facilities.sql | **複数事業所所属（兼任）対応**。employee_facilities テーブル（兼任先のみ）+ ヘルパー関数 `get_my_facility_ids()` / `get_my_managed_facility_ids()` / `employee_belongs_to_facility(emp,fac)` + 主所属＝兼任の重複防止トリガ × 2 | 🆕 未適用 |
-| 131 | 131_multi_facility_rls.sql | RLS 大改修：facility-only テーブル (children/schedule_entries/events/billing/facility_shift_settings/transport_assignments) + employee-level cross-facility テーブル (shift_requests/shift_assignments/shift_change_requests) で兼任を考慮。manager の管轄施設は `get_my_managed_facility_ids()` ベース。`employee_in_my_managed_facilities()` 追加 + `get_manager_subordinate_ids()` 兼任対応に拡張 | 🆕 未適用 |
+| 115 | 115_remove_departments_and_position_role.sql | (A) departments / employee_departments / manager_departments 完全削除 + employees.department drop / (B) positions.system_role + 同期トリガー削除（役職→ロール自動連動を切断） | ✅ 適用済（2026-07-17 実DB確認） |
+| 116 | 116_facility_core_time_and_meta.sql | (A) facility_shift_settings.core_start_time / core_end_time（コアタイム事業所別設定） / (B) facilities に display_order / shift_enabled / transport_enabled 追加（並び順 + シフト/送迎 ON/OFF） | ✅ 適用済（2026-07-17 実DB確認） |
+| 130 | 130_employee_facilities.sql | **複数事業所所属（兼任）対応**。employee_facilities テーブル（兼任先のみ）+ ヘルパー関数 `get_my_facility_ids()` / `get_my_managed_facility_ids()` / `employee_belongs_to_facility(emp,fac)` + 主所属＝兼任の重複防止トリガ × 2 | ✅ 適用済（2026-07-17 実DB確認） |
+| 131 | 131_multi_facility_rls.sql | RLS 大改修：facility-only テーブル (children/schedule_entries/events/billing/facility_shift_settings/transport_assignments) + employee-level cross-facility テーブル (shift_requests/shift_assignments/shift_change_requests) で兼任を考慮。manager の管轄施設は `get_my_managed_facility_ids()` ベース。`employee_in_my_managed_facilities()` 追加 + `get_manager_subordinate_ids()` 兼任対応に拡張。**現行の policy 本体は 140 が shift_manager を足した上書き版**（131 の `get_my_managed_facility_ids()` 形を継承） | ✅ 適用済（2026-07-17 実DB確認） |
 | 156 | 156_get_my_subordinate_progress_rpc.sql | **`get_my_subordinate_progress(p_facility_id uuid)` RPC 新設**（SECURITY DEFINER）。/mgr/dashboard の部下達成率が全件 0% になる問題の修正。employee_progress（security_invoker ビュー）+ submission 系テーブル直読みは manager の RLS で 0 件になるため、RPC で部下ごとの完了件数 + 各カテゴリ最終完了日時を返す。migration 148/153 の ambiguous 対策（alias + `AS fid`）踏襲 | ✅ 適用済 |
 | 157 | 157_split_public_holiday_and_requested_off.sql | **公休 / 希望休 の分離**。`shift_requests.request_type`: `public_holiday`→`requested_off` リネーム + CHECK を実使用値（`requested_off`/`paid_leave`/`full_day_available`/`am_off`/`pm_off`）に作り直し（旧 CHECK は `available_day` の3値のみで `full_day_available` 等の保存が失敗していた既存バグも修正）。`shift_assignments.assignment_type` に `requested_off` 追加 + 既存 `public_holiday` 16行を `requested_off` に移行 | ✅ 適用済 |
 | 158 | 158_notifications_insert_policy.sql | notifications テーブルに INSERT ポリシー (`notif_actor_insert`) 追加。139 で RLS 有効化したが INSERT ポリシー欠落 → 個別メッセージ送信が本番 403。actor_employee_id 自分 + tenant_id 自分の WITH CHECK で許可 | ✅ 適用済 |
@@ -62,6 +62,35 @@
 | 217 | 217_facility_shift_view_employees_rpc.sql | **`get_my_facility_shift_view_employees(uuid[])` RPC 新設**。/my/requests?tab=facility-shift で employee が自分しか見えなかった件の解消。全ロール対応・最小列のみ返す SECURITY DEFINER | ✅ 適用済 |
 | 218 | 218_shift_assignment_halfday.sql | **`shift_assignments_assignment_type_check` に `am_off`/`pm_off` 追加**。半休をシフト割当でも表現可能に。docs/features/shift-halfday-availability-reflection.md | ✅ 適用済 |
 | 219 | 219_shift_day_notes.sql | **シフト表 日別メモ2行 (先方要望①)**。新テーブル `shift_day_notes(tenant_id, facility_id, date, row_no 1\|2, content)` UNIQUE(tenant,facility,date,row_no) + set_updated_at トリガ + RLS 2本（admin=テナント全域 / manager・shift_manager=管轄施設。employee ポリシーなし）。publish_status 非連動の作成支援メモ。docs/features/shift-notes-copypaste-crossfacility.md | ✅ 適用済 |
+
+---
+
+## 0.20 スクリプトの DB 接続を `scripts/_db.mjs` に一本化 + TLS 証明書検証を有効化（2026-07-17）
+
+制約の正本: [docs/constraints.md](constraints.md) §2 ／ 経緯: [docs/error-log.md](error-log.md)（TLS / worktree 由来 env パス / CRLF codemod の3件）
+
+### 何が変わったか
+- **`scripts/_db.mjs`（新規・接続構成の正本）**: `createPgClient(env?)` / `loadEnv(file?)` / `withDb(fn)` を export。
+  pooler 固定（`aws-1-ap-southeast-1.pooler.supabase.com:6543` / `postgres.<ref>`）+ `ssl:{ca: scripts/certs/*.crt, rejectUnauthorized:true}`
+- **`scripts/certs/prod-ca-2021.crt` / `prod-ca-2025.crt`（新規・git 追跡下）**: 信頼アンカー。
+  CN 同一・鍵別物の 2 本を**両方**信頼（rotation 耐性）。`_db.mjs` は `certs/*.crt` を全部読むため**増えたら置くだけ**
+- **`scripts/probe-tls-verify.mjs`（新規）**: 検証が効いていることの実証（成功例 + 失敗すべき 3 例）
+- **既存 58 本**を `createPgClient(env)` 経由に置換し、`ssl:{rejectUnauthorized:false}` を**全撤去**
+
+### 連動ポイント（今後スクリプトを書く/直すとき）
+| 変更箇所 | 影響 |
+|---|---|
+| `scripts/_db.mjs` | **DB に触る全スクリプト（58 本）**。host / port / ssl を変えると全部に効く |
+| `scripts/certs/*.crt` | 同上。消すと `_db.mjs` が起動時に throw（＝黙って検証が緩まない設計） |
+| 新規スクリプト作成 | `pg.Client` を直接組まない。`import { createPgClient } from './_db.mjs'` に限る（constraints.md §2） |
+
+### 既知の未修正（今回スコープ外）
+- `scripts/cleanup-orphan-storage.mjs`: `.env.local` を 4 階層上に探すため**起動不能のまま**
+  （worktree 由来。`pg` ではなく supabase-js を使うため今回の置換対象外）。使うときは `loadEnv()` に寄せること
+
+### 参照（DBカラム・ロール・定数・型）
+- **なし**。`_db.mjs` / `certs/` / `probe-tls-verify.mjs` は接続層のみで、DB カラム・ロール名・定数・型に依存しない
+  （`DATABASE_URL` / `SUPABASE_DB_URL` の 2 つの env キーのみ参照）
 
 ---
 
@@ -480,7 +509,7 @@ A 施設で勤務時間を登録 → B 施設のシフト表に「A 勤務」と
 | `tsconfig.json` | exclude に diletto-shift-maker / diletto-staffbase 追加 |
 
 ### 影響範囲
-- ❗ **migration 115 未適用**: コード側は dept 参照ゼロ。Supabase で `115_remove_departments_and_position_role.sql` 実行後に dept テーブル drop で完了
+- ✅ **migration 115 適用済**（2026-07-17 実DB確認）: コード側は dept 参照ゼロ。dept テーブル drop も完了済み（`departments` / `employee_departments` / `manager_departments` / `employees.department` / `positions.system_role` がいずれも本番に存在しないことを `scripts/probe-migration-115-116-130.mjs` で確認）。**この行は長らく「未適用・要実行」と誤記載されていた** — 経緯は `docs/error-log.md` の台帳腐りエントリ参照
 - 役職 (positions) は純粋なラベルになる。システム権限は employees.role + manager_facilities + access-matrix で管理
 
 ---
@@ -1028,19 +1057,20 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 
 ---
 
-## 14c. 利用料金表 / イベント / 児童料金属性（Phase 66, migration 126〜128）
+## 14c. 利用料金表 / イベント / 児童料金属性（Phase 66, migration 126〜128, 221）
 
 | ファイル | 参照内容 |
 |---|---|
 | **supabase/migrations/126_children_billing_fields.sql** | children に `municipality / copay_tier / copay_freeform_amount / kumon_monthly_fee` 列追加 |
 | **supabase/migrations/127_events.sql** | `events` テーブル新規（name, date, price, facility_id）+ RLS |
 | **supabase/migrations/128_billing.sql** | `billing_summaries` + `billing_event_participations` 新規 + RLS |
-| lib/types.ts | `CopayTier` / `EventRow` 追加、`ChildRow` 拡張 |
-| lib/constants.ts | `SNACK_FEE_PER_DAY=50` / `COPAY_TIERS` / `COPAY_TIER_AMOUNT` / `COPAY_TIER_LABELS` / `NAGOYA_FREE_PRESCHOOL_MUNICIPALITY` / `FREE_GRADES_NATIONWIDE` |
-| lib/logic/computeBilling.ts | `isFreeOfCharge` / `resolveCopayCap` / `computeDefaultCopayAmount` / `computeBillingRow`（純関数） |
+| **supabase/migrations/221_billing_snack_fee_override.sql** | `billing_summaries.snack_fee_override integer null` 追加（CHECK: null or >= 0）。おやつ等の手動調整。RLS 変更なし（既存 policy が `for all` のため新列も同ポリシー配下） |
+| lib/types.ts | `CopayTier` / `EventRow` 追加、`ChildRow` 拡張。**Billing 系の型は無し**（`BillingSummaryRow` は `BillingFull.tsx` のローカル型） |
+| lib/constants.ts | `SNACK_FEE_PER_DAY=50` / `COPAY_TIERS` / `COPAY_TIER_AMOUNT` / `COPAY_TIER_LABELS` / `NAGOYA_FREE_PRESCHOOL_MUNICIPALITY` / `FREE_GRADES_NATIONWIDE`<br>※ `SNACK_FEE_PER_DAY` は**自動算出の単価**と**▲▼ 1 ステップ幅**の両方に使う。参照は `computeBilling.ts` のみ（`BillingFull.tsx` は直接参照しない） |
+| lib/logic/computeBilling.ts | `isFreeOfCharge` / `resolveCopayCap` / `computeDefaultCopayAmount` / `computeDefaultSnackFee` / `resolveSnackFee` / `stepSnackFee` / `computeBillingRow(child, days, events, copayOverride?, snackOverride?)`（純関数） |
 | components/shift/ChildrenSettingsFull.tsx | 児童編集モーダルに料金属性 UI、児童一覧テーブルに「上限 / 公文」列追加（事業所列削除）|
 | components/shift/EventSettingsFull.tsx | イベント設定 ページ（CRUD + 月切替）|
-| components/shift/BillingFull.tsx | 利用料金表 ページ（月選択 / 自動計算 / 手動オーバーライド / 保存 / A4 横印刷）|
+| components/shift/BillingFull.tsx | 利用料金表 ページ（月選択 / 自動計算 / 手動オーバーライド / おやつ等の ▲▼ 調整 / 保存 / A4 横印刷 / Excel 出力）。`RowState.snackOverride` ⇄ `billing_summaries.snack_fee_override` |
 | app/(admin)/admin/shifts/events/, app/(manager)/mgr/shifts/events/ | EventSettingsFull のページラッパ |
 | app/(admin)/admin/shifts/output/billing/, app/(manager)/mgr/shifts/output/billing/ | BillingFull のページラッパ |
 | app/(admin)/layout.tsx, app/(manager)/layout.tsx | サイドバーに「💰 利用料金表」追加 / 「⚙️ シフト設定」をアコーディオン化 |
@@ -1052,7 +1082,9 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 - **無償化判定**: 全国 = `nursery_3/4/5`、名古屋市のみ追加で `preschool` も対象（市町村文字列の完全一致）
 - **イベント参加判定**: 月締め時に手動チェック前提。schedule_entries の `attendance_status='present'` から自動推測はしない（present 以外でも イベントには参加した、という運用例があるため）
 - **月次集計の永続化**: `billing_summaries` に保存。copay（手動上書き）/ イベント参加 / 受取日 / 児童名・市町村スナップショットは保存値を保持（月内に児童属性が変わっても紙の数字を守る）。**ただし出席日数・おやつ代・請求額はスナップショット固定せず、表示/印刷/Excel とも常に利用表 `schedule_entries` のライブカウント（`isAttended`）を正とする（2026-06-08〜「利用表＝正」化）。保存済みでもライブ値とズレていれば `dirty` 表示し「保存」で `billing_summaries` を最新化できる。`billing_summaries` を読むのは `BillingFull` のみ**
+- **おやつ等の手動調整（migration 221, 2026-07-17）**: 上記「ライブ算出」の**唯一の例外**。`snack_fee_override` が null なら従来どおり `出席日数 × SNACK_FEE_PER_DAY` のライブ算出で出席日数に追従するが、料金表の ▲▼（±50円 = ±1日分）で調整すると値が入り、**その月は固定されて出席日数の事後変更に追従しなくなる**（↺ で null に戻せば追従再開）。`0`（手動で 0 円に固定）と `null`（自動）は意味が異なるため、判定は必ず `?? ` / `== null` で行い `||` を使わない。算出の分岐は `resolveSnackFee` に一元化し、`BillingFull.tsx` 側で式を再実装しない（旧実装は `computeBilling.ts` と `BillingFull.tsx` に式が二重定義されていた）
 - **shift_only_mode との関係**: シフトのみ事業所はそもそも利用料金表を使わない（児童不在）。サイドバーから 利用料金表 / 児童管理 / イベント設定 はフィルタで除外
+- **ロール別アクセス（2026-07-17 実 DB 確認済 / `scripts/probe-billing-page-as-shift-manager.mjs`）**: admin = 全事業所 / manager = 管轄事業所 / **shift_manager = 主所属1事業所（読み書きとも可・追加対応不要）** / employee = 不可。shift_manager は migration 140 が `bs_manager_facility`・`bep_manager_facility` を drop & recreate して述語を `get_my_role() in ('manager','shift_manager')` に拡張済みで、**manager と同一ポリシーを共用する（shift_manager 専用ポリシーは無い）**。⚠️ ポリシー名 `bs_manager_facility` は "manager" と読めるため「shift_manager は弾かれる」と誤読しやすい（2026-07-17 に実際に誤診）。判定は必ず `pg_policies.qual` 本体を引くこと（CLAUDE.md §16-2）
 
 ---
 

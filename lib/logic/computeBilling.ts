@@ -14,6 +14,8 @@
  *      この純関数は「初期値」を返すだけ。手動入力された値があれば呼び出し側で上書きする想定。
  *
  *   おやつ消耗品代 = 出席日数 × SNACK_FEE_PER_DAY
+ *     ※ 料金表ページの ▲▼（±1日分）で手動調整可（migration 221 billing_summaries.snack_fee_override）。
+ *        調整するとその月は固定され、出席日数の事後変更に追従しなくなる。
  *   教材印刷代   = kumonMonthlyFee ?? 0（児童ごと、施設ごとに金額違うため）
  *   参加費合計   = Σ(参加した event の price)  ※ 料金表 UI では別列表示するが、請求額には含める
  *   請求額       = (利用負担額 ?? 0) + おやつ + 教材印刷代 + 参加費合計
@@ -94,21 +96,49 @@ export function computeDefaultCopayAmount(child: BillingChildInput, attendanceDa
   return cap;
 }
 
+/** おやつ等の自動算出額（円）= 出席日数 × SNACK_FEE_PER_DAY */
+export function computeDefaultSnackFee(attendanceDays: number): number {
+  return Math.max(0, attendanceDays) * SNACK_FEE_PER_DAY;
+}
+
+/**
+ * おやつ等の実効額（円）。料金表の表示・印刷・Excel・保存はすべてこの関数を通す。
+ *
+ * override が null/undefined なら自動算出（＝出席日数の事後変更に追従する）。
+ * 値があればそれで固定する（＝利用表を直しても追従しない）。
+ * override=0（手動で 0 円に固定）と null（自動）は意味が異なるため、
+ * `||` ではなく `== null` で判定する。`0 || x` の取り違えが本機能の最有力バグ点。
+ */
+export function resolveSnackFee(attendanceDays: number, snackOverride?: number | null): number {
+  if (snackOverride == null) return computeDefaultSnackFee(attendanceDays);
+  return Math.max(0, Math.floor(snackOverride));
+}
+
+/**
+ * ▲▼ の 1 ステップ後のおやつ等の額（円）。1 ステップ = SNACK_FEE_PER_DAY（＝おやつ 1 日分）。
+ * 下限 0（マイナスの請求は存在しないため）。
+ */
+export function stepSnackFee(currentFee: number, direction: 1 | -1): number {
+  return Math.max(0, currentFee + direction * SNACK_FEE_PER_DAY);
+}
+
 /**
  * 1 児童分の請求書 1 行を計算する。
  * copayOverride を渡すと利用負担額を強制上書きする（料金表ページで手動入力された値）。
+ * snackOverride を渡すとおやつ等を固定する（null/undefined = 出席日数からの自動算出）。
  */
 export function computeBillingRow(
   child: BillingChildInput,
   attendanceDays: number,
   events: BillingEventInput[],
   copayOverride?: number | null,
+  snackOverride?: number | null,
 ): BillingChildResult {
   const copayAmount =
     copayOverride === undefined
       ? computeDefaultCopayAmount(child, attendanceDays)
       : copayOverride;
-  const snackFee = Math.max(0, attendanceDays) * SNACK_FEE_PER_DAY;
+  const snackFee = resolveSnackFee(attendanceDays, snackOverride);
   const kumonFee = child.kumonMonthlyFee != null && child.kumonMonthlyFee > 0
     ? Math.floor(child.kumonMonthlyFee)
     : 0;

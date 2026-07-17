@@ -5,6 +5,143 @@
 
 ---
 
+## Supabase 接続スクリプトが TLS 証明書検証を全部切っていた（`rejectUnauthorized:false` × 58 ファイル）
+
+- **発生日**: 2026-07-17
+- **発生箇所**: `scripts/*.mjs` 58 本すべて（`apply-migration-*.mjs` / `probe-*.mjs` / `cleanup-*.mjs` ほか）
+- **エラー内容**: 実害の報告は無い（**顕在化していない脆弱性**）。検証を有効にすると
+  `Error: self-signed certificate in certificate chain (SELF_SIGNED_CERT_IN_CHAIN)`
+- **原因**:
+  - pooler (`aws-1-ap-southeast-1.pooler.supabase.com:6543`) が提示するのは **Supabase の私設 CA チェーン**
+    （leaf `*.pooler.supabase.com` → `Supabase Intermediate 2021 CA` → 自己署名 `Supabase Root 2021 CA`）で、
+    **OS / Node の既定信頼ストアには入っていない**。素直に繋ぐと上記エラーになる
+  - そこで最初の 1 本が `ssl:{rejectUnauthorized:false}` で"解決"し、以降**コピペで 58 本に伝播**した。
+    CLAUDE.md にも constraints.md §2 にも「pooler を使う」とだけ書かれ、**TLS をどうするかが未記載**だったため、
+    定型として固定化した（＝ドキュメントの穴がそのままコードの穴になった典型）
+  - 実害: この接続には **postgres スーパーユーザーの資格情報**が流れる。検証を切った TLS は
+    「暗号化はされているが相手が誰か確かめない」状態で、中間者に対して無防備
+- **解決方法**: 「検証を切る」のではなく「**信頼アンカーを明示する**」:
+  1. Dashboard と同一 URL（`supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt`）から
+     公的 CA で検証された HTTPS 経由で CA を取得。**pooler が送ってきたチェーンは信頼しない**（TOFU になり無意味）
+  2. fingerprint を 3 系統（S3 / Supabase CLI の embed / 実接続チェーン）で突き合わせて一致を確認
+  3. `scripts/certs/prod-ca-2021.crt` + `prod-ca-2025.crt` を **git 追跡下**に配置（公開情報。差分レビュー可能にするため）
+  4. 接続構成を `scripts/_db.mjs` の `createPgClient()` に一本化し、58 本をそこ経由に置換
+  5. `scripts/probe-tls-verify.mjs` で**成功例と失敗すべき例の両方**を実証（詳細は constraints.md §2）
+- **再発防止**:
+  - constraints.md §2 に「pooler 経由 **+ 証明書検証あり**」の正本と、CA の入手元・fingerprint・rotation 方針を明記
+  - **`pg.Client` を各スクリプトで組み立てない**。`_db.mjs` 経由に限る（迂回すると検証設定ごと抜け落ちる）
+  - Supabase は **CN が同じまま鍵違いの root を再発行**する（2021 / 2025 は CN 同一・SPKI 別物）。
+    片方だけ pin すると rotation で全スクリプトが落ちるため、`certs/*.crt` を**全部**信頼する設計にした
+  - 「動かないから検証を切る」は**常に間違い**。落ちたら CA を疑う（`openssl s_client -starttls postgres` で実チェーンを見る）
+
+---
+
+## worktree 由来のスクリプトを `scripts/` にコピーして 9 本が起動不能だった（`.env.local` を 4 階層上に探す）
+
+- **発生日**: 2026-07-17（TLS 対応中に `node scripts/verify-vault-secrets.mjs` を流して発覚）
+- **発生箇所**: `scripts/verify-vault-secrets.mjs:9` ほか計 9 本
+  （`apply-migration-179/180/181`, `check-issued-docs-duplicates`, `check-notification-queue-overdue`,
+  `cleanup-orphan-storage`, `diagnose-vault`, `investigate-issued-docs-duplicates`）
+- **エラー内容**: `Error: ENOENT: no such file or directory, open 'C:\Users\.env.local'`
+- **原因**: これらは `.claude/worktrees/beautiful-neumann-53346e/scripts/` で書かれたもの。
+  **worktree には `.env.local` が無い**（gitignore されており checkout されない）ため、
+  作者は `path.resolve(__dirname,'..','..','..','..','.env.local')` と**4 階層上の本体リポジトリ**を参照していた。
+  worktree ではこれが正しく repo ルートを指すが、`scripts/` にコピーした瞬間 `C:\Users\.env.local` になり壊れた。
+  migration SQL 側は `'..'`（1 階層上）で正しく、**env パスだけが worktree 相対**という歪な状態だった
+- **解決方法**: `_db.mjs` の `loadEnv()`（repo ルート基準で解決）に寄せて 8 本を修正。
+  読み取り専用の 4 本を実行して復旧を確認（`verify-vault-secrets` は Vault secret を正しく取得）。
+  残る `cleanup-orphan-storage.mjs` は `pg` を使わず supabase-js のため当時のスコープ外だったが、
+  同日 9 本目として同様に `loadEnv()` へ寄せて修正済（`fs`/`path`/`url`/`__dirname` は
+  `orphan-pdf-paths.json` の解決に使うため残置、`envPath` のみ削除）。
+  ただし本体は **dry-run 分岐を持たず起動＝即削除**のため、`loadEnv()` の解決のみ
+  別ハーネスで確認し、スクリプト自体の実行は見送っている（＝起動確認は未実施のまま）
+- **再発防止**:
+  - **worktree で書いたスクリプトを `scripts/` にコピーするときはパス解決を必ず見直す**。
+    特に gitignore されたファイル（`.env.local`）への相対パスは worktree と本体で意味が変わる
+  - env の読み込みは `loadEnv()` に限る（`path.resolve` を各スクリプトで書かない）
+  - **コピー後に一度実行する**。今回は 58 本を機械置換した際、read-only の数本を実際に流すまで
+    「9 本が元から起動不能」に誰も気づいていなかった
+
+---
+
+## codemod が CRLF ファイルの改行を壊した（JS の `^` は `\r` と `\n` の間にもマッチする）
+
+- **発生日**: 2026-07-17（上記 TLS 対応の一括置換中に自分で作り込み、`node --check` 通過後に発覚）
+- **発生箇所**: 一時 codemod の `src.replace(/^\s*\n(?=import)/m, '')`（空行を詰めるつもりの 1 行）
+- **エラー内容**: 構文エラーにならない。8 ファイルで
+  `/* コメント */import { createPgClient } from './_db.mjs';` と**行が連結して見える**状態になった
+- **原因**: 対象が **CRLF** 改行のファイルだった。JS の正規表現 `^`（`/m`）は `\n` だけでなく
+  **`\r` の直後にもマッチ**する。そのため `*/\r\nimport…` の **`\r` と `\n` の間**で `^` が成立し、
+  `\s*`（空）→ `\n` が CRLF の `\n` **だけ**を食って削除。結果 `\r` が単独で残り、
+  多くのエディタ / grep では改行として描画されず「連結」に見えた（＝ `*/import …` は JS としては合法なので
+  `node --check` も通り、静かに残った）
+- **解決方法**: バイト単位で `\r(?!\n)`（孤立 CR）を検出 → 8 ファイル 各 1 個を `\r\n` に修復。
+  修復後は 58 本すべてで `import { createPgClient } from './_db.mjs';` が独立行に揃うことを確認
+- **再発防止**:
+  - **CRLF リポジトリで `^` / `$` を使った行単位の置換をしない**。行を消すなら `\r?\n` を明示的に扱う
+  - `node --check` は**構文しか見ない**。改行・未定義参照・実行時エラーは捕まらないので、
+    機械置換の後は必ず「バイト単位の健全性チェック + 実際に数本を実行」まで行う
+  - 置換前に対象を退避しておく（今回 `scripts/*.mjs` を scratchpad に退避しており、
+    **7 本は git 未追跡＝ git では戻せなかった**。退避が唯一の安全網だった）
+
+---
+
+## 「shift_manager は利用料金表を保存できない」と誤診（実際は元から読み書き可）— policy 名でロールを判断した
+
+- **発生日**: 2026-07-17（`docs/features/billing-snack-fee-adjustable.md` §5「要確認①」として起票され、
+  「shift_manager が料金表に到達できるのに `billing_summaries` を読み書きできない不整合」を塞ぐ別タスクまで切られた）
+- **発生箇所**: `scripts/apply-migration-221.mjs:56`（旧実装）+ `docs/features/billing-snack-fee-adjustable.md` §5 の権限マトリクス
+- **エラー内容**: 実害ゼロ。**存在しない不整合**を「事実（実 DB で確認済み）」として起票し、
+  migration で RLS を足す or middleware / サイドバーから料金表を隠す、という**不要な破壊的変更を実行しかける**ところだった
+- **原因（二段構え）**:
+  1. **apply script が policy 名しか出力していなかった**。`pols.rows.map(r=>`${r.policyname}[${r.cmd}]`)` の出力
+     `bs_admin_all[ALL] / bs_manager_facility[ALL]` を見て「shift_manager 用ポリシーが無い」と推論した。
+     しかし `bs_manager_facility` の USING 本体は `get_my_role() = ANY (ARRAY['manager','shift_manager'])` で
+     **shift_manager を含む**。**名前が "manager" と読めるだけ**だった
+  2. `128_billing.sql` / `131_multi_facility_rls.sql` のファイルだけを読み、`140_shift_manager_role.sql` が
+     **同名 policy を drop & recreate して述語を拡張している**ことを見落とした。policy 名は 128/131/140 で不変のため、
+     名前でもファイル読解でも世代を判別できない
+- **解決方法**: コード変更なし（**塞ぐべき穴が無かった**）。`scripts/probe-billing-rls.mjs` /
+  `scripts/probe-billing-page-as-shift-manager.mjs` で実 DB を引いて決着：
+  - `pg_policy.polqual` 本体に `shift_manager` が含まれることを確認
+  - `get_my_managed_facility_ids()` は `employees.facility_id` ∪ `manager_facilities` の union のため、
+    `manager_facilities` に行が無い shift_manager でも**主所属1施設が返る**（空集合にならない）
+  - 実在の shift_manager の JWT を偽装し、BillingFull の全読み取り経路を実行 →
+    `facilities 1/1・children 24/24・events 3/3・schedule_entries 218/218・billing_summaries 26/26・
+    billing_event_participations 156/156` で **RLS に削られる行はゼロ**。`snack_fee_override` の upsert も成功（ROLLBACK 済）
+  - 設計意図も一致：`140_shift_manager_role.sql:6` の用途定義が**「利用料金表」を明示的に列挙**しており、
+    (a) 使えるようにする は migration 140 の時点で**実装済み**だった
+- **再発防止**:
+  - `apply-migration-221.mjs` の policy 出力を **USING 式 + 述語に現れるロール一覧**まで出すよう修正済
+    （`bs_manager_facility[ALL] 述語に現れるロール: manager, shift_manager` と出る）。同型の apply/probe を書くときはこれを踏襲する
+  - CLAUDE.md §4 に「**shift_manager 専用の RLS ポリシーは基本的に存在せず manager 用を共用**」
+    「**ポリシー名でロールを判断しない**」を明記。`reference-map.md` の利用料金表セクションにもロール別アクセスを追記
+  - **「〜が存在しない」は最も検証が甘くなる主張**。存在の否定を根拠に実装方針を決める前に、
+    必ず実体（`pg_policies.qual` 本体）を引く。今回は「無い」の根拠が**出力形式の都合で見えていなかっただけ**だった
+- **関連**: 直下の「台帳が 115/116/130/131 を未適用と誤記載」（同日・同じ "台帳/名前を信じて実体を引かなかった" 系）/ CLAUDE.md §16-2
+
+---
+
+## 台帳 (reference-map.md) が適用済 migration 115/116/130/131 を「🆕 未適用」と誤記載（118 と逆向きの台帳腐り）
+
+- **発生日**: 2026-07-17（`docs/reference-map.md:35` が 131 を「未適用」、`docs/migration-applied.md` は 220 まで適用済 という台帳同士の矛盾として発覚）
+- **発生箇所**: `docs/reference-map.md:32-35`（115 / 116 / 130 / 131 の「適用済」欄）
+- **エラー内容**: 実害の出たエラーではなく**台帳の事実誤り**。ただし CLAUDE.md §16-2 は「バグ調査時に台帳を根拠にすると誤診する」と警告しており、この 4 行を信じると RLS 系調査で「兼任 (`get_my_managed_facility_ids()`) が効いていないはず」と真逆の前提から調査を始めてしまう
+- **原因**:
+  - 118 の事故（ファイルはあるのに本番に流れていない）と**逆向き**で、流したのに台帳を更新しなかった（＝ CLAUDE.md §16-2「書いたら必ず流す、流したら必ず記録する」の後半の失敗）
+  - `migration-applied.md` の記録対象が 200 番以降のため、199 番以下は reference-map 側の「適用済」欄しか情報源が無く、そこが腐ると検出できなかった
+- **解決方法**: `scripts/probe-migration-131-rls.mjs` / `scripts/probe-migration-115-116-130.mjs` で実 DB を引いて事実確認 → **4 件とも適用済**と判明。reference-map.md:32-35 を ✅ 適用済 に修正し、migration-applied.md に「遡及確認」表 + 既知の不整合 1 行を追加
+  - 131 の判定: 対象 17 policy の `pg_policies.qual` 全文を取得し **17/17 が 131 版 (`get_my_managed_facility_ids()` 形) / 旧 127・128 版 (`facility_id = (select facility_id from employees ...)` 形) 0 件 / 欠落 0 件**
+  - 115: departments 系 3 テーブル + `employees.department` + `positions.system_role` が**存在しない**こと（drop 済）を以て適用済と判定
+  - 116: 対象 5 列すべて存在 / 130: `employee_facilities` + ヘルパー 3/3 + トリガ 2/2
+- **再発防止**:
+  - **台帳の腐りは双方向に起きる**前提で読む。「適用済と書いてあるから効いている」も「未適用と書いてあるから効いていない」も、実 DB を引くまでは仮説。この方針を `migration-applied.md` の注記に明記
+  - probe スクリプト 2 本を残置。同じ疑いが出たら再実行するだけで事実確認できる
+- **教訓（policy 世代の判定方法）**: policy の**名前の有無**では適用判定にならない。後続 migration が同名 policy を `drop`→`create` で作り直すため（実際 131 の policy 群は 140 が shift_manager 対応で上書きしており、現行 qual は `get_my_role() = ANY (ARRAY['manager','shift_manager'])` になっている）。`qual` の**本体**で判別し、かつ判別の印が複数 migration に跨る場合（`get_my_managed_facility_ids()` は 131 も 140 も使う）は、**その migration だけが `create` する関数・policy** を証拠に選ぶ。131 の場合は `employee_in_my_managed_facilities()`（create するのは 131 のみ、140 は参照するだけ）と policy `sa_employee_cross_facility_select`（131 のみ）が決定的証拠
+- **関連**: `docs/migration-applied.md`「遡及確認」表 + 「既知の不整合」表 / CLAUDE.md §16-2 / 118 の事故（逆向きの同種事象）
+
+---
+
 ## 兼任職員の「他施設 勤務」バッジが、全施設が同時にシフトを作ると消える + 兼任が二重フル出勤で生成される
 
 - **発生日**: 2026-07-03（先方要望④のヒアリング中に発覚。実データで ※金さん 7月に パレット27日(ready) と 本部22日(draft) の二重フル出勤を確認）

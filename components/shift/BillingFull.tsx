@@ -6,7 +6,7 @@
  * - 月選択 → 児童一覧 + 当月イベント列を取得
  * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 教材印刷代 / 参加費合計 / イベント参加（既定 false）
  * - 参加費合計 (eventTotal) は別列で表示するが、請求額にも含む
- * - 手動オーバーライド可: 利用負担額 / イベント参加チェック / 受取日
+ * - 手動オーバーライド可: 利用負担額 / おやつ等（▲▼ で ±1日分）/ イベント参加チェック / 受取日
  * - 「保存」で billing_summaries + billing_event_participations を upsert（再印刷時は同じ値）
  * - 「印刷」で A4 横レイアウト
  *
@@ -18,11 +18,12 @@ import { format, getDaysInMonth } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import Button from '@/components/shift-compat/Button';
-import { SNACK_FEE_PER_DAY, type CopayTierConst } from '@/lib/constants';
 import {
   computeDefaultCopayAmount,
+  computeDefaultSnackFee,
+  resolveSnackFee,
+  stepSnackFee,
   type BillingChildInput,
-  type BillingEventInput,
 } from '@/lib/logic/computeBilling';
 import { isAttended } from '@/lib/logic/attendance';
 import type {
@@ -50,6 +51,8 @@ type RowState = {
   child: BillingChildInput;
   attendanceDays: number;
   copayAmount: number | null; // null = "—"
+  /** おやつ等の手動調整額。null = 自動算出（出席日数に追従）/ 値あり = その月は固定 */
+  snackOverride: number | null;
   /** 受取（入金）日 YYYY-MM-DD */
   receivedAt: string | null;
   /** event_id → 参加 boolean */
@@ -65,6 +68,7 @@ interface BillingSummaryRow {
   attendance_days: number;
   copay_amount: number | null;
   snack_fee: number;
+  snack_fee_override: number | null;
   kumon_fee: number;
   event_total: number;
   total_amount: number;
@@ -77,6 +81,24 @@ function defaultMonth(): { year: number; month: number } {
 }
 
 const fmtYen = (n: number) => `¥${n.toLocaleString('ja-JP')}`;
+
+/* おやつ等セル内の小型ステッパー。shadcn の Button はセル内には大きすぎるため素の button を使う。
+   タップ標的 24px を確保（モバイルで押せる最小サイズ）。 */
+const snackBtnStyle: React.CSSProperties = {
+  width: '24px',
+  height: '24px',
+  lineHeight: 1,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: '4px',
+  border: '1px solid var(--rule)',
+  background: 'var(--white)',
+  color: 'var(--ink)',
+  fontSize: '0.7rem',
+  cursor: 'pointer',
+  flexShrink: 0,
+};
 
 export default function BillingFull({ scope }: Props) {
   const supabase = createClient();
@@ -143,7 +165,7 @@ export default function BillingFull({ scope }: Props) {
           .lte('date', monthTo),
         supabase
           .from('billing_summaries')
-          .select('id, child_id, attendance_days, copay_amount, snack_fee, kumon_fee, event_total, total_amount, received_at')
+          .select('id, child_id, attendance_days, copay_amount, snack_fee, snack_fee_override, kumon_fee, event_total, total_amount, received_at')
           .eq('tenant_id', me.tenant_id)
           .eq('facility_id', facilityId)
           .eq('year', year)
@@ -227,6 +249,9 @@ export default function BillingFull({ scope }: Props) {
              （おやつ代・請求額も r.attendanceDays から派生するので自動で追従）。 */
           attendanceDays,
           copayAmount: initialCopay,
+          /* null = 自動算出（出席日数に追従）。保存済みの調整値があればそれを復元して固定。
+             既存の保存済み月は全て null なので従来どおりの金額になる（後方互換）。 */
+          snackOverride: existing?.snack_fee_override ?? null,
           receivedAt: existing?.received_at ?? null,
           participations,
           summaryId: existing?.id ?? null,
@@ -268,10 +293,11 @@ export default function BillingFull({ scope }: Props) {
   }, [rows.length, events.length]);
 
   /* 行の派生値（snack/kumon/eventTotal/total）。
-     参加費合計 (eventTotal) は別列「参加費合計」として表示すると同時に、請求額 (total) にも含める。 */
+     参加費合計 (eventTotal) は別列「参加費合計」として表示すると同時に、請求額 (total) にも含める。
+     おやつ等は resolveSnackFee に一元化（自動算出と手動調整の分岐をここで二重定義しない）。 */
   const computed = useMemo(() => {
     return rows.map((r) => {
-      const snackFee = Math.max(0, r.attendanceDays) * SNACK_FEE_PER_DAY;
+      const snackFee = resolveSnackFee(r.attendanceDays, r.snackOverride);
       const kumonFee = r.child.kumonMonthlyFee != null && r.child.kumonMonthlyFee > 0
         ? Math.floor(r.child.kumonMonthlyFee)
         : 0;
@@ -316,6 +342,27 @@ export default function BillingFull({ scope }: Props) {
 
   const updateRow = (childId: string, patch: Partial<RowState>) => {
     setRows((prev) => prev.map((r) => (r.childId === childId ? { ...r, ...patch, dirty: true } : r)));
+  };
+
+  /* おやつ等の ▲▼。表示中の実効額（自動算出 or 調整済み）を起点に ±1日分し、override として固定する。
+     初回押下時は「自動算出値 ± 50」になるので、画面上の数字がそのまま動いて見える。 */
+  const handleStepSnack = (childId: string, direction: 1 | -1) => {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.childId === childId
+          ? {
+              ...r,
+              snackOverride: stepSnackFee(resolveSnackFee(r.attendanceDays, r.snackOverride), direction),
+              dirty: true,
+            }
+          : r,
+      ),
+    );
+  };
+
+  /* 自動算出に戻す（override を捨てる）。以後は再び出席日数の変更に追従する。 */
+  const handleResetSnack = (childId: string) => {
+    updateRow(childId, { snackOverride: null });
   };
 
   /* 174-B: Excel (xlsx) 出力。exceljs を動的 import して初回のみロード。
@@ -462,6 +509,9 @@ export default function BillingFull({ scope }: Props) {
           attendance_days: r.attendanceDays,
           copay_amount: r.copayAmount,
           snack_fee: c?.snackFee ?? 0,
+          /* 実効額 (snack_fee) と併せて「調整されたか」の根拠も残す。
+             null のまま保存された月は次回読込時も自動算出に追従する。 */
+          snack_fee_override: r.snackOverride,
           kumon_fee: c?.kumonFee ?? 0,
           event_total: c?.eventTotal ?? 0,
           total_amount: c?.total ?? 0,
@@ -690,7 +740,7 @@ export default function BillingFull({ scope }: Props) {
             ref={tableRef}
             className="w-full text-sm billing-grid"
             style={{
-              minWidth: `${600 + events.length * 80}px`,
+              minWidth: `${660 + events.length * 80}px`,
               borderCollapse: 'collapse',
               ['--sticky-c2' as string]: `${stickyLeft.c2}px`,
               ['--sticky-c3' as string]: `${stickyLeft.c3}px`,
@@ -704,7 +754,8 @@ export default function BillingFull({ scope }: Props) {
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3" style={{ width: '140px' }}>氏名</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>おやつ等</th>
+                {/* ▲▼/↺ を収めるため 70px → 130px（印刷時は width:auto に上書きされるため紙面には影響しない） */}
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '130px' }}>おやつ等</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '90px' }}>教材印刷代</th>
                 {events.map((ev) => {
                   /* イベント名が長いと列幅で折り返してしまうので、文字数に応じて自動縮小して 1 行に収める。
@@ -779,8 +830,73 @@ export default function BillingFull({ scope }: Props) {
                         {r.copayAmount == null ? '—' : fmtYen(r.copayAmount)}
                       </span>
                     </td>
-                    <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {c && c.snackFee > 0 ? fmtYen(c.snackFee) : ''}
+                    {/* おやつ等: 自動算出値を起点に ▲▼ で ±1日分（50円）調整できる。
+                        調整済みは 色 + ✎ + title の 3 点で示す（色だけで伝えない: CLAUDE.md §9）。 */}
+                    <td className="px-2 py-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {(() => {
+                        const adjusted = r.snackOverride != null;
+                        const autoFee = computeDefaultSnackFee(r.attendanceDays);
+                        const fee = c?.snackFee ?? autoFee;
+                        const hint = adjusted
+                          ? `手動調整済み（自動算出は ${fmtYen(autoFee)}）。↺ で自動に戻せます`
+                          : `自動算出（出席 ${r.attendanceDays}日分）。▲▼ で 50円ずつ調整できます`;
+                        return (
+                          <>
+                            <div className="flex items-center justify-end gap-1 print-hide">
+                              <button
+                                type="button"
+                                style={snackBtnStyle}
+                                onClick={() => handleStepSnack(r.childId, -1)}
+                                aria-label={`${r.childName} のおやつ等を50円減らす`}
+                                title="50円（1日分）減らす"
+                              >
+                                ▼
+                              </button>
+                              <span
+                                title={hint}
+                                style={{
+                                  minWidth: '52px',
+                                  textAlign: 'right',
+                                  fontSize: '0.78rem',
+                                  fontVariantNumeric: 'tabular-nums',
+                                  color: adjusted ? 'var(--accent)' : 'var(--ink)',
+                                  fontWeight: adjusted ? 700 : 400,
+                                }}
+                              >
+                                {adjusted && <span aria-hidden="true">✎</span>}
+                                {fmtYen(fee)}
+                              </span>
+                              <button
+                                type="button"
+                                style={snackBtnStyle}
+                                onClick={() => handleStepSnack(r.childId, 1)}
+                                aria-label={`${r.childName} のおやつ等を50円増やす`}
+                                title="50円（1日分）増やす"
+                              >
+                                ▲
+                              </button>
+                              {/* 調整時のみ ↺。未調整でも幅を確保して行のガタつきを防ぐ */}
+                              {adjusted ? (
+                                <button
+                                  type="button"
+                                  style={{ ...snackBtnStyle, color: 'var(--accent)' }}
+                                  onClick={() => handleResetSnack(r.childId)}
+                                  aria-label={`${r.childName} のおやつ等を自動算出に戻す`}
+                                  title={`自動算出（${fmtYen(autoFee)}）に戻す`}
+                                >
+                                  ↺
+                                </button>
+                              ) : (
+                                <span style={{ width: '24px', flexShrink: 0 }} aria-hidden="true" />
+                              )}
+                            </div>
+                            {/* 印刷: 操作 UI を消して金額のみ。未調整で 0 円の場合は従来どおり空欄 */}
+                            <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {adjusted || fee > 0 ? fmtYen(fee) : ''}
+                            </span>
+                          </>
+                        );
+                      })()}
                     </td>
                     <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {c && c.kumonFee > 0 ? fmtYen(c.kumonFee) : ''}
@@ -842,6 +958,10 @@ export default function BillingFull({ scope }: Props) {
         <br />
         ※ 出席日数 = 利用予定で時間が入っている日のカウント（欠席 / お休み / キャンセル待ちは除外）。
         利用表に時間さえ入れれば自動でカウントされます。
+        <br />
+        ※ おやつ等は「出席日数 × ¥50」の自動算出です。▲▼ で 50円（おやつ 1 日分）ずつ調整できます。
+        調整するとその月は金額が固定され（<span style={{ color: 'var(--accent)', fontWeight: 700 }}>✎</span> 付きで表示）、
+        あとから利用表の出席日数を直しても追従しなくなります。↺ で自動算出に戻せます。
       </p>
     </div>
   );
