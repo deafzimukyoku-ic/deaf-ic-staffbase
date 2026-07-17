@@ -51,7 +51,7 @@
 
 <!-- 2026-07-17 利用料金表: おやつ等の手動調整 -->
 <div class="phase">
-  <h2>利用料金表: 「おやつ等」を ▲▼ で 50円ずつ手動調整（2026-07-17） <span class="phase-pct">コード実装完了 / ロジック検証済 / UI確認待ち</span></h2>
+  <h2>利用料金表: 「おやつ等」を ▲▼ で 50円ずつ手動調整（2026-07-17） <span class="phase-pct">完了 / UI確認済 / push済（デプロイ status のみ未確認）</span></h2>
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
@@ -62,7 +62,8 @@
       <tr><td>UI: ▲▼/↺ + 合計 / 印刷 / Excel 追従</td><td class="files">components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>下限0クリップ。調整済みは 色+✎+title の3点セット(色のみで伝えない)。▲▼/↺ に aria-label、24pxタップ標的、button でキーボード操作可。列幅 70→130px / minWidth 600→660+。未使用 import (CopayTierConst / BillingEventInput) も除去</td></tr>
       <tr><td>ロジック検証（tsx で実コード実行）</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>19項目全パス: 自動算出 / null=追従・値=固定 / <b>override=0 と null の区別（|| 取り違え検出）</b> / 下限0クリップ / computeBillingRow の請求額反映</td></tr>
       <tr><td>型チェック / lint</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0エラー / eslint 0エラー0警告</td></tr>
-      <tr><td>ローカル UI 確認</td><td class="files">—</td><td><span class="status todo">進行中</span></td><td class="pct">50%</td><td>dev(6001)起動・コンパイルOK。<b>ログインが必要なため実画面の確認はユーザー操作待ち</b>（認証情報の入力はアシスタント側で行わない方針）</td></tr>
+      <tr><td>ローカル UI 確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>2026-07-17 ユーザーが実画面で確認済（アシスタント側は認証情報を入力しない方針のため、ログインを伴う確認はユーザーが実施）</td></tr>
+      <tr><td>デプロイ（main へ push → Vercel 本番）</td><td class="files">—</td><td><span class="status todo">要確認</span></td><td class="pct">90%</td><td>push 成功（cb4da2a..cdf9ab4）。<b>Vercel のデプロイ完了 status は未確認</b>（確認時にツール障害で gh が叩けず）。要: gh api repos/deafzimukyoku-ic/deaf-ic-staffbase/deployments?per_page=1 → /deployments/&lt;id&gt;/statuses で state=success を確認</td></tr>
       <tr><td>台帳更新</td><td class="files">docs/reference-map.md, docs/migration-applied.md, CLAUDE.md §8</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>CLAUDE.md §8 の「固定」表記を実態に合わせ修正。reference-map §14c に migration 221 + resolveSnackFee 一元化 + 「ライブ算出の唯一の例外」を明記</td></tr>
       <tr><td>shift_manager の保存可否（当初「不可」と報告 → <b>誤りを撤回</b>）</td><td class="files">scripts/probe-billing-rls.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><b>追加対応不要。既に manager と同一ポリシーで保存できる。</b> 誤因=128/131 のファイルだけ読み「bs_manager_facility は manager 限定」と推論したが、<b>140 が同名ポリシーを drop&recreate して shift_manager を追加済み</b>だった（名前では世代を判別できない＝CLAUDE.md §16-2 の罠）。実DB probe で USING 本体が get_my_role() = ANY(ARRAY['manager','shift_manager']) を含むこと、実アカウント(パレットシフト統括)の JWT 偽装で SELECT 52/52行・snack_fee_override の UPDATE 52行成功 を実証</td></tr>
       <tr class="check"><td>別視点確認</td><td colspan="4">① 過去の保存済み月を開いて金額が1円も変わらないか（override=null の後方互換） ② 調整して保存→利用表で出席日数を変更→おやつ等が固定のまま追従しないか / 調整していない児童は従来どおり追従するか ③ override=0（手動0円）と null（自動）が区別されるか（?? を使い || を使わない） ④ 印刷で ▲▼ が消え金額のみ出るか</td></tr>
