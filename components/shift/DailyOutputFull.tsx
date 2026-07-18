@@ -9,6 +9,7 @@ import { defaultOutputDate } from '@/lib/date/defaultOutputDate';
 import { isJpHoliday, jpHolidayName } from '@/lib/date/holidays';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
 import { isAttended } from '@/lib/logic/attendance';
+import { isWorkingShift } from '@/lib/logic/shiftAssignment';
 import { fetchFacilityMembers } from '@/lib/multi-facility';
 import { staffDisplayName } from '@/lib/shift-utils';
 import type { GradeType } from '@/lib/constants';
@@ -60,7 +61,8 @@ import { CSS } from '@dnd-kit/utilities';
  *  - 保護者送迎 (method='self') の「👪 保護者」表示と未割当扱いから除外
  *  - ta が無い児童も赤枠で「⚠ 担当未割当」表示（Phase 43）
  *  - attendance_status='absent'/'leave' は除外
- *  - 分割シフト対応 (assignment_type='normal' のみ集約、segment_order ソート、" / " 連結)
+ *  - 分割シフト対応 (出勤系=normal/am_off/pm_off を集約、segment_order ソート、" / " 連結)
+ *  - 半休(am_off/pm_off)は勤務区間を持つ実出勤なので出勤者に含め、AM休/PM休 バッジで表示
  *  - A3 portrait 印刷 CSS（@page、min-width 1100px、サイドバー hide、color-adjust exact）
  */
 
@@ -126,6 +128,14 @@ type OnDutyStaff = {
   name: string;
   start: string;
   end: string;
+  /** 半休のとき 'am_off' | 'pm_off'。normal（終日）は null。バッジ表示に使う */
+  halfDay: 'am_off' | 'pm_off' | null;
+};
+
+/** ホワイトボード「本日の出勤」の半休バッジ。色は ShiftGridFull の TYPE_CONFIG と統一（AM休=青系/PM休=藍系）。 */
+const HALF_DAY_BADGE: Record<'am_off' | 'pm_off', { label: string; color: string; bg: string }> = {
+  am_off: { label: 'AM休', color: '#2563eb', bg: '#eff6ff' },
+  pm_off: { label: 'PM休', color: '#4f46e5', bg: '#eef2ff' },
 };
 
 type ChildOrderMemoryRow = {
@@ -432,7 +442,8 @@ export default function DailyOutputFull({ role: _role }: Props) {
   const onDuty: OnDutyStaff[] = useMemo(() => {
     const segmentsByEmployeeId = new Map<string, ShiftAssignmentRow[]>();
     shifts
-      .filter((sa) => sa.assignment_type === 'normal' && sa.start_time && sa.end_time)
+      // 出勤系(normal/am_off/pm_off) かつ 時間ありを出勤者に。半休は勤務区間を持つ実出勤
+      .filter((sa) => isWorkingShift(sa))
       .forEach((sa) => {
         const arr = segmentsByEmployeeId.get(sa.employee_id);
         if (arr) arr.push(sa);
@@ -452,11 +463,17 @@ export default function DailyOutputFull({ role: _role }: Props) {
       .filter((s) => segmentsByEmployeeId.has(s.id))
       .map((s) => {
         const segs = segmentsByEmployeeId.get(s.id)!;
+        // 半休は単一区間。分割シフト(複数 normal)と混在しない前提で、単独の半休セグメントのみバッジ表示
+        const half =
+          segs.length === 1 && (segs[0].assignment_type === 'am_off' || segs[0].assignment_type === 'pm_off')
+            ? (segs[0].assignment_type as 'am_off' | 'pm_off')
+            : null;
         return {
           id: s.id,
           name: staffDisplayName(s),
           start: segs.map((sa) => fmtTime(sa.start_time)).join(' / '),
           end: segs.map((sa) => fmtTime(sa.end_time)).join(' / '),
+          halfDay: half,
         };
       });
   }, [shifts, staff]);
@@ -812,11 +829,25 @@ export default function DailyOutputFull({ role: _role }: Props) {
                           className="flex items-center justify-between gap-3 py-1.5"
                           style={{ borderBottom: '1px dashed var(--rule)' }}
                         >
-                          <span
-                            className="text-base font-black whitespace-nowrap"
-                            style={{ color: 'var(--ink)' }}
-                          >
-                            {s.name}
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="text-base font-black whitespace-nowrap"
+                              style={{ color: 'var(--ink)' }}
+                            >
+                              {s.name}
+                            </span>
+                            {/* 半休バッジ: 色だけでなく「AM休/PM休」テキストで示す（ろう者向け・色のみ依存回避） */}
+                            {s.halfDay && (
+                              <span
+                                className="text-xs font-black px-1.5 py-0.5 rounded whitespace-nowrap"
+                                style={{
+                                  color: HALF_DAY_BADGE[s.halfDay].color,
+                                  background: HALF_DAY_BADGE[s.halfDay].bg,
+                                }}
+                              >
+                                {HALF_DAY_BADGE[s.halfDay].label}
+                              </span>
+                            )}
                           </span>
                           <span
                             className="text-sm font-bold tracking-tight whitespace-nowrap"

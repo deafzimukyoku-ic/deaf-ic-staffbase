@@ -49,6 +49,26 @@
 <h1>deaf-ic 統合実装 進捗表</h1>
 <p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-07-03（先方要望 シフト表3機能 実装完了・ローカル確認済） / 全体完了率: 約 98%</p>
 
+<!-- 2026-07-18 半休を送迎表・ホワイトボードに反映 -->
+<div class="phase">
+  <h2>半休(AM休/PM休)を送迎表・ホワイトボードの出勤者に反映（2026-07-18） <span class="phase-pct">コード実装完了 / tsc・lint・build 済 / UI確認待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">シフト表は半休(migration 218)に対応済だが、送迎表/ホワイトボード/送迎自動割当は出勤者を assignment_type==='normal' だけで抽出しており半休職員が抜け落ちていた。半休は勤務区間(PM休=午前[09:30,13:30]/AM休=午後[14:30,18:00])を持つのに出勤者/送迎候補に出ない不整合を解消。仕様書 docs/features/shift-halfday-transport-whiteboard.md（承認済）。DBスキーマ変更なし・fetch変更なし。</td></tr>
+      <tr><td>仕様書作成・承認</td><td class="files">docs/features/shift-halfday-transport-whiteboard.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>半休も出勤者表示 / 送迎は勤務時間内の便のみ候補 / ホワイトボードは時間+AM休PM休バッジ をユーザー確定</td></tr>
+      <tr><td>出勤系判定ヘルパー新設</td><td class="files">lib/logic/shiftAssignment.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>isWorkingAssignmentType / isWorkingShift。normal/am_off/pm_off 判定を集約。直書き4箇所の二重定義を解消（generateShift.ts:174 の isWorking と同型）</td></tr>
+      <tr><td>送迎自動割当を半休対応</td><td class="files">lib/logic/generateTransport.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>:116 workingStaff / :364 候補 の normal 限定を出勤系に拡張。時間区間ガード(:372-377)は不変＝「勤務時間内の便のみ候補」が自動達成</td></tr>
+      <tr><td>ホワイトボード 半休表示</td><td class="files">components/shift/DailyOutputFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>:445 出勤者抽出を isWorkingShift に / OnDutyStaff.halfDay 追加 / 表示に AM休(#2563eb)/PM休(#4f46e5)バッジ+勤務時間（色のみで伝えない）</td></tr>
+      <tr><td>送迎表 半休を候補に</td><td class="files">components/shift/TransportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>:618 availableStaffForDay 拡張 / :1477 追加モーダル hasShift に半休含め既存シフト上書き防止。leave判定は不変（半休は休みでない）</td></tr>
+      <tr><td>型チェック / lint</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><b>tsc 0エラー</b>。eslint は変更行に指摘なし（残る3件=DailyOutput:157 _role未使用 / Transport:142 不要disable / Transport:1245 children-prop は<b>いずれも既存・スコープ外</b>で本変更と無関係）</td></tr>
+      <tr><td>build / ローカル UI 確認</td><td class="files">—</td><td><span class="status todo">進行中</span></td><td class="pct">70%</td><td><b>npm run build 成功（exit 0）</b>。UI 目視（半休を含む日のホワイトボード・送迎表）はログインが必要なためユーザー確認待ち</td></tr>
+      <tr><td>台帳更新</td><td class="files">docs/reference-map.md, shift-halfday-availability-reflection.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>reference-map §14a-2「職員の出勤判定ヘルパー」新設。旧半休仕様書の実装メモに相互リンク</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① normal のみの日は送迎割当・ホワイトボード・送迎表の結果が変更前と完全一致か（後方互換） ② PM休(午前勤務)が午前便に候補入り・午後の送り便に入らないか / AM休(午後勤務)が午後便に入るか ③ 半休職員をホワイトボードに時間+バッジで表示・出勤者数に加算されるか ④ 送迎表の追加モーダルで半休職員が既存シフト上書きされず分割追加されるか</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 2026-07-17 利用料金表: おやつ等の手動調整 -->
 <div class="phase">
   <h2>利用料金表: 「おやつ等」を ▲▼ で 50円ずつ手動調整（2026-07-17） <span class="phase-pct">完了 / UI確認済 / push済（デプロイ status のみ未確認）</span></h2>
@@ -63,7 +83,7 @@
       <tr><td>ロジック検証（tsx で実コード実行）</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>19項目全パス: 自動算出 / null=追従・値=固定 / <b>override=0 と null の区別（|| 取り違え検出）</b> / 下限0クリップ / computeBillingRow の請求額反映</td></tr>
       <tr><td>型チェック / lint</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0エラー / eslint 0エラー0警告</td></tr>
       <tr><td>ローカル UI 確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>2026-07-17 ユーザーが実画面で確認済（アシスタント側は認証情報を入力しない方針のため、ログインを伴う確認はユーザーが実施）</td></tr>
-      <tr><td>デプロイ（main へ push → Vercel 本番）</td><td class="files">—</td><td><span class="status todo">要確認</span></td><td class="pct">90%</td><td>push 成功（cb4da2a..cdf9ab4）。<b>Vercel のデプロイ完了 status は未確認</b>（確認時にツール障害で gh が叩けず）。要: gh api repos/deafzimukyoku-ic/deaf-ic-staffbase/deployments?per_page=1 → /deployments/&lt;id&gt;/statuses で state=success を確認</td></tr>
+      <tr><td>デプロイ（main へ push → Vercel 本番）</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>push 成功（cb4da2a..cdf9ab4）→ Vercel deployment id=5488444914 が <b>state=success</b>（2026-07-17T11:34:49Z）。deaf-ic は別 Vercel team のため GitHub deployment statuses で確認</td></tr>
       <tr><td>台帳更新</td><td class="files">docs/reference-map.md, docs/migration-applied.md, CLAUDE.md §8</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>CLAUDE.md §8 の「固定」表記を実態に合わせ修正。reference-map §14c に migration 221 + resolveSnackFee 一元化 + 「ライブ算出の唯一の例外」を明記</td></tr>
       <tr><td>shift_manager の保存可否（当初「不可」と報告 → <b>誤りを撤回</b>）</td><td class="files">scripts/probe-billing-rls.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><b>追加対応不要。既に manager と同一ポリシーで保存できる。</b> 誤因=128/131 のファイルだけ読み「bs_manager_facility は manager 限定」と推論したが、<b>140 が同名ポリシーを drop&recreate して shift_manager を追加済み</b>だった（名前では世代を判別できない＝CLAUDE.md §16-2 の罠）。実DB probe で USING 本体が get_my_role() = ANY(ARRAY['manager','shift_manager']) を含むこと、実アカウント(パレットシフト統括)の JWT 偽装で SELECT 52/52行・snack_fee_override の UPDATE 52行成功 を実証</td></tr>
       <tr class="check"><td>別視点確認</td><td colspan="4">① 過去の保存済み月を開いて金額が1円も変わらないか（override=null の後方互換） ② 調整して保存→利用表で出席日数を変更→おやつ等が固定のまま追従しないか / 調整していない児童は従来どおり追従するか ③ override=0（手動0円）と null（自動）が区別されるか（?? を使い || を使わない） ④ 印刷で ▲▼ が消え金額のみ出るか</td></tr>

@@ -1033,6 +1033,25 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 
 ---
 
+## 14a-2. 職員の出勤判定ヘルパー `isWorkingAssignmentType` / `isWorkingShift`（2026-07-18）
+
+**シフト表に半休(am_off/pm_off)＋勤務時間を出せるようにした（migration 218）のに、送迎表・ホワイトボード・送迎自動割当が `assignment_type === 'normal'` 直書きで抽出しており、半休職員が出勤者として表示されなかった → 出勤判定を一元化。** `isAttended`（児童の出席）と対になる「職員の出勤」判定。
+
+| ファイル | 参照内容 |
+|---|---|
+| **lib/logic/shiftAssignment.ts** | **`isWorkingAssignmentType(t)` = t ∈ {normal, am_off, pm_off}（在席として数える割当タイプ）/ `isWorkingShift(sa)` = 出勤系タイプ AND start_time/end_time あり** |
+| lib/logic/generateTransport.ts | `workingStaff` 抽出 → `isWorkingAssignmentType`（時間ありも併記）/ `selectStaff` 候補 → `isWorkingShift`。便時刻フィルタ（`sm<=t && t+30<=em`）は不変で、半休の勤務区間により午前/午後の便に自動で絞られる |
+| components/shift/DailyOutputFull.tsx | 「本日の出勤」抽出 → `isWorkingShift`。半休は `OnDutyStaff.halfDay` に格納し `HALF_DAY_BADGE`（AM休=青系/PM休=藍系）で表示 |
+| components/shift/TransportFull.tsx | `availableStaffForDay` 抽出 + 職員追加モーダルの `hasShift` 判定 → `isWorkingAssignmentType`。半休職員の既存シフトを上書きしないため hasShift にも含める |
+
+### 設計判断
+- **半休は勤務区間フィルタに委ねる**: 送迎候補の午前/午後の絞り込みは専用フラグを足さず、既存の時間区間ガード（便時刻がセグメントに収まるか）に任せる。PM休=午前[出勤,13:30] は迎え便、AM休=午後[14:30,退勤] は送り便に自然に寄る
+- **normal 直書きの集約**: 半休のような新区分が増えるたびに追従漏れが起きる（実際 normal 直書きが 4 箇所に散在していた）。billing の `resolveSnackFee` 一元化と同型で判定を 1 箇所に集約
+- **バッジは色＋テキスト**: ろう者向け納品のため色のみ依存を避け「AM休/PM休」ラベルを併記（CLAUDE.md §9）
+- **未対応（別issue）**: 週次送迎表(WeeklyTransportFull)は当日 shift_assignments を見ず職員の default_start/end_time で動く別設計のため、当日半休は反映しない。`docs/features/shift-halfday-transport-whiteboard.md`「将来対応」参照
+
+---
+
 ## 14b. facilities フィーチャーフラグ（shift_enabled / transport_enabled / shift_only_mode）
 
 | ファイル | 参照内容 |

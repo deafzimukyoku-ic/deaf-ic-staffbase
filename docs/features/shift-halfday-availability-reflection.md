@@ -151,4 +151,9 @@ constraints.md 確認済: 新規 cron / 重処理 / 外部API 追加なし → *
 → **残る確認は #1（昼区切り X）のみ**。確定すれば実装着手可能。
 
 ## 実装メモ（実装後に追記）
-（未着手）
+
+- **下流ビューの追従（2026-07-18・別仕様書に分離）**: 本仕様書はシフト表・人員カバレッジへの半休反映で完結していたが、
+  §2 で「要確認」としていた **日次出力（ホワイトボード）と送迎表は追従できておらず**、半休職員が出勤者・送迎候補として
+  表示されない不整合が残っていた（`assignment_type === 'normal'` 直書きで抽出）。これを
+  [[shift-halfday-transport-whiteboard]]（`docs/features/shift-halfday-transport-whiteboard.md`）で解消。
+  出勤判定を `lib/logic/shiftAssignment.ts`（`isWorkingAssignmentType` / `isWorkingShift`）に一元化した。

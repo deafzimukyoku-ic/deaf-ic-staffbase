@@ -13,6 +13,7 @@ import {
   DEFAULT_PICKUP_COOLDOWN_MINUTES,
   TRANSPORT_TRIP_GAP_MINUTES,
 } from '@/lib/constants';
+import { isWorkingAssignmentType, isWorkingShift } from '@/lib/logic/shiftAssignment';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
 
 /**
@@ -111,7 +112,8 @@ export function generateTransportAssignments(
       (sa) =>
         sa.employee_id === s.id &&
         sa.date === date &&
-        sa.assignment_type === 'normal' &&
+        // 半休(am_off/pm_off)も出勤扱い。勤務区間フィルタ(下の selectStaff)が便時刻で絞る
+        isWorkingAssignmentType(sa.assignment_type) &&
         !!sa.end_time
     )
   );
@@ -357,9 +359,9 @@ function selectStaff({
       (sa) =>
         sa.employee_id === s.id &&
         sa.date === date &&
-        sa.assignment_type === 'normal' &&
-        sa.start_time &&
-        sa.end_time
+        // 出勤系(normal/am_off/pm_off)を候補に。半休は勤務区間が短いため下の coveringSegment で
+        // 「便時刻がその区間に収まるか」で自動的に午前/午後の便だけに絞られる
+        isWorkingShift(sa)
     );
     if (segments.length === 0) return false;
 

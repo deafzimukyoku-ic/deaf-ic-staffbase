@@ -12,6 +12,7 @@ import Button from '@/components/shift-compat/Button';
 import Modal from '@/components/shift-compat/Modal';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
 import { isAttended, isWaitlist } from '@/lib/logic/attendance';
+import { isWorkingAssignmentType } from '@/lib/logic/shiftAssignment';
 import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
 import { fetchFacilityMembers, type FacilityMemberRow } from '@/lib/multi-facility';
 import {
@@ -613,7 +614,8 @@ export default function TransportFull({ role }: Props) {
   const availableStaffForDay = useMemo(() => {
     const shiftByStaffId = new Map<string, ShiftAssignmentRow[]>();
     for (const sa of shiftAssignments) {
-      if (sa.date === selectedDate && sa.assignment_type === 'normal' && !!sa.end_time) {
+      // 半休(am_off/pm_off)も出勤扱い。segments の勤務区間が送迎便の時刻フィルタに使われる
+      if (sa.date === selectedDate && isWorkingAssignmentType(sa.assignment_type) && !!sa.end_time) {
         const arr = shiftByStaffId.get(sa.employee_id) ?? [];
         arr.push(sa);
         shiftByStaffId.set(sa.employee_id, arr);
@@ -1467,11 +1469,12 @@ export default function TransportFull({ role }: Props) {
                     sa.assignment_type === 'requested_off' ||
                     sa.assignment_type === 'paid_leave')
               );
+              // 半休(am_off/pm_off)も既存シフトありとみなす（分割追加扱いで既存の半休を上書きしない）
               const hasShift = shiftAssignments.some(
                 (sa) =>
                   sa.employee_id === addShiftModal.staffId &&
                   sa.date === selectedDate &&
-                  sa.assignment_type === 'normal'
+                  isWorkingAssignmentType(sa.assignment_type)
               );
               const leaveAType = leave?.assignment_type;
               const leaveLabel =
