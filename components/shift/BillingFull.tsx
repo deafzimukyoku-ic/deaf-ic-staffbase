@@ -460,28 +460,6 @@ export default function BillingFull({ scope }: Props) {
     return m;
   }, [computed]);
 
-  /* 兄弟グループの児童を隣接させる。グループはその「最初のメンバーが現れる位置」に寄せ、
-     グループ未所属の児童の順序は一切変えない（既存の display_order を尊重する安定並べ替え）。 */
-  const orderedRows = useMemo(() => {
-    const emitted = new Set<string>();
-    const out: RowState[] = [];
-    for (const r of rows) {
-      if (emitted.has(r.childId)) continue;
-      if (r.siblingGroupId) {
-        for (const s of rows) {
-          if (s.siblingGroupId === r.siblingGroupId && !emitted.has(s.childId)) {
-            out.push(s);
-            emitted.add(s.childId);
-          }
-        }
-      } else {
-        out.push(r);
-        emitted.add(r.childId);
-      }
-    }
-    return out;
-  }, [rows]);
-
   /* きょうだいの表示名。migration 225 でグループ名を廃したので、児童名から組み立てる。
      候補 RPC はテナント全域なので、別事業所に通うきょうだいも（事業所名付きで）出せる。 */
   const siblingNamesById = useMemo(() => {
@@ -506,19 +484,13 @@ export default function BillingFull({ scope }: Props) {
     [siblingNamesById, facilityId],
   );
 
-  /** グループ全体の児童名（きょうだい合計行の見出し用） */
-  const siblingGroupLabel = useCallback(
-    (groupId: string) =>
-      (siblingNamesById.get(groupId) ?? [])
-        .map((m) => (m.facility_id === facilityId ? m.name : `${m.name}（${m.facility_name}）`))
-        .join('・'),
-    [siblingNamesById, facilityId],
-  );
   const siblingGroupById = useMemo(
     () => new Map(siblingGroups.map((g) => [g.id, g])),
     [siblingGroups],
   );
-  /* 兄弟ごとの請求額小計。表示専用で、全体合計には足さない（足すと二重計上） */
+  /* きょうだいの請求額合計（この事業所の児童分）。
+     行の並べ替えも小計行も行わない方針（先方要望 2026-08-08）なので、
+     合計は「兄弟」列の各行にそのまま表示する。全体合計には足さない（足すと二重計上）。 */
   const siblingSubtotals = useMemo(
     () => computeSiblingSubtotals(
       rows.map((r) => ({
@@ -528,14 +500,18 @@ export default function BillingFull({ scope }: Props) {
     ),
     [rows, computedById],
   );
-  /* グループの最終行（そこに小計行を挿し込む）と、グループ内の人数 */
-  const lastRowIdxOfGroup = useMemo(() => {
-    const m = new Map<string, number>();
-    orderedRows.forEach((r, i) => {
-      if (r.siblingGroupId) m.set(r.siblingGroupId, i);
-    });
-    return m;
-  }, [orderedRows]);
+
+  /* きょうだいごとの色。行が離れて並ぶため、同じ世帯を目で追えるように色を割り当てる。
+     色だけで意味を伝えないよう、セルには必ず金額（文字）と title も入れる（CLAUDE.md §9）。
+     並び順に依存しない安定した割り当てにするため、グループ id の昇順で採番する。 */
+  const siblingColorById = useMemo(() => {
+    const palette = [
+      '#e8ecf7', '#e6f2eb', '#f7efdd', '#f7e8e8',
+      '#efe6f7', '#e0eff4', '#f4ece2', '#eaf3e0',
+    ];
+    const ids = [...new Set(rows.map((r) => r.siblingGroupId).filter((v): v is string => !!v))].sort();
+    return new Map(ids.map((id, i) => [id, palette[i % palette.length]]));
+  }, [rows]);
 
   /* 合計（footer）。**児童行のみ**を集計する。兄弟小計行は表示専用なので足さない。 */
   const totals = useMemo(() => {
@@ -860,7 +836,7 @@ export default function BillingFull({ scope }: Props) {
     ws.getColumn(col).width = 10;                                            // 兄弟
 
     /* データ行（兄弟小計行を挟みながら） */
-    orderedRows.forEach((r, idx) => {
+    rows.forEach((r, idx) => {
       const c = computedById.get(r.childId);
       const dataRow = [
         idx + 1,
@@ -873,39 +849,24 @@ export default function BillingFull({ scope }: Props) {
         c?.eventTotal ?? 0,
         ...checkboxFeeItems.map((i) => feeAmountByKey.get(`${r.childId}|${i.id}`) ?? 0),
         c?.totalAmount ?? 0,
-        siblingMatesLabel(r.siblingGroupId, r.childId),
+        /* 兄弟列は画面と同じく「きょうだい合計（当事業所分）」の金額。単独児は空欄 */
+        r.siblingGroupId ? (siblingSubtotals.get(r.siblingGroupId) ?? 0) : '',
       ];
       const row = ws.addRow(dataRow);
       row.eachCell((cell, colNum) => {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        /* 数値列は 出席日数(4) 〜 請求額(lastCol-1)。兄弟(lastCol) は文字列なので除く */
-        if (colNum >= 4 && colNum <= lastCol - 1) {
+        /* 数値列は 出席日数(4) 〜 兄弟(lastCol)。兄弟も金額になったので右端まで含める */
+        if (colNum >= 4 && colNum <= lastCol) {
           cell.numFmt = '#,##0';
           cell.alignment = { horizontal: 'right' };
         }
       });
-
-      /* 兄弟グループの最終行の直下に小計行 */
-      if (r.siblingGroupId && lastRowIdxOfGroup.get(r.siblingGroupId) === idx) {
-        const label = siblingGroupLabel(r.siblingGroupId);
-        const subRow = ws.addRow([
-          '', '', '', '', '',
-          ...mainFeeItems.map(() => ''),
-          ...events.map(() => ''),
-          '',
-          ...checkboxFeeItems.map(() => ''),
-          siblingSubtotals.get(r.siblingGroupId) ?? 0,
-          `${label} きょうだい合計`,
-        ]);
-        subRow.eachCell((cell, colNum) => {
-          cell.font = { bold: true, italic: true };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF6E3' } };
-          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-          if (colNum === lastCol - 1) {
-            cell.numFmt = '#,##0';
-            cell.alignment = { horizontal: 'right' };
-          }
-        });
+      /* 同じ世帯を目で追えるように、画面と同じ色を兄弟セルに塗る */
+      if (r.siblingGroupId) {
+        const hex = (siblingColorById.get(r.siblingGroupId) ?? '#ffffff').replace('#', '').toUpperCase();
+        row.getCell(lastCol).fill = {
+          type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${hex}` },
+        };
       }
     });
 
@@ -1058,9 +1019,6 @@ export default function BillingFull({ scope }: Props) {
   }
 
   const dirtyCount = rows.filter((r) => r.dirty).length;
-  /* # / 市町村 / 氏名 / 出席日数 / 利用負担額 (5) + 請求項目 + イベント
-     + 参加費合計 + 請求額 + 兄弟 (3) */
-  const totalCols = 5 + feeItems.length + events.length + 3;
 
   /* 動的列（請求項目 + イベント）の総数に応じた印刷密度。
      旧実装はイベント数だけで判定していたが、請求項目も列を増やすので合算で見る。 */
@@ -1097,11 +1055,6 @@ export default function BillingFull({ scope }: Props) {
               border-top: 3px double var(--ink) !important;
               box-shadow: 0 -1px 0 var(--white) inset;
             }
-            /* 兄弟の小計行: 塗り + 斜体で「集計であって請求対象の行ではない」ことを示す */
-            .billing-grid tbody tr.billing-sibling-subtotal td {
-              background: var(--gold-pale);
-              font-style: italic;
-            }
             /* スクリーン表示: 見出し（thead）と先頭3列（# / 市町村 / 氏名）を固定 */
             @media screen {
               .billing-grid thead th {
@@ -1119,9 +1072,6 @@ export default function BillingFull({ scope }: Props) {
               .billing-grid tbody tr.billing-total-row .billing-sticky-col {
                 background: var(--bg);
                 z-index: 3;
-              }
-              .billing-grid tbody tr.billing-sibling-subtotal .billing-sticky-col {
-                background: var(--gold-pale);
               }
               .billing-grid .billing-sticky-col-1 { left: 0; }
               .billing-grid .billing-sticky-col-2 { left: var(--sticky-c2, 40px); }
@@ -1178,7 +1128,6 @@ export default function BillingFull({ scope }: Props) {
               .billing-grid thead th { border-bottom: 1.2pt solid #000 !important; border-top: 1pt solid #000 !important; }
               .billing-grid tbody tr.billing-total-row td { border-top: 1.2pt solid #000 !important; }
               .billing-grid tbody tr.billing-group-divider td { border-top: 1.5pt double #000 !important; }
-              .billing-grid tbody tr.billing-sibling-subtotal td { background: #f2f2f2 !important; }
               .billing-print-title { display: block !important; }
             }
             @media screen { .billing-print-title { display: none; } }
@@ -1314,26 +1263,24 @@ export default function BillingFull({ scope }: Props) {
                 <th
                   className="px-2 py-2 text-center font-semibold whitespace-nowrap"
                   style={{ width: '80px' }}
-                  title="兄弟グループ。同じグループの児童は隣接表示され、直下に「きょうだい合計」行が出ます"
+                  title="きょうだいの請求額の合計（この事業所の児童分）。同じ世帯は同じ色で表示されます"
                 >
                   兄弟
                 </th>
               </tr>
             </thead>
             <tbody>
-              {orderedRows.map((r, idx) => {
+              {/* 行の並べ替えはしない（先方要望）。児童管理の並び順そのままで出す */}
+              {rows.map((r, idx) => {
                 const c = computedById.get(r.childId);
                 /* 小学生以下（preschool / nursery_3〜5）と それ以上の境目に二重線 */
                 const underElem = (g: string) =>
                   g === 'preschool' || g === 'nursery_3' || g === 'nursery_4' || g === 'nursery_5';
-                const prev = idx > 0 ? orderedRows[idx - 1] : null;
+                const prev = idx > 0 ? rows[idx - 1] : null;
                 const isGroupBoundary =
                   prev != null && underElem(prev.child.gradeType) !== underElem(r.child.gradeType);
                 const siblingLabel = siblingMatesLabel(r.siblingGroupId, r.childId);
-                const isLastOfSiblingGroup =
-                  r.siblingGroupId != null && lastRowIdxOfGroup.get(r.siblingGroupId) === idx;
                 return (
-                  /* 児童行 + （最後の兄弟なら）小計行 の 2 行を返すので、key は Fragment 側に付ける */
                   <Fragment key={r.childId}>
                     <tr className={isGroupBoundary ? 'billing-group-divider' : ''}>
                       <td className="px-2 py-2 text-center whitespace-nowrap billing-sticky-col billing-sticky-col-1">{idx + 1}</td>
@@ -1413,53 +1360,42 @@ export default function BillingFull({ scope }: Props) {
                       <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {c ? fmtYen(c.totalAmount) : ''}
                       </td>
-                      <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem', color: 'var(--gold)', fontWeight: siblingLabel ? 700 : 400 }}>
-                        {siblingLabel}
-                      </td>
+                      {/* 兄弟: きょうだい合計（当事業所分）を金額で出す。
+                          行は並べ替えないので、同じ世帯は**背景色**で目で追えるようにする。
+                          色だけに頼らないよう、金額（文字）と title を必ず併記する（CLAUDE.md §9）。 */}
+                      {(() => {
+                        if (!r.siblingGroupId) {
+                          return <td className="px-2 py-2" />;
+                        }
+                        const grp = siblingGroupById.get(r.siblingGroupId);
+                        const billFacId = grp?.billing_facility_id ?? null;
+                        const isOther = billFacId != null && billFacId !== facilityId;
+                        const amount = siblingSubtotals.get(r.siblingGroupId) ?? 0;
+                        const title =
+                          `きょうだい: ${siblingLabel || '（この事業所には他にいません）'}`
+                          + `／合計 ${fmtYen(amount)}（当事業所分）`
+                          + (isOther ? `／請求は ${facilityNames.get(billFacId!) ?? '他事業所'} が担当` : '')
+                          + (billFacId != null && !isOther ? '／請求担当: この事業所' : '');
+                        return (
+                          <td
+                            className="px-2 py-2 text-right whitespace-nowrap"
+                            style={{
+                              background: siblingColorById.get(r.siblingGroupId),
+                              fontVariantNumeric: 'tabular-nums',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                            }}
+                            title={title}
+                          >
+                            {isOther && (
+                              <span aria-hidden="true" style={{ color: 'var(--red)' }}>⚠ </span>
+                            )}
+                            {fmtYen(amount)}
+                            <span className="sr-only">{title}</span>
+                          </td>
+                        );
+                      })()}
                     </tr>
-
-                    {/* きょうだい小計行。表示専用で、下の合計行には含めない（二重計上の防止） */}
-                    {isLastOfSiblingGroup && (
-                      <tr className="billing-sibling-subtotal">
-                        <td className="px-2 py-2 billing-sticky-col billing-sticky-col-1" />
-                        <td className="px-2 py-2 billing-sticky-col billing-sticky-col-2" />
-                        <td className="px-2 py-2 billing-sticky-col billing-sticky-col-3" />
-                        {/* 請求額の直前まで（出席日数〜チェック型項目）を 1 セルにまとめて見出しにする。
-                            合計は**この事業所の児童だけ**。兄弟が別事業所に通う場合、
-                            請求担当が他事業所なら二重請求を防ぐため明示する（migration 224）。 */}
-                        <td className="px-2 py-2 text-right" colSpan={totalCols - 5} style={{ fontSize: '0.8rem' }}>
-                          {(() => {
-                            const grp = r.siblingGroupId ? siblingGroupById.get(r.siblingGroupId) : null;
-                            const billFacId = grp?.billing_facility_id ?? null;
-                            const isOther = billFacId != null && billFacId !== facilityId;
-                            return (
-                              <>
-                                <span aria-hidden="true">👨‍👩‍👧 </span>
-                                {r.siblingGroupId ? `${siblingGroupLabel(r.siblingGroupId)} ` : ''}
-                                きょうだい合計（当事業所分）
-                                {isOther && (
-                                  <span style={{ color: 'var(--red)', fontWeight: 700 }}>
-                                    {' '}／ <span aria-hidden="true">⚠ </span>
-                                    請求は {facilityNames.get(billFacId) ?? '他事業所'} が担当
-                                  </span>
-                                )}
-                                {billFacId != null && !isOther && (
-                                  <span style={{ color: 'var(--green)', fontWeight: 700 }}>
-                                    {' '}／ 請求担当: この事業所
-                                  </span>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                          {fmtYen(siblingSubtotals.get(r.siblingGroupId!) ?? 0)}
-                        </td>
-                        <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem', color: 'var(--gold)', fontWeight: 700 }}>
-                          {siblingLabel}
-                        </td>
-                      </tr>
-                    )}
                   </Fragment>
                 );
               })}
@@ -1508,13 +1444,15 @@ export default function BillingFull({ scope }: Props) {
         ※ 出席日数 = 利用予定で時間が入っている日のカウント（欠席 / お休み / キャンセル待ちは除外）。
         利用表に時間さえ入れれば自動でカウントされます。
         <br />
-        ※ 兄弟グループは児童設定で設定します。同じグループの児童は隣接表示され、直下に「きょうだい合計」行が出ます。
-        各児童の行は個別金額のままで、いちばん下の合計は児童行だけを足しています（きょうだい合計は二重に足しません）。
+        ※ きょうだいは児童設定で設定します。<b>行の並び順は児童管理のまま</b>で、
+        「兄弟」列に<b>きょうだいの請求額の合計（この事業所の児童分）</b>が入ります。
+        同じ世帯は<b>同じ背景色</b>になるので、離れた行でも見分けられます。
+        いちばん下の合計は各児童の請求額だけを足しています（きょうだい合計は二重に足しません）。
         <br />
-        ※ 兄弟グループは<b>全事業所共通</b>です。兄弟が別の事業所に通っていても同じグループに入れられますが、
-        <b>「きょうだい合計」はこの事業所の児童だけ</b>を足します（他事業所の金額は表示しません）。
-        児童設定で「請求担当の事業所」を決めておくと、担当が他事業所のときに
-        <span style={{ color: 'var(--red)', fontWeight: 700 }}>⚠ 請求は◯◯が担当</span> と表示され、二重請求を防げます。
+        ※ きょうだいは<b>全事業所共通</b>です。別の事業所に通っていても設定できますが、
+        <b>合計はこの事業所の児童だけ</b>を足します（他事業所の金額は表示しません）。
+        児童設定で「請求担当の事業所」を決めておくと、担当が他事業所のときに兄弟列へ
+        <span style={{ color: 'var(--red)', fontWeight: 700 }}>⚠</span> が付きます（二重請求の防止）。
       </p>
     </div>
   );

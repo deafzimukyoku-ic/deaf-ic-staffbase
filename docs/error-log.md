@@ -1255,4 +1255,35 @@
 - **関連**: `docs/features/billing-event-check-follow.md` / `scripts/probe-billing-event-check.mjs` /
   `scripts/verify-billing-event-check.mjs` / `docs/reference-map.md`（BillingFull.tsx の行）
 ---
+## 児童設定で請求項目を施設で絞らず、旧列 kumon_monthly_fee が null 化
+
+- **発生日**: 2026-08-08（ユーザーが 竹内天椛 を編集・保存 → 検証スクリプトが検出）
+- **発生箇所**: `components/shift/ChildrenSettingsFull.tsx` の `perChildFeeItems` 取得と `handleSave`
+- **エラー内容**: 例外なし。児童編集モーダルに「教材印刷代 月額」欄が**4 つ並び**、保存すると
+  `children.kumon_monthly_fee` が null になる。
+- **原因**:
+  `billing_fee_items` は **施設ごとに別レコード**（migration 222 で 4 事業所ぶんシードした）。
+  ところが取得が `.eq('tenant_id', tid)` だけで**施設で絞っていなかった**ため、
+  `per_child_monthly` の項目が 4 件返り、
+  - モーダルが同名の金額欄を 4 つ描画
+  - `perChildFeeItems.find((i) => i.system_key === 'material')` が**別事業所の項目**を拾い、
+    その欄（空）から旧列を算出して null を書き込む
+  という二重の不具合になった。`children_fee_amounts` 側は item id で正しく引けていたため無事。
+- **請求額への影響**: **なし**。料金表は `children_fee_amounts` を見ており、
+  旧列は migration 222 以降 互換目的の書き込み専用。実測でも 302 件・合計 ¥944,762 で不変。
+- **解決方法**:
+  - `editingFeeItems`（= 編集中の児童の facility で絞った配列）を新設し、
+    モーダル描画・`system_key` の find・`children_fee_amounts` の同期ループを全てこれに統一
+  - 一覧 / カードの表示も各児童の `facility_id` で絞る
+  - 旧列のずれは `scripts/resync-kumon-legacy-column.mjs`（dry-run 既定・冪等）で復旧。1 件修正
+- **再発防止**:
+  - **facility スコープのマスタを引くときは、必ず対象レコードの facility で絞る**。
+    tenant で絞っただけの配列に `find()` を掛けると、事業所数ぶんの同名レコードから
+    「たまたま先頭のもの」を掴む。deaf-ic は 1 テナント 4 事業所なので、
+    tenant 絞りは**絞れているように見えて絞れていない**のが罠。
+  - 互換のために二重に持っている値（旧列 × 新テーブル）は、**突合スクリプトを常設**して
+    ずれを検出できるようにする。今回は `verify-billing-fee-items.ts` が拾って発覚した。
+- **関連**: `scripts/resync-kumon-legacy-column.mjs` / `scripts/verify-billing-fee-items.ts` /
+  `docs/features/billing-configurable-items.md`
+---
 *(以降、新規エラーがあれば追記)*

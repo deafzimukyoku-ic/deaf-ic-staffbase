@@ -331,10 +331,22 @@ export default function ChildrenSettingsFull({ scope }: Props) {
             .map((c) => c.id)
         : [],
       fee_amounts: Object.fromEntries(
-        perChildFeeItems.map((i) => [i.id, childFeeAmounts.get(`${child.id}|${i.id}`) ?? null]),
+        perChildFeeItems
+          .filter((i) => i.facility_id === child.facility_id)
+          .map((i) => [i.id, childFeeAmounts.get(`${child.id}|${i.id}`) ?? null]),
       ),
     });
   };
+
+  /* 請求項目は**施設ごとに別レコード**（「教材印刷代」も 4 事業所ぶん存在する）。
+     編集中の児童の事業所で必ず絞る。絞らずに扱うと
+     - モーダルに同名の金額欄が事業所数ぶん並ぶ
+     - system_key での find が別事業所の項目を拾い、旧列 kumon_monthly_fee が壊れる
+     という事故になる（2026-08-08 に実際に発生し、竹内天椛の旧列が null 化した）。 */
+  const editingFeeItems = useMemo(
+    () => (editing ? perChildFeeItems.filter((i) => i.facility_id === editing.facility_id) : []),
+    [perChildFeeItems, editing],
+  );
 
   const toggleSibling = (childId: string) => {
     if (!editing) return;
@@ -394,7 +406,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
         /* 旧列 kumon_monthly_fee は migration 222 で children_fee_amounts へ移行済み。
            外部から読む処理が将来現れても壊れないよう、組込項目 'material' の額と同期して書き続ける。 */
         kumon_monthly_fee: (() => {
-          const materialItem = perChildFeeItems.find((i) => i.system_key === 'material');
+          const materialItem = editingFeeItems.find((i) => i.system_key === 'material');
           if (!materialItem) return null;
           const v = editing.fee_amounts[materialItem.id];
           return v != null && v > 0 ? Math.floor(v) : null;
@@ -429,7 +441,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
 
       /* children_fee_amounts（児童ごとの月額）を反映。
          空欄 / 0 は「計上しない」なので行ごと削除する（0 円の行を残すと料金表に ¥0 が出るため）。 */
-      for (const item of perChildFeeItems) {
+      for (const item of editingFeeItems) {
         const raw = editing.fee_amounts[item.id];
         const amount = raw != null && raw > 0 ? Math.floor(raw) : null;
         if (amount == null) {
@@ -734,6 +746,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)', fontVariantNumeric: 'tabular-nums' }}>
                     {(() => {
                       const parts = perChildFeeItems
+                        .filter((i) => i.facility_id === c.facility_id)
                         .map((i) => ({ name: i.name, amount: childFeeAmounts.get(`${c.id}|${i.id}`) ?? 0 }))
                         .filter((p) => p.amount > 0);
                       const sum = parts.reduce((s, p) => s + p.amount, 0);
@@ -870,7 +883,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     </span>
                   </div>
                   {/* 児童ごとの月額（請求項目ごとに 1 行）。項目が無ければ何も出さない */}
-                  {perChildFeeItems.map((item) => {
+                  {perChildFeeItems.filter((i) => i.facility_id === c.facility_id).map((item) => {
                     const amount = childFeeAmounts.get(`${c.id}|${item.id}`) ?? 0;
                     return (
                       <div key={item.id} className="flex items-center justify-between">
@@ -1124,7 +1137,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
 
                 {/* 児童ごとの月額（請求項目設定で calc_type='児童ごとの月額' にした項目ぶん）— 赤系（red）。
                     旧「教材印刷代」固定欄を置き換え、項目マスタから動的に生成する（migration 222）。 */}
-                {perChildFeeItems.length === 0 ? (
+                {editingFeeItems.length === 0 ? (
                   <div
                     className="flex flex-col gap-1.5 p-3 rounded"
                     style={{ background: 'var(--white)', borderLeft: '3px solid var(--red)' }}
@@ -1135,7 +1148,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     </p>
                   </div>
                 ) : (
-                  perChildFeeItems.map((item) => (
+                  editingFeeItems.map((item) => (
                     <div
                       key={item.id}
                       className="flex flex-col gap-1.5 p-3 rounded"
@@ -1237,11 +1250,14 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                           </div>
                         );
                       }
-                      /* 自事業所の児童を先に出す。別事業所は事業所名を添えて後ろに */
+                      /* 自事業所の児童を先に出すだけ。**同じ事業所の中は児童管理の並び順**
+                         （RPC が display_order 順で返している）をそのまま維持する。
+                         ここで名前順に並べ替えると児童管理と順序がズレて探しづらくなる。
+                         Array.sort は安定なので、同グループ内で 0 を返せば元の順序が保たれる。 */
                       const sorted = [...list].sort((a, b) => {
                         const ao = a.facility_id === editing.facility_id ? 0 : 1;
                         const bo = b.facility_id === editing.facility_id ? 0 : 1;
-                        return ao !== bo ? ao - bo : a.name.localeCompare(b.name, 'ja');
+                        return ao - bo;
                       });
                       return sorted.map((c) => {
                         const checked = editing.sibling_child_ids.includes(c.id);
