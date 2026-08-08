@@ -1,39 +1,51 @@
 'use client';
 
 /**
- * 利用料金表（月次）出力ページ — Phase 66-C
+ * 利用料金表（月次）出力ページ — Phase 66-C / migration 222・223 で請求項目を可変化
  *
- * - 月選択 → 児童一覧 + 当月イベント列を取得
- * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 教材印刷代 / 参加費合計
+ * - 月選択 → 児童一覧 + 当月イベント列 + 請求項目列 を取得
+ * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ 各請求項目 / 参加費合計 / 請求額
+ * - 請求項目（おやつ等・教材印刷代・他施設利用 等）は `billing_fee_items` のマスタから動的に列を生成する。
+ *   計算方式ごとの UI:
+ *     per_day / monthly_fixed … ▲▼ で調整（調整するとその月は固定）+ ↺ で自動に戻す
+ *     checkbox               … チェック ON で加算（他施設利用）
+ *     per_child_monthly      … 児童設定の金額を読み取り専用表示
  * - イベント参加は「保存済みの明示値があればそれ、無ければ利用表の出席実績」で初期化する。
  *   保存済みの値は自動で書き換えず、利用表とズレている場合のみ警告 + 一括で揃えるボタンを出す
+ * - 兄弟グループの児童は隣接表示し、グループ直下に「きょうだい小計」行を出す。
+ *   **各児童の行は個別金額のまま**で、全体合計には児童行のみを足す（小計を足すと二重計上になる）
  * - 参加費合計 (eventTotal) は別列で表示するが、請求額にも含む
- * - 手動オーバーライド可: 利用負担額 / おやつ等（▲▼ で ±1日分）/ イベント参加チェック / 受取日
- * - 「保存」で billing_summaries + billing_event_participations を upsert（再印刷時は同じ値）
+ * - 「保存」で billing_summaries + billing_event_participations + billing_summary_fee_amounts を upsert
  * - 「印刷」で A4 横レイアウト
- *
- * PDF 列構成: # / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ消耗品代 / 教材印刷代 / 各イベント / 参加費合計 / 請求額 / 受取日
  */
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { format, getDaysInMonth } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useShiftFacilityId } from '@/lib/shift-facility';
 import Button from '@/components/shift-compat/Button';
 import {
+  computeBillingRow,
   computeDefaultCopayAmount,
-  computeDefaultSnackFee,
-  resolveSnackFee,
-  stepSnackFee,
+  computeDefaultFeeAmount,
+  computeSiblingSubtotals,
+  isFeeOverridable,
+  resolveFeeAmount,
+  stepFeeAmount,
+  EMPTY_FEE_VALUE,
   type BillingChildInput,
+  type BillingFeeItemInput,
+  type BillingFeeValueInput,
 } from '@/lib/logic/computeBilling';
 import { isAttended } from '@/lib/logic/attendance';
 import type {
+  BillingFeeItemRow,
   ChildRow,
-  EventRow,
-  ScheduleEntryRow,
   CopayTier,
+  EventRow,
   Facility,
+  ScheduleEntryRow,
+  SiblingGroupRow,
 } from '@/lib/types';
 
 interface Props {
@@ -51,10 +63,11 @@ type RowState = {
   childName: string;
   municipality: string | null;
   child: BillingChildInput;
+  siblingGroupId: string | null;
   attendanceDays: number;
   copayAmount: number | null; // null = "—"
-  /** おやつ等の手動調整額。null = 自動算出（出席日数に追従）/ 値あり = その月は固定 */
-  snackOverride: number | null;
+  /** fee_item_id → その児童のその月の値（チェック / 手動調整 / 児童別月額） */
+  feeValues: Record<string, BillingFeeValueInput>;
   /** 受取（入金）日 YYYY-MM-DD */
   receivedAt: string | null;
   /** event_id → 参加 boolean */
@@ -71,12 +84,14 @@ interface BillingSummaryRow {
   child_id: string;
   attendance_days: number;
   copay_amount: number | null;
-  snack_fee: number;
-  snack_fee_override: number | null;
-  kumon_fee: number;
-  event_total: number;
-  total_amount: number;
   received_at: string | null;
+}
+
+interface FeeAmountRow {
+  billing_summary_id: string;
+  fee_item_id: string;
+  checked: boolean;
+  amount_override: number | null;
 }
 
 function defaultMonth(): { year: number; month: number } {
@@ -86,9 +101,9 @@ function defaultMonth(): { year: number; month: number } {
 
 const fmtYen = (n: number) => `¥${n.toLocaleString('ja-JP')}`;
 
-/* おやつ等セル内の小型ステッパー。shadcn の Button はセル内には大きすぎるため素の button を使う。
+/* 請求項目セル内の小型ステッパー。shadcn の Button はセル内には大きすぎるため素の button を使う。
    タップ標的 24px を確保（モバイルで押せる最小サイズ）。 */
-const snackBtnStyle: React.CSSProperties = {
+const feeBtnStyle: React.CSSProperties = {
   width: '24px',
   height: '24px',
   lineHeight: 1,
@@ -113,6 +128,8 @@ export default function BillingFull({ scope }: Props) {
   const [{ year, month }, setYM] = useState(() => defaultMonth());
   const [facility, setFacility] = useState<Facility | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [feeItems, setFeeItems] = useState<BillingFeeItemRow[]>([]);
+  const [siblingGroups, setSiblingGroups] = useState<SiblingGroupRow[]>([]);
   const [rows, setRows] = useState<RowState[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -141,7 +158,7 @@ export default function BillingFull({ scope }: Props) {
     setError('');
     try {
       /* 並列 fetch */
-      const [facRes, childRes, eventRes, entryRes, sumRes] = await Promise.all([
+      const [facRes, childRes, eventRes, entryRes, sumRes, itemRes, cfaRes, sgRes] = await Promise.all([
         supabase.from('facilities').select('*').eq('id', facilityId).maybeSingle(),
         supabase
           .from('children')
@@ -169,11 +186,30 @@ export default function BillingFull({ scope }: Props) {
           .lte('date', monthTo),
         supabase
           .from('billing_summaries')
-          .select('id, child_id, attendance_days, copay_amount, snack_fee, snack_fee_override, kumon_fee, event_total, total_amount, received_at')
+          .select('id, child_id, attendance_days, copay_amount, received_at')
           .eq('tenant_id', me.tenant_id)
           .eq('facility_id', facilityId)
           .eq('year', year)
           .eq('month', month),
+        /* 請求項目マスタ。is_active=false は以後の月の列から外す（過去月のスナップショットは残る） */
+        supabase
+          .from('billing_fee_items')
+          .select('*')
+          .eq('tenant_id', me.tenant_id)
+          .eq('facility_id', facilityId)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('children_fee_amounts')
+          .select('child_id, fee_item_id, amount')
+          .eq('tenant_id', me.tenant_id)
+          .eq('facility_id', facilityId),
+        supabase
+          .from('sibling_groups')
+          .select('*')
+          .eq('tenant_id', me.tenant_id)
+          .eq('facility_id', facilityId),
       ]);
 
       setFacility((facRes.data ?? null) as Facility | null);
@@ -184,26 +220,44 @@ export default function BillingFull({ scope }: Props) {
         'id' | 'child_id' | 'date' | 'pickup_time' | 'dropoff_time' | 'attendance_status'
       >[];
       const summaries = (sumRes.data ?? []) as BillingSummaryRow[];
+      const items = (itemRes.data ?? []) as BillingFeeItemRow[];
+      const childAmounts = (cfaRes.data ?? []) as { child_id: string; fee_item_id: string; amount: number }[];
 
       setEvents(evs);
+      setFeeItems(items);
+      setSiblingGroups((sgRes.data ?? []) as SiblingGroupRow[]);
 
-      /* 既存 summary から participations を取得 */
+      /* 既存 summary から participations と請求項目の値を取得 */
       const summaryIds = summaries.map((s) => s.id);
       const partsByChildId = new Map<string, Map<string, boolean>>();
+      const feesByChildId = new Map<string, Map<string, FeeAmountRow>>();
       if (summaryIds.length > 0) {
-        const { data: partsData } = await supabase
-          .from('billing_event_participations')
-          .select('billing_summary_id, event_id, participated')
-          .in('billing_summary_id', summaryIds);
         const sumIdToChildId = new Map(summaries.map((s) => [s.id, s.child_id]));
-        for (const p of ((partsData ?? []) as { billing_summary_id: string; event_id: string; participated: boolean }[])) {
+        const [partsRes, feeRes] = await Promise.all([
+          supabase
+            .from('billing_event_participations')
+            .select('billing_summary_id, event_id, participated')
+            .in('billing_summary_id', summaryIds),
+          supabase
+            .from('billing_summary_fee_amounts')
+            .select('billing_summary_id, fee_item_id, checked, amount_override')
+            .in('billing_summary_id', summaryIds),
+        ]);
+        for (const p of ((partsRes.data ?? []) as { billing_summary_id: string; event_id: string; participated: boolean }[])) {
           const cid = sumIdToChildId.get(p.billing_summary_id);
           if (!cid) continue;
           if (!partsByChildId.has(cid)) partsByChildId.set(cid, new Map());
           partsByChildId.get(cid)!.set(p.event_id, p.participated);
         }
+        for (const f of ((feeRes.data ?? []) as FeeAmountRow[])) {
+          const cid = sumIdToChildId.get(f.billing_summary_id);
+          if (!cid) continue;
+          if (!feesByChildId.has(cid)) feesByChildId.set(cid, new Map());
+          feesByChildId.get(cid)!.set(f.fee_item_id, f);
+        }
       }
       const summaryByChildId = new Map(summaries.map((s) => [s.child_id, s]));
+      const childAmountByKey = new Map(childAmounts.map((a) => [`${a.child_id}|${a.fee_item_id}`, a.amount]));
 
       /* 出席日数 / イベント参加初期値: lib/logic/attendance.ts の isAttended に一元化。
          「時間あり ∧ ¬waitlist」だけで判定（absent/leave は時間 NULL に強制されるため自動除外）。 */
@@ -224,13 +278,13 @@ export default function BillingFull({ scope }: Props) {
           municipality: c.municipality ?? null,
           copayTier: (c.copay_tier ?? 'zero') as CopayTier,
           copayFreeformAmount: c.copay_freeform_amount ?? null,
-          kumonMonthlyFee: c.kumon_monthly_fee ?? null,
         };
         const attendanceDays = presentDaysByChildId.get(c.id) ?? 0;
         const existing = summaryByChildId.get(c.id);
         const initialCopay = existing
           ? existing.copay_amount
           : computeDefaultCopayAmount(childInput, attendanceDays);
+
         const partsMap = partsByChildId.get(c.id) ?? new Map<string, boolean>();
         const participations: Record<string, boolean> = {};
         const attendedByEvent: Record<string, boolean> = {};
@@ -250,19 +304,32 @@ export default function BillingFull({ scope }: Props) {
             if (existing) filledFromAttendance = true;
           }
         }
+
+        /* 請求項目の値。保存済みがあれば復元（amount_override=null は「自動算出」の意味なので
+           そのまま null を保つ。0 と null を取り違えないこと）。 */
+        const feeMap = feesByChildId.get(c.id) ?? new Map<string, FeeAmountRow>();
+        const feeValues: Record<string, BillingFeeValueInput> = {};
+        for (const item of items) {
+          const saved = feeMap.get(item.id);
+          feeValues[item.id] = {
+            checked: saved?.checked ?? false,
+            amountOverride: saved?.amount_override ?? null,
+            childAmount: childAmountByKey.get(`${c.id}|${item.id}`) ?? null,
+          };
+        }
+
         return {
           childId: c.id,
           childName: c.name,
           municipality: c.municipality ?? null,
           child: childInput,
+          siblingGroupId: c.sibling_group_id ?? null,
           /* 出席日数は常に利用表 (schedule_entries) のライブカウントを正とする。
              保存値で固定しないので、保存後に利用表を直しても表示/印刷/Excel が追従する
-             （おやつ代・請求額も r.attendanceDays から派生するので自動で追従）。 */
+             （per_day 項目・請求額も r.attendanceDays から派生するので自動で追従）。 */
           attendanceDays,
           copayAmount: initialCopay,
-          /* null = 自動算出（出席日数に追従）。保存済みの調整値があればそれを復元して固定。
-             既存の保存済み月は全て null なので従来どおりの金額になる（後方互換）。 */
-          snackOverride: existing?.snack_fee_override ?? null,
+          feeValues,
           receivedAt: existing?.received_at ?? null,
           participations,
           attendedByEvent,
@@ -303,36 +370,107 @@ export default function BillingFull({ scope }: Props) {
     const ro = new ResizeObserver(measure);
     ro.observe(table);
     return () => ro.disconnect();
-  }, [rows.length, events.length]);
+  }, [rows.length, events.length, feeItems.length]);
 
-  /* 行の派生値（snack/kumon/eventTotal/total）。
-     参加費合計 (eventTotal) は別列「参加費合計」として表示すると同時に、請求額 (total) にも含める。
-     おやつ等は resolveSnackFee に一元化（自動算出と手動調整の分岐をここで二重定義しない）。 */
+  /* 純関数に渡す形（DB 行 → 計算用の最小形）。列の描画順もこの配列に従う */
+  const feeItemInputs = useMemo<BillingFeeItemInput[]>(
+    () => feeItems.map((i) => ({
+      itemId: i.id,
+      calcType: i.calc_type,
+      unitAmount: i.unit_amount,
+      stepAmount: i.step_amount,
+    })),
+    [feeItems],
+  );
+  const feeItemInputById = useMemo(
+    () => new Map(feeItemInputs.map((i) => [i.itemId, i])),
+    [feeItemInputs],
+  );
+
+  /* 行の派生値。請求額の式は computeBillingRow が唯一の定義（UI 側で再実装しない）。
+     参加費合計 (eventTotal) は別列「参加費合計」として表示すると同時に、請求額にも含める。 */
   const computed = useMemo(() => {
-    return rows.map((r) => {
-      const snackFee = resolveSnackFee(r.attendanceDays, r.snackOverride);
-      const kumonFee = r.child.kumonMonthlyFee != null && r.child.kumonMonthlyFee > 0
-        ? Math.floor(r.child.kumonMonthlyFee)
-        : 0;
-      let eventTotal = 0;
-      for (const ev of events) {
-        if (r.participations[ev.id]) eventTotal += Math.max(0, Math.floor(ev.price));
-      }
-      const total = (r.copayAmount ?? 0) + snackFee + kumonFee + eventTotal;
-      return { childId: r.childId, snackFee, kumonFee, eventTotal, total };
-    });
-  }, [rows, events]);
+    return rows.map((r) =>
+      computeBillingRow(
+        r.child,
+        r.attendanceDays,
+        feeItemInputs,
+        r.feeValues,
+        events.map((ev) => ({
+          eventId: ev.id,
+          date: ev.date,
+          name: ev.name,
+          price: ev.price,
+          participated: !!r.participations[ev.id],
+        })),
+        r.copayAmount,
+      ),
+    );
+  }, [rows, events, feeItemInputs]);
   const computedById = useMemo(
     () => new Map(computed.map((c) => [c.childId, c])),
     [computed],
   );
+  /* 請求項目の額を (childId, itemId) で引けるようにする（セル描画用） */
+  const feeAmountByKey = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of computed) {
+      for (const f of c.feeBreakdown) m.set(`${c.childId}|${f.itemId}`, f.amount);
+    }
+    return m;
+  }, [computed]);
 
-  /* 合計（footer）。eventGrand は参加費合計列の総和、grand は請求額の総和。 */
+  /* 兄弟グループの児童を隣接させる。グループはその「最初のメンバーが現れる位置」に寄せ、
+     グループ未所属の児童の順序は一切変えない（既存の display_order を尊重する安定並べ替え）。 */
+  const orderedRows = useMemo(() => {
+    const emitted = new Set<string>();
+    const out: RowState[] = [];
+    for (const r of rows) {
+      if (emitted.has(r.childId)) continue;
+      if (r.siblingGroupId) {
+        for (const s of rows) {
+          if (s.siblingGroupId === r.siblingGroupId && !emitted.has(s.childId)) {
+            out.push(s);
+            emitted.add(s.childId);
+          }
+        }
+      } else {
+        out.push(r);
+        emitted.add(r.childId);
+      }
+    }
+    return out;
+  }, [rows]);
+
+  const siblingLabelById = useMemo(
+    () => new Map(siblingGroups.map((g) => [g.id, g.label])),
+    [siblingGroups],
+  );
+  /* 兄弟ごとの請求額小計。表示専用で、全体合計には足さない（足すと二重計上） */
+  const siblingSubtotals = useMemo(
+    () => computeSiblingSubtotals(
+      rows.map((r) => ({
+        siblingGroupId: r.siblingGroupId,
+        totalAmount: computedById.get(r.childId)?.totalAmount ?? 0,
+      })),
+    ),
+    [rows, computedById],
+  );
+  /* グループの最終行（そこに小計行を挿し込む）と、グループ内の人数 */
+  const lastRowIdxOfGroup = useMemo(() => {
+    const m = new Map<string, number>();
+    orderedRows.forEach((r, i) => {
+      if (r.siblingGroupId) m.set(r.siblingGroupId, i);
+    });
+    return m;
+  }, [orderedRows]);
+
+  /* 合計（footer）。**児童行のみ**を集計する。兄弟小計行は表示専用なので足さない。 */
   const totals = useMemo(() => {
     let attendanceDays = 0;
     let copay = 0;
-    let snack = 0;
-    let kumon = 0;
+    const feeTotals: Record<string, number> = {};
+    for (const item of feeItems) feeTotals[item.id] = 0;
     const eventTotals: Record<string, number> = {};
     for (const ev of events) eventTotals[ev.id] = 0;
     let eventGrand = 0;
@@ -342,16 +480,15 @@ export default function BillingFull({ scope }: Props) {
       if (!c) continue;
       attendanceDays += r.attendanceDays;
       copay += r.copayAmount ?? 0;
-      snack += c.snackFee;
-      kumon += c.kumonFee;
+      for (const f of c.feeBreakdown) feeTotals[f.itemId] = (feeTotals[f.itemId] ?? 0) + f.amount;
       for (const ev of events) {
         if (r.participations[ev.id]) eventTotals[ev.id] += Math.max(0, Math.floor(ev.price));
       }
       eventGrand += c.eventTotal;
-      grand += c.total;
+      grand += c.totalAmount;
     }
-    return { attendanceDays, copay, snack, kumon, eventTotals, eventGrand, grand };
-  }, [rows, computedById, events]);
+    return { attendanceDays, copay, feeTotals, eventTotals, eventGrand, grand };
+  }, [rows, computedById, events, feeItems]);
 
   /* イベント参加チェックと利用表の出席実績のズレ。
      保存済みの明示値は「職員が意図的に外した/付けた」可能性があるため自動では直さず
@@ -397,15 +534,16 @@ export default function BillingFull({ scope }: Props) {
     setRows((prev) => prev.map((r) => (r.childId === childId ? { ...r, ...patch, dirty: true } : r)));
   };
 
-  /* おやつ等の ▲▼。表示中の実効額（自動算出 or 調整済み）を起点に ±1日分し、override として固定する。
-     初回押下時は「自動算出値 ± 50」になるので、画面上の数字がそのまま動いて見える。 */
-  const handleStepSnack = (childId: string, direction: 1 | -1) => {
+  const patchFeeValue = (childId: string, itemId: string, patch: Partial<BillingFeeValueInput>) => {
     setRows((prev) =>
       prev.map((r) =>
         r.childId === childId
           ? {
               ...r,
-              snackOverride: stepSnackFee(resolveSnackFee(r.attendanceDays, r.snackOverride), direction),
+              feeValues: {
+                ...r.feeValues,
+                [itemId]: { ...(r.feeValues[itemId] ?? EMPTY_FEE_VALUE), ...patch },
+              },
               dirty: true,
             }
           : r,
@@ -413,14 +551,47 @@ export default function BillingFull({ scope }: Props) {
     );
   };
 
-  /* 自動算出に戻す（override を捨てる）。以後は再び出席日数の変更に追従する。 */
-  const handleResetSnack = (childId: string) => {
-    updateRow(childId, { snackOverride: null });
+  /* 請求項目の ▲▼。表示中の実効額（自動算出 or 調整済み）を起点に ±1 ステップし、override として固定する。
+     初回押下時は「自動算出値 ± ステップ」になるので、画面上の数字がそのまま動いて見える。 */
+  const handleStepFee = (childId: string, itemId: string, direction: 1 | -1) => {
+    const item = feeItemInputById.get(itemId);
+    if (!item) return;
+    const row = rows.find((r) => r.childId === childId);
+    if (!row) return;
+    const value = row.feeValues[itemId] ?? EMPTY_FEE_VALUE;
+    const current = resolveFeeAmount(item, value, row.attendanceDays);
+    patchFeeValue(childId, itemId, { amountOverride: stepFeeAmount(item, current, direction) });
+  };
+
+  /* 自動算出に戻す（override を捨てる）。以後は再びマスタ単価・出席日数の変更に追従する。 */
+  const handleResetFee = (childId: string, itemId: string) => {
+    patchFeeValue(childId, itemId, { amountOverride: null });
+  };
+
+  const handleToggleFeeCheckbox = (childId: string, itemId: string) => {
+    const row = rows.find((r) => r.childId === childId);
+    if (!row) return;
+    const value = row.feeValues[itemId] ?? EMPTY_FEE_VALUE;
+    patchFeeValue(childId, itemId, { checked: !value.checked });
+  };
+
+  const handleToggleEvent = (childId: string, eventId: string) => {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.childId === childId
+          ? {
+              ...r,
+              participations: { ...r.participations, [eventId]: !r.participations[eventId] },
+              dirty: true,
+            }
+          : r,
+      ),
+    );
   };
 
   /* 174-B: Excel (xlsx) 出力。exceljs を動的 import して初回のみロード。
-     列構成は印刷ビューと同じ (# / 市町村 / 氏名 / 出席日数 / 利用負担額 / おやつ等 /
-     教材印刷代 / 各イベント / 参加費合計 / 請求額)。合計行も含める。 */
+     列構成は印刷ビューと同じ (# / 市町村 / 氏名 / 兄弟 / 出席日数 / 利用負担額 /
+     各請求項目 / 各イベント / 参加費合計 / 請求額)。兄弟小計行と合計行も含める。 */
   const handleDownloadExcel = async () => {
     const ExcelJS = (await import('exceljs')).default;
     const wb = new ExcelJS.Workbook();
@@ -431,8 +602,11 @@ export default function BillingFull({ scope }: Props) {
     const sheetName = `${year}年${month}月`;
     const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4, xSplit: 3 }] });
 
+    const FIXED_LEFT = 6; // # / 市町村 / 氏名 / 兄弟 / 出席日数 / 利用負担額
+    const lastCol = FIXED_LEFT + feeItems.length + events.length + 2;
+
     /* タイトル行 */
-    ws.mergeCells(1, 1, 1, 7 + events.length + 2);
+    ws.mergeCells(1, 1, 1, lastCol);
     const titleCell = ws.getCell(1, 1);
     titleCell.value = `${facilityName} 利用料金表  ${year}年${month}月`;
     titleCell.font = { size: 14, bold: true };
@@ -440,14 +614,15 @@ export default function BillingFull({ scope }: Props) {
     ws.getRow(1).height = 22;
 
     /* 出力日 (右端) */
-    const stampCell = ws.getCell(2, 7 + events.length + 2);
+    const stampCell = ws.getCell(2, lastCol);
     stampCell.value = `出力: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`;
     stampCell.font = { size: 9, color: { argb: 'FF6B7280' } };
     stampCell.alignment = { horizontal: 'right' };
 
     /* ヘッダー (row 3) */
     const headerRow = [
-      '#', '市町村', '氏名', '出席日数', '利用負担額', 'おやつ等', '教材印刷代',
+      '#', '市町村', '氏名', '兄弟', '出席日数', '利用負担額',
+      ...feeItems.map((i) => i.name),
       ...events.map((ev) => `${ev.name} (${format(new Date(ev.date), 'M/d')} ¥${ev.price.toLocaleString('ja-JP')})`),
       '参加費合計', '請求額',
     ];
@@ -467,46 +642,66 @@ export default function BillingFull({ scope }: Props) {
     ws.getColumn(1).width = 5;
     ws.getColumn(2).width = 12;
     ws.getColumn(3).width = 18;
-    ws.getColumn(4).width = 9;
-    ws.getColumn(5).width = 12;
-    ws.getColumn(6).width = 10;
-    ws.getColumn(7).width = 12;
-    for (let i = 0; i < events.length; i++) ws.getColumn(8 + i).width = 14;
-    ws.getColumn(8 + events.length).width = 12;
-    ws.getColumn(9 + events.length).width = 14;
+    ws.getColumn(4).width = 10;
+    ws.getColumn(5).width = 9;
+    ws.getColumn(6).width = 12;
+    for (let i = 0; i < feeItems.length; i++) ws.getColumn(FIXED_LEFT + 1 + i).width = 12;
+    for (let i = 0; i < events.length; i++) ws.getColumn(FIXED_LEFT + feeItems.length + 1 + i).width = 14;
+    ws.getColumn(lastCol - 1).width = 12;
+    ws.getColumn(lastCol).width = 14;
 
-    /* データ行 */
-    rows.forEach((r, idx) => {
+    /* データ行（兄弟小計行を挟みながら） */
+    orderedRows.forEach((r, idx) => {
       const c = computedById.get(r.childId);
       const dataRow = [
         idx + 1,
         r.municipality ?? '',
         r.childName,
+        r.siblingGroupId ? (siblingLabelById.get(r.siblingGroupId) ?? '') : '',
         r.attendanceDays,
         r.copayAmount ?? 0,
-        c?.snackFee ?? 0,
-        c?.kumonFee ?? 0,
+        ...feeItems.map((i) => feeAmountByKey.get(`${r.childId}|${i.id}`) ?? 0),
         ...events.map((ev) => (r.participations[ev.id] ? Math.max(0, Math.floor(ev.price)) : 0)),
         c?.eventTotal ?? 0,
-        c?.total ?? 0,
+        c?.totalAmount ?? 0,
       ];
       const row = ws.addRow(dataRow);
       row.eachCell((cell, colNum) => {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        if (colNum >= 4) {
+        if (colNum >= 5) {
           cell.numFmt = '#,##0';
           cell.alignment = { horizontal: 'right' };
         }
       });
+
+      /* 兄弟グループの最終行の直下に小計行 */
+      if (r.siblingGroupId && lastRowIdxOfGroup.get(r.siblingGroupId) === idx) {
+        const label = siblingLabelById.get(r.siblingGroupId) ?? '';
+        const subRow = ws.addRow([
+          '', '', '', label, '', '',
+          ...feeItems.map(() => ''),
+          ...events.map(() => ''),
+          'きょうだい小計',
+          siblingSubtotals.get(r.siblingGroupId) ?? 0,
+        ]);
+        subRow.eachCell((cell, colNum) => {
+          cell.font = { bold: true, italic: true };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF6E3' } };
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          if (colNum === lastCol) {
+            cell.numFmt = '#,##0';
+            cell.alignment = { horizontal: 'right' };
+          }
+        });
+      }
     });
 
-    /* 合計行 */
+    /* 合計行（児童行のみの集計。兄弟小計は含めない） */
     const totalRow = ws.addRow([
-      '', '', '合計',
+      '', '', '合計', '',
       totals.attendanceDays,
       totals.copay,
-      totals.snack,
-      totals.kumon,
+      ...feeItems.map((i) => totals.feeTotals[i.id] ?? 0),
       ...events.map((ev) => totals.eventTotals[ev.id] ?? 0),
       totals.eventGrand,
       totals.grand,
@@ -515,7 +710,7 @@ export default function BillingFull({ scope }: Props) {
       cell.font = { bold: true };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
       cell.border = { top: { style: 'medium' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-      if (colNum >= 4) {
+      if (colNum >= 5) {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
       }
@@ -531,25 +726,16 @@ export default function BillingFull({ scope }: Props) {
     URL.revokeObjectURL(a.href);
   };
 
-  const handleToggleEvent = (childId: string, eventId: string) => {
-    setRows((prev) =>
-      prev.map((r) =>
-        r.childId === childId
-          ? {
-              ...r,
-              participations: { ...r.participations, [eventId]: !r.participations[eventId] },
-              dirty: true,
-            }
-          : r,
-      ),
-    );
-  };
-
   const handleSave = async () => {
     if (!me || !facilityId) return;
     setSaving(true);
     setError('');
     try {
+      /* 互換のため billing_summaries.snack_fee / kumon_fee / snack_fee_override も書き続ける
+         （移行前から存在する列。外部から読む処理が将来現れても壊れないようにする）。 */
+      const snackItem = feeItems.find((i) => i.system_key === 'snack');
+      const materialItem = feeItems.find((i) => i.system_key === 'material');
+
       /* 1) billing_summaries upsert（unique: tenant, facility, year, month, child） */
       const summaryRows = rows.map((r) => {
         const c = computedById.get(r.childId);
@@ -561,13 +747,11 @@ export default function BillingFull({ scope }: Props) {
           child_id: r.childId,
           attendance_days: r.attendanceDays,
           copay_amount: r.copayAmount,
-          snack_fee: c?.snackFee ?? 0,
-          /* 実効額 (snack_fee) と併せて「調整されたか」の根拠も残す。
-             null のまま保存された月は次回読込時も自動算出に追従する。 */
-          snack_fee_override: r.snackOverride,
-          kumon_fee: c?.kumonFee ?? 0,
+          snack_fee: snackItem ? (feeAmountByKey.get(`${r.childId}|${snackItem.id}`) ?? 0) : 0,
+          snack_fee_override: snackItem ? (r.feeValues[snackItem.id]?.amountOverride ?? null) : null,
+          kumon_fee: materialItem ? (feeAmountByKey.get(`${r.childId}|${materialItem.id}`) ?? 0) : 0,
           event_total: c?.eventTotal ?? 0,
-          total_amount: c?.total ?? 0,
+          total_amount: c?.totalAmount ?? 0,
           received_at: r.receivedAt && r.receivedAt.trim() !== '' ? r.receivedAt : null,
           child_name_snapshot: r.childName,
           child_municipality_snapshot: r.municipality,
@@ -581,9 +765,10 @@ export default function BillingFull({ scope }: Props) {
         .select('id, child_id');
       if (upErr) throw new Error(upErr.message);
 
-      /* 2) billing_event_participations を全置換（このサマリ群のみ）*/
       const childIdToSumId = new Map(((upserted ?? []) as { id: string; child_id: string }[]).map((u) => [u.child_id, u.id]));
       const summaryIds = Array.from(childIdToSumId.values());
+
+      /* 2) billing_event_participations を全置換（このサマリ群のみ）*/
       if (summaryIds.length > 0) {
         const { error: delErr } = await supabase
           .from('billing_event_participations')
@@ -611,6 +796,36 @@ export default function BillingFull({ scope }: Props) {
           .insert(partsToInsert);
         if (insErr) throw new Error(insErr.message);
       }
+
+      /* 3) billing_summary_fee_amounts は upsert（delete しない）。
+         過去に無効化した項目のスナップショットを消さないため、全置換ではなく差分更新にする。 */
+      const feeRowsToUpsert: {
+        tenant_id: string; facility_id: string; billing_summary_id: string; fee_item_id: string;
+        checked: boolean; amount_override: number | null; amount: number;
+      }[] = [];
+      for (const r of rows) {
+        const sid = childIdToSumId.get(r.childId);
+        if (!sid) continue;
+        for (const item of feeItems) {
+          const v = r.feeValues[item.id] ?? EMPTY_FEE_VALUE;
+          feeRowsToUpsert.push({
+            tenant_id: me.tenant_id,
+            facility_id: facilityId,
+            billing_summary_id: sid,
+            fee_item_id: item.id,
+            checked: v.checked,
+            amount_override: v.amountOverride,
+            amount: feeAmountByKey.get(`${r.childId}|${item.id}`) ?? 0,
+          });
+        }
+      }
+      if (feeRowsToUpsert.length > 0) {
+        const { error: feeErr } = await supabase
+          .from('billing_summary_fee_amounts')
+          .upsert(feeRowsToUpsert, { onConflict: 'billing_summary_id,fee_item_id' });
+        if (feeErr) throw new Error(feeErr.message);
+      }
+
       /* dirty フラグをリセットして再 fetch（id を受け取るため） */
       await fetchAll();
     } catch (e) {
@@ -628,12 +843,16 @@ export default function BillingFull({ scope }: Props) {
   }
 
   const dirtyCount = rows.filter((r) => r.dirty).length;
+  /* 固定 6 列 (# / 市町村 / 氏名 / 兄弟 / 出席日数 / 利用負担額) + 動的列 + 参加費合計 + 請求額 */
+  const totalCols = 6 + feeItems.length + events.length + 2;
 
-  /* イベント数に応じた印刷密度: 0-4=lg(9pt), 5-7=md(8pt), 8-10=sm(7pt), 11+=xs(6pt) */
+  /* 動的列（請求項目 + イベント）の総数に応じた印刷密度。
+     旧実装はイベント数だけで判定していたが、請求項目も列を増やすので合算で見る。 */
+  const dynamicCols = feeItems.length + events.length;
   const printDensity =
-    events.length <= 4 ? 'lg' :
-    events.length <= 7 ? 'md' :
-    events.length <= 10 ? 'sm' : 'xs';
+    dynamicCols <= 6 ? 'lg' :
+    dynamicCols <= 9 ? 'md' :
+    dynamicCols <= 12 ? 'sm' : 'xs';
 
   /* ===== render ===== */
   return (
@@ -641,7 +860,7 @@ export default function BillingFull({ scope }: Props) {
       className="flex flex-col -m-6 lg:-m-8 p-6 lg:p-8 billing-print-root"
       data-density={printDensity}
     >
-      {/* 印刷 CSS + Excel 風グリッド線（縦横全セル枠線） + イベント数に応じた密度自動調整 */}
+      {/* 印刷 CSS + Excel 風グリッド線（縦横全セル枠線） + 列数に応じた密度自動調整 */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -662,6 +881,11 @@ export default function BillingFull({ scope }: Props) {
               border-top: 3px double var(--ink) !important;
               box-shadow: 0 -1px 0 var(--white) inset;
             }
+            /* 兄弟の小計行: 塗り + 斜体で「集計であって請求対象の行ではない」ことを示す */
+            .billing-grid tbody tr.billing-sibling-subtotal td {
+              background: var(--gold-pale);
+              font-style: italic;
+            }
             /* スクリーン表示: 見出し（thead）と先頭3列（# / 市町村 / 氏名）を固定 */
             @media screen {
               .billing-grid thead th {
@@ -680,6 +904,9 @@ export default function BillingFull({ scope }: Props) {
                 background: var(--bg);
                 z-index: 3;
               }
+              .billing-grid tbody tr.billing-sibling-subtotal .billing-sticky-col {
+                background: var(--gold-pale);
+              }
               .billing-grid .billing-sticky-col-1 { left: 0; }
               .billing-grid .billing-sticky-col-2 { left: var(--sticky-c2, 40px); }
               .billing-grid .billing-sticky-col-3 {
@@ -688,7 +915,7 @@ export default function BillingFull({ scope }: Props) {
               }
             }
             @media print {
-              /* ユーザー要望: 常に A4 横で出力。イベントが増えても A3 にしない */
+              /* ユーザー要望: 常に A4 横で出力。列が増えても A3 にしない */
               @page { size: A4 landscape; margin: 8mm; }
               .billing-print-root { overflow: visible !important; height: auto !important; padding: 0 !important; margin: 0 !important; }
               .billing-print-root .print-hide { display: none !important; }
@@ -714,7 +941,7 @@ export default function BillingFull({ scope }: Props) {
               .billing-print-root .whitespace-nowrap { white-space: normal !important; }
               .billing-print-root thead { display: table-header-group !important; }
               .billing-print-root tr { page-break-inside: avoid !important; break-inside: avoid !important; }
-              /* イベント増加に応じてフォント・横パディングを段階縮小（A4 横を維持するため）。
+              /* 列増加に応じてフォント・横パディングを段階縮小（A4 横を維持するため）。
                  縦パディングはセル高を確保するため広めに設定。 */
               .billing-print-root[data-density="lg"] table { font-size: 9pt !important; }
               .billing-print-root[data-density="lg"] th,
@@ -735,6 +962,7 @@ export default function BillingFull({ scope }: Props) {
               .billing-grid thead th { border-bottom: 1.2pt solid #000 !important; border-top: 1pt solid #000 !important; }
               .billing-grid tbody tr.billing-total-row td { border-top: 1.2pt solid #000 !important; }
               .billing-grid tbody tr.billing-group-divider td { border-top: 1.5pt double #000 !important; }
+              .billing-grid tbody tr.billing-sibling-subtotal td { background: #f2f2f2 !important; }
               .billing-print-title { display: block !important; }
             }
             @media screen { .billing-print-title { display: none; } }
@@ -816,7 +1044,7 @@ export default function BillingFull({ scope }: Props) {
             ref={tableRef}
             className="w-full text-sm billing-grid"
             style={{
-              minWidth: `${660 + events.length * 80}px`,
+              minWidth: `${730 + feeItems.length * 130 + events.length * 80}px`,
               borderCollapse: 'collapse',
               ['--sticky-c2' as string]: `${stickyLeft.c2}px`,
               ['--sticky-c3' as string]: `${stickyLeft.c3}px`,
@@ -828,11 +1056,34 @@ export default function BillingFull({ scope }: Props) {
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-1" style={{ width: '40px' }}>#</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-2" style={{ width: '90px' }}>市町村</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3" style={{ width: '140px' }}>氏名</th>
+                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }} title="兄弟グループ。同じグループの児童は隣接表示され、直下に「きょうだい小計」行が出ます">兄弟</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
-                {/* ▲▼/↺ を収めるため 70px → 130px（印刷時は width:auto に上書きされるため紙面には影響しない） */}
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '130px' }}>おやつ等</th>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '90px' }}>教材印刷代</th>
+                {feeItems.map((item) => (
+                  <th
+                    key={item.id}
+                    className="px-2 py-2 text-center font-semibold"
+                    style={{ width: isFeeOverridable(item.calc_type) ? '130px' : '90px' }}
+                    title={
+                      item.calc_type === 'per_day' ? `出席日数 × ${fmtYen(item.unit_amount)}（▲▼ で調整可）`
+                      : item.calc_type === 'monthly_fixed' ? `月額 ${fmtYen(item.unit_amount)}（▲▼ で調整可）`
+                      : item.calc_type === 'checkbox' ? `チェックで ${fmtYen(item.unit_amount)} 加算`
+                      : '児童設定で入力した月額'
+                    }
+                  >
+                    <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
+                    {item.calc_type === 'per_day' && (
+                      <div style={{ fontSize: '0.65rem', color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>
+                        {fmtYen(item.unit_amount)}/日
+                      </div>
+                    )}
+                    {item.calc_type === 'checkbox' && (
+                      <div style={{ fontSize: '0.65rem', color: item.unit_amount > 0 ? 'var(--ink-3)' : 'var(--red)', whiteSpace: 'nowrap' }}>
+                        {item.unit_amount > 0 ? fmtYen(item.unit_amount) : '⚠ 金額未設定'}
+                      </div>
+                    )}
+                  </th>
+                ))}
                 {events.map((ev) => {
                   /* イベント名が長いと列幅で折り返してしまうので、文字数に応じて自動縮小して 1 行に収める。
                      scaleX 系よりフォントサイズ縮小 + 微妙なトラッキング詰めの方が読みやすい。 */
@@ -869,170 +1120,234 @@ export default function BillingFull({ scope }: Props) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, idx) => {
+              {orderedRows.map((r, idx) => {
                 const c = computedById.get(r.childId);
                 /* 小学生以下（preschool / nursery_3〜5）と それ以上の境目に二重線 */
                 const underElem = (g: string) =>
                   g === 'preschool' || g === 'nursery_3' || g === 'nursery_4' || g === 'nursery_5';
-                const prev = idx > 0 ? rows[idx - 1] : null;
+                const prev = idx > 0 ? orderedRows[idx - 1] : null;
                 const isGroupBoundary =
                   prev != null && underElem(prev.child.gradeType) !== underElem(r.child.gradeType);
+                const siblingLabel = r.siblingGroupId ? (siblingLabelById.get(r.siblingGroupId) ?? '') : '';
+                const isLastOfSiblingGroup =
+                  r.siblingGroupId != null && lastRowIdxOfGroup.get(r.siblingGroupId) === idx;
                 return (
-                  <tr key={r.childId} className={isGroupBoundary ? 'billing-group-divider' : ''}>
-                    <td className="px-2 py-2 text-center whitespace-nowrap billing-sticky-col billing-sticky-col-1">{idx + 1}</td>
-                    <td className="px-2 py-2 whitespace-nowrap billing-sticky-col billing-sticky-col-2">{r.municipality ?? ''}</td>
-                    <td className="px-2 py-2 font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3">{r.childName}</td>
-                    <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {r.attendanceDays}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={r.copayAmount ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          const n = v === '' ? null : Math.max(0, Math.floor(Number(v)));
-                          updateRow(r.childId, {
-                            copayAmount: Number.isFinite(n as number) ? n : null,
-                          });
-                        }}
-                        className="outline-none w-full px-2 py-1 rounded text-right print-hide"
-                        style={{ background: 'var(--white)', border: '1px solid var(--rule)', fontVariantNumeric: 'tabular-nums' }}
-                        placeholder="—"
-                      />
-                      <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {r.copayAmount == null ? '—' : fmtYen(r.copayAmount)}
-                      </span>
-                    </td>
-                    {/* おやつ等: 自動算出値を起点に ▲▼ で ±1日分（50円）調整できる。
-                        調整済みは 色 + ✎ + title の 3 点で示す（色だけで伝えない: CLAUDE.md §9）。 */}
-                    <td className="px-2 py-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {(() => {
-                        const adjusted = r.snackOverride != null;
-                        const autoFee = computeDefaultSnackFee(r.attendanceDays);
-                        const fee = c?.snackFee ?? autoFee;
+                  /* 児童行 + （最後の兄弟なら）小計行 の 2 行を返すので、key は Fragment 側に付ける */
+                  <Fragment key={r.childId}>
+                    <tr className={isGroupBoundary ? 'billing-group-divider' : ''}>
+                      <td className="px-2 py-2 text-center whitespace-nowrap billing-sticky-col billing-sticky-col-1">{idx + 1}</td>
+                      <td className="px-2 py-2 whitespace-nowrap billing-sticky-col billing-sticky-col-2">{r.municipality ?? ''}</td>
+                      <td className="px-2 py-2 font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3">{r.childName}</td>
+                      <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem', color: 'var(--ink-3)' }}>
+                        {siblingLabel}
+                      </td>
+                      <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {r.attendanceDays}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={r.copayAmount ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const n = v === '' ? null : Math.max(0, Math.floor(Number(v)));
+                            updateRow(r.childId, {
+                              copayAmount: Number.isFinite(n as number) ? n : null,
+                            });
+                          }}
+                          className="outline-none w-full px-2 py-1 rounded text-right print-hide"
+                          style={{ background: 'var(--white)', border: '1px solid var(--rule)', fontVariantNumeric: 'tabular-nums' }}
+                          placeholder="—"
+                        />
+                        <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {r.copayAmount == null ? '—' : fmtYen(r.copayAmount)}
+                        </span>
+                      </td>
+
+                      {/* 請求項目セル。計算方式ごとに UI を変える。
+                          調整済みは 色 + ✎ + title の 3 点で示す（色だけで伝えない: CLAUDE.md §9）。 */}
+                      {feeItems.map((item) => {
+                        const itemInput = feeItemInputById.get(item.id);
+                        const value = r.feeValues[item.id] ?? EMPTY_FEE_VALUE;
+                        const fee = feeAmountByKey.get(`${r.childId}|${item.id}`) ?? 0;
+                        const adjusted = value.amountOverride != null;
+                        const autoFee = itemInput
+                          ? computeDefaultFeeAmount(itemInput, value, r.attendanceDays)
+                          : 0;
                         const hint = adjusted
                           ? `手動調整済み（自動算出は ${fmtYen(autoFee)}）。↺ で自動に戻せます`
-                          : `自動算出（出席 ${r.attendanceDays}日分）。▲▼ で 50円ずつ調整できます`;
+                          : item.calc_type === 'per_day'
+                            ? `自動算出（出席 ${r.attendanceDays}日 × ${fmtYen(item.unit_amount)}）`
+                            : item.calc_type === 'per_child_monthly'
+                              ? '児童設定で入力した月額'
+                              : item.calc_type === 'checkbox'
+                                ? `チェックで ${fmtYen(item.unit_amount)} 加算`
+                                : `月額固定 ${fmtYen(item.unit_amount)}`;
+
                         return (
-                          <>
-                            <div className="flex items-center justify-end gap-1 print-hide">
-                              <button
-                                type="button"
-                                style={snackBtnStyle}
-                                onClick={() => handleStepSnack(r.childId, -1)}
-                                aria-label={`${r.childName} のおやつ等を50円減らす`}
-                                title="50円（1日分）減らす"
-                              >
-                                ▼
-                              </button>
-                              <span
-                                title={hint}
-                                style={{
-                                  minWidth: '52px',
-                                  textAlign: 'right',
-                                  fontSize: '0.78rem',
-                                  fontVariantNumeric: 'tabular-nums',
-                                  color: adjusted ? 'var(--accent)' : 'var(--ink)',
-                                  fontWeight: adjusted ? 700 : 400,
-                                }}
-                              >
-                                {adjusted && <span aria-hidden="true">✎</span>}
-                                {fmtYen(fee)}
-                              </span>
-                              <button
-                                type="button"
-                                style={snackBtnStyle}
-                                onClick={() => handleStepSnack(r.childId, 1)}
-                                aria-label={`${r.childName} のおやつ等を50円増やす`}
-                                title="50円（1日分）増やす"
-                              >
-                                ▲
-                              </button>
-                              {/* 調整時のみ ↺。未調整でも幅を確保して行のガタつきを防ぐ */}
-                              {adjusted ? (
-                                <button
-                                  type="button"
-                                  style={{ ...snackBtnStyle, color: 'var(--accent)' }}
-                                  onClick={() => handleResetSnack(r.childId)}
-                                  aria-label={`${r.childName} のおやつ等を自動算出に戻す`}
-                                  title={`自動算出（${fmtYen(autoFee)}）に戻す`}
-                                >
-                                  ↺
-                                </button>
-                              ) : (
-                                <span style={{ width: '24px', flexShrink: 0 }} aria-hidden="true" />
-                              )}
-                            </div>
-                            {/* 印刷: 操作 UI を消して金額のみ。未調整で 0 円の場合は従来どおり空欄 */}
-                            <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              {adjusted || fee > 0 ? fmtYen(fee) : ''}
-                            </span>
-                          </>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {c && c.kumonFee > 0 ? fmtYen(c.kumonFee) : ''}
-                    </td>
-                    {events.map((ev) => {
-                      const participated = !!r.participations[ev.id];
-                      /* 利用表とのズレは 背景色 + アイコン + title の 3 点で示す（色だけで伝えない）。
-                         紙には出さない（print-hide）ので、印刷結果は確定値のみ。 */
-                      const drifted = driftKeys.has(`${r.childId}_${ev.id}`);
-                      const attended = !!r.attendedByEvent[ev.id];
-                      const driftHint = !drifted
-                        ? undefined
-                        : attended
-                          ? `${r.childName} は ${format(new Date(ev.date), 'M/d')} に利用表で出席実績がありますが、チェックが外れています`
-                          : `${r.childName} は ${format(new Date(ev.date), 'M/d')} に利用表で出席実績がありませんが、チェックが入っています`;
-                      return (
-                        <td
-                          key={ev.id}
-                          className={`px-2 py-2 text-center${drifted ? ' billing-drift-cell' : ''}`}
-                          style={drifted ? { background: 'var(--gold-pale)' } : undefined}
-                        >
-                          <label className="inline-flex items-center gap-1 cursor-pointer print-hide" title={driftHint}>
-                            <input
-                              type="checkbox"
-                              checked={participated}
-                              onChange={() => handleToggleEvent(r.childId, ev.id)}
-                            />
-                            <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem', color: participated ? 'var(--ink)' : 'var(--ink-3)' }}>
-                              {participated ? fmtYen(ev.price) : '—'}
-                            </span>
-                            {drifted && (
-                              <span aria-hidden="true" style={{ color: 'var(--gold)', fontWeight: 700 }}>
-                                {attended ? '⚠' : '＋'}
-                              </span>
+                          <td key={item.id} className="px-2 py-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {item.calc_type === 'per_child_monthly' ? (
+                              /* 児童設定が正。ここでは読み取り専用 */
+                              <div className="text-right" title={hint}>
+                                {fee > 0 ? fmtYen(fee) : ''}
+                              </div>
+                            ) : item.calc_type === 'checkbox' ? (
+                              <>
+                                <label className="flex items-center justify-end gap-1 cursor-pointer print-hide" title={hint}>
+                                  <input
+                                    type="checkbox"
+                                    checked={value.checked}
+                                    onChange={() => handleToggleFeeCheckbox(r.childId, item.id)}
+                                    aria-label={`${r.childName} の${item.name}`}
+                                  />
+                                  <span style={{ fontSize: '0.78rem', color: value.checked ? 'var(--ink)' : 'var(--ink-3)' }}>
+                                    {value.checked ? fmtYen(fee) : '—'}
+                                  </span>
+                                </label>
+                                <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                  {value.checked ? fmtYen(fee) : ''}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-end gap-1 print-hide">
+                                  <button
+                                    type="button"
+                                    style={feeBtnStyle}
+                                    onClick={() => handleStepFee(r.childId, item.id, -1)}
+                                    aria-label={`${r.childName} の${item.name}を減らす`}
+                                    title={`${fmtYen(item.step_amount ?? item.unit_amount)} 減らす`}
+                                  >
+                                    ▼
+                                  </button>
+                                  <span
+                                    title={hint}
+                                    style={{
+                                      minWidth: '52px',
+                                      textAlign: 'right',
+                                      fontSize: '0.78rem',
+                                      fontVariantNumeric: 'tabular-nums',
+                                      color: adjusted ? 'var(--accent)' : 'var(--ink)',
+                                      fontWeight: adjusted ? 700 : 400,
+                                    }}
+                                  >
+                                    {adjusted && <span aria-hidden="true">✎</span>}
+                                    {fmtYen(fee)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    style={feeBtnStyle}
+                                    onClick={() => handleStepFee(r.childId, item.id, 1)}
+                                    aria-label={`${r.childName} の${item.name}を増やす`}
+                                    title={`${fmtYen(item.step_amount ?? item.unit_amount)} 増やす`}
+                                  >
+                                    ▲
+                                  </button>
+                                  {/* 調整時のみ ↺。未調整でも幅を確保して行のガタつきを防ぐ */}
+                                  {adjusted ? (
+                                    <button
+                                      type="button"
+                                      style={{ ...feeBtnStyle, color: 'var(--accent)' }}
+                                      onClick={() => handleResetFee(r.childId, item.id)}
+                                      aria-label={`${r.childName} の${item.name}を自動算出に戻す`}
+                                      title={`自動算出（${fmtYen(autoFee)}）に戻す`}
+                                    >
+                                      ↺
+                                    </button>
+                                  ) : (
+                                    <span style={{ width: '24px', flexShrink: 0 }} aria-hidden="true" />
+                                  )}
+                                </div>
+                                {/* 印刷: 操作 UI を消して金額のみ。未調整で 0 円の場合は従来どおり空欄 */}
+                                <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                  {adjusted || fee > 0 ? fmtYen(fee) : ''}
+                                </span>
+                              </>
                             )}
-                          </label>
-                          {drifted && <span className="sr-only">{driftHint}</span>}
-                          <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {participated ? fmtYen(ev.price) : ''}
-                          </span>
+                          </td>
+                        );
+                      })}
+
+                      {events.map((ev) => {
+                        const participated = !!r.participations[ev.id];
+                        /* 利用表とのズレは 背景色 + アイコン + title の 3 点で示す（色だけで伝えない）。
+                           紙には出さない（print-hide）ので、印刷結果は確定値のみ。 */
+                        const drifted = driftKeys.has(`${r.childId}_${ev.id}`);
+                        const attended = !!r.attendedByEvent[ev.id];
+                        const driftHint = !drifted
+                          ? undefined
+                          : attended
+                            ? `${r.childName} は ${format(new Date(ev.date), 'M/d')} に利用表で出席実績がありますが、チェックが外れています`
+                            : `${r.childName} は ${format(new Date(ev.date), 'M/d')} に利用表で出席実績がありませんが、チェックが入っています`;
+                        return (
+                          <td
+                            key={ev.id}
+                            className={`px-2 py-2 text-center${drifted ? ' billing-drift-cell' : ''}`}
+                            style={drifted ? { background: 'var(--gold-pale)' } : undefined}
+                          >
+                            <label className="inline-flex items-center gap-1 cursor-pointer print-hide" title={driftHint}>
+                              <input
+                                type="checkbox"
+                                checked={participated}
+                                onChange={() => handleToggleEvent(r.childId, ev.id)}
+                              />
+                              <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem', color: participated ? 'var(--ink)' : 'var(--ink-3)' }}>
+                                {participated ? fmtYen(ev.price) : '—'}
+                              </span>
+                              {drifted && (
+                                <span aria-hidden="true" style={{ color: 'var(--gold)', fontWeight: 700 }}>
+                                  {attended ? '⚠' : '＋'}
+                                </span>
+                              )}
+                            </label>
+                            {drifted && <span className="sr-only">{driftHint}</span>}
+                            <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {participated ? fmtYen(ev.price) : ''}
+                            </span>
+                          </td>
+                        );
+                      })}
+                      {/* 参加費合計 (各イベント参加チェックの合計を集約表示。請求額にも含まれる) */}
+                      <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums', background: 'var(--bg)', color: 'var(--ink-3)' }}>
+                        {c && c.eventTotal > 0 ? fmtYen(c.eventTotal) : ''}
+                      </td>
+                      <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {c ? fmtYen(c.totalAmount) : ''}
+                      </td>
+                    </tr>
+
+                    {/* きょうだい小計行。表示専用で、下の合計行には含めない（二重計上の防止） */}
+                    {isLastOfSiblingGroup && (
+                      <tr className="billing-sibling-subtotal">
+                        <td className="px-2 py-2 billing-sticky-col billing-sticky-col-1" />
+                        <td className="px-2 py-2 billing-sticky-col billing-sticky-col-2" />
+                        <td className="px-2 py-2 billing-sticky-col billing-sticky-col-3" />
+                        <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem' }}>
+                          {siblingLabel}
                         </td>
-                      );
-                    })}
-                    {/* 参加費合計 (各イベント参加チェックの合計を集約表示。請求額にも含まれる) */}
-                    <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums', background: 'var(--bg)', color: 'var(--ink-3)' }}>
-                      {c && c.eventTotal > 0 ? fmtYen(c.eventTotal) : ''}
-                    </td>
-                    <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {c ? fmtYen(c.total) : ''}
-                    </td>
-                  </tr>
+                        <td className="px-2 py-2 text-right" colSpan={totalCols - 5} style={{ fontSize: '0.8rem' }}>
+                          <span aria-hidden="true">👨‍👩‍👧 </span>きょうだい合計
+                        </td>
+                        <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtYen(siblingSubtotals.get(r.siblingGroupId!) ?? 0)}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
-              {/* 合計行 */}
+              {/* 合計行（児童行のみの集計。きょうだい小計は含めない） */}
               <tr className="billing-total-row" style={{ background: 'var(--bg)', fontWeight: 700 }}>
-                <td colSpan={3} className="px-2 py-2 text-right billing-sticky-col billing-sticky-col-1">合計</td>
+                <td colSpan={4} className="px-2 py-2 text-right billing-sticky-col billing-sticky-col-1">合計</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{totals.attendanceDays}</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.copay)}</td>
-                <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.snack)}</td>
-                <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.kumon)}</td>
+                {feeItems.map((item) => (
+                  <td key={item.id} className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtYen(totals.feeTotals[item.id] ?? 0)}
+                  </td>
+                ))}
                 {events.map((ev) => (
                   <td key={ev.id} className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {fmtYen(totals.eventTotals[ev.id] ?? 0)}
@@ -1049,6 +1364,10 @@ export default function BillingFull({ scope }: Props) {
       <p className="text-xs mt-3 print-hide" style={{ color: 'var(--ink-3)' }}>
         ※ 利用負担額の初期値は児童設定の上限額。デイロボで算出した金額をこの欄に上書きしてください。
         <br />
+        ※ 請求項目（おやつ等・教材印刷代・他施設利用 など）は「請求項目設定」で自由に追加・削除できます。
+        ▲▼ で調整するとその月は金額が固定され（<span style={{ color: 'var(--accent)', fontWeight: 700 }}>✎</span> 付きで表示）、
+        あとから出席日数や単価を直しても追従しなくなります。↺ で自動算出に戻せます。
+        <br />
         ※ イベント参加チェックは、その日に利用表で出席実績がある児童に自動で入ります
         （保存後にイベントを追加した場合も同じ）。手動で付け外しした分は保存され、あとから勝手に変わりません。
         利用表とズレている場合は <span style={{ color: 'var(--gold)', fontWeight: 700 }}>⚠</span>（出席あり・チェック無し）/
@@ -1058,9 +1377,8 @@ export default function BillingFull({ scope }: Props) {
         ※ 出席日数 = 利用予定で時間が入っている日のカウント（欠席 / お休み / キャンセル待ちは除外）。
         利用表に時間さえ入れれば自動でカウントされます。
         <br />
-        ※ おやつ等は「出席日数 × ¥50」の自動算出です。▲▼ で 50円（おやつ 1 日分）ずつ調整できます。
-        調整するとその月は金額が固定され（<span style={{ color: 'var(--accent)', fontWeight: 700 }}>✎</span> 付きで表示）、
-        あとから利用表の出席日数を直しても追従しなくなります。↺ で自動算出に戻せます。
+        ※ 兄弟グループは児童設定で設定します。同じグループの児童は隣接表示され、直下に「きょうだい合計」行が出ます。
+        各児童の行は個別金額のままで、いちばん下の合計は児童行だけを足しています（きょうだい合計は二重に足しません）。
       </p>
     </div>
   );

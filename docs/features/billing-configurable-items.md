@@ -203,8 +203,11 @@ using (
 | 3 | 既存 `billing_summaries` 302 行 × 2 項目を `billing_summary_fee_amounts` へ写す（snack: `amount=snack_fee, amount_override=snack_fee_override` / material: `amount=kumon_fee`） | **なし（スナップショットをそのまま複製）** |
 | 4 | 検証: 移行後の `Σ amount` が旧 `Σ(snack_fee + kumon_fee)` と一致することを assert | 不一致なら中断 |
 
-`他施設利用` は `is_active=false` でシードし、事業所が金額を設定して有効化した時点で列が現れる
-（未設定のまま ¥0 の列が全事業所に出るのを避けるため）。
+> **実装時の変更（2026-08-08）**: `他施設利用` は当初 `is_active=false` でシードする設計だったが、
+> ユーザー要望④は「列が欲しい」であり、無効シードだと**列が見当たらず設定に辿り着けない**。
+> よって **`is_active=true` / `unit_amount=0` でシード**し、代わりに請求項目設定ページで
+> 「金額が未設定です（0 円のままだと加算されません）」を赤字で警告する方式に変更した。
+> 列は最初から見えるので、職員は金額を入れるだけでよい。
 
 **移行後も** `billing_summaries.snack_fee` / `kumon_fee` / `snack_fee_override` には対応する
 `system_key` 項目の値を書き続ける（外部から読む処理が将来現れても壊れないようにする互換書き込み）。

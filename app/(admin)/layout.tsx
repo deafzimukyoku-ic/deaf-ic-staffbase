@@ -58,6 +58,7 @@ const shiftNav: NavItem[] = [
       { kind: 'link', href: '/admin/shifts/staff-settings', label: '職員管理', icon: '👔' },
       { kind: 'link', href: '/admin/children', label: '児童管理', icon: '👶' },
       { kind: 'link', href: '/admin/shifts/events', label: 'イベント設定', icon: '🎉' },
+      { kind: 'link', href: '/admin/shifts/billing-items', label: '請求項目設定', icon: '🧾' },
     ],
   },
 ];

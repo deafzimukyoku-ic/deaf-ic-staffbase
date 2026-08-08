@@ -23,9 +23,11 @@ import { isFreeOfCharge, resolveCopayCap } from '@/lib/logic/computeBilling';
 import type {
   ChildRow,
   AreaLabel,
+  BillingFeeItemRow,
   ChildAreaEligibleStaffRow,
   Facility,
   CopayTier,
+  SiblingGroupRow,
 } from '@/lib/types';
 
 interface StaffLite {
@@ -59,8 +61,10 @@ type EditableChild = {
   municipality: string | null;
   copay_tier: CopayTier;
   copay_freeform_amount: number | null;
-  /** 教材印刷代の月額（円、自然数）。null = 計上しない */
-  kumon_monthly_fee: number | null;
+  /** 兄弟グループ（migration 223）。null = 単独 */
+  sibling_group_id: string | null;
+  /** calc_type='per_child_monthly' の請求項目ごとの月額（migration 222）。fee_item_id → 円 / null=計上しない */
+  fee_amounts: Record<string, number | null>;
   isNew?: boolean;
 };
 
@@ -105,6 +109,13 @@ export default function ChildrenSettingsFull({ scope }: Props) {
   // facility ごとの pickup/dropoff_area_labels
   const [facilityAreas, setFacilityAreas] = useState<Record<string, { pickup: AreaLabel[]; dropoff: AreaLabel[] }>>({});
   const [staffList, setStaffList] = useState<StaffLite[]>([]);
+  /* 利用料金表の請求項目のうち「児童ごとの月額」型だけ。金額欄をここから動的に生成する（migration 222） */
+  const [perChildFeeItems, setPerChildFeeItems] = useState<BillingFeeItemRow[]>([]);
+  /** `${child_id}|${fee_item_id}` → 円 */
+  const [childFeeAmounts, setChildFeeAmounts] = useState<Map<string, number>>(new Map());
+  const [siblingGroups, setSiblingGroups] = useState<SiblingGroupRow[]>([]);
+  const [newSiblingLabel, setNewSiblingLabel] = useState('');
+  const [savingSiblingGroup, setSavingSiblingGroup] = useState(false);
   const [editing, setEditing] = useState<EditableChild | null>(null);
   const [draggingChildIdx, setDraggingChildIdx] = useState<number | null>(null);
   const [dragOverChildIdx, setDragOverChildIdx] = useState<number | null>(null);
@@ -163,6 +174,27 @@ export default function ChildrenSettingsFull({ scope }: Props) {
         };
       }
       setFacilityAreas(areaMap);
+
+      /* 請求項目マスタ（児童ごとの月額型のみ）+ 児童別金額 + 兄弟グループ（migration 222 / 223）。
+         RLS で自動スコープされるので facility 条件は付けない（admin=全域 / manager=管轄）。 */
+      const [feeItemRes, cfaRes, sgRes] = await Promise.all([
+        supabase
+          .from('billing_fee_items')
+          .select('*')
+          .eq('tenant_id', tid)
+          .eq('calc_type', 'per_child_monthly')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true }),
+        supabase.from('children_fee_amounts').select('child_id, fee_item_id, amount').eq('tenant_id', tid),
+        supabase.from('sibling_groups').select('*').eq('tenant_id', tid).order('label'),
+      ]);
+      setPerChildFeeItems((feeItemRes.data ?? []) as BillingFeeItemRow[]);
+      setChildFeeAmounts(
+        new Map(((cfaRes.data ?? []) as { child_id: string; fee_item_id: string; amount: number }[])
+          .map((a) => [`${a.child_id}|${a.fee_item_id}`, a.amount])),
+      );
+      setSiblingGroups((sgRes.data ?? []) as SiblingGroupRow[]);
 
       // 在職職員（eligibility 用）
       const { data: staffRows } = await supabase
@@ -229,7 +261,8 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       municipality: null,
       copay_tier: 'zero',
       copay_freeform_amount: null,
-      kumon_monthly_fee: null,
+      sibling_group_id: null,
+      fee_amounts: {},
       isNew: true,
     });
   };
@@ -265,8 +298,45 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       municipality: child.municipality ?? null,
       copay_tier: (child.copay_tier ?? 'zero') as CopayTier,
       copay_freeform_amount: child.copay_freeform_amount ?? null,
-      kumon_monthly_fee: child.kumon_monthly_fee ?? null,
+      sibling_group_id: child.sibling_group_id ?? null,
+      fee_amounts: Object.fromEntries(
+        perChildFeeItems.map((i) => [i.id, childFeeAmounts.get(`${child.id}|${i.id}`) ?? null]),
+      ),
     });
+  };
+
+  /* 兄弟グループを作ってそのまま編集中の児童に割り当てる。
+     児童設定を離れずに「新しいきょうだいを作る → 2 人目を同じグループに入れる」が完結するようにする。 */
+  const handleCreateSiblingGroup = async () => {
+    if (!editing || !me) return;
+    const label = newSiblingLabel.trim();
+    if (label === '') return;
+    setSavingSiblingGroup(true);
+    setError('');
+    try {
+      const existing = siblingGroups.find(
+        (g) => g.facility_id === editing.facility_id && g.label === label,
+      );
+      if (existing) {
+        setEditing({ ...editing, sibling_group_id: existing.id });
+        setNewSiblingLabel('');
+        return;
+      }
+      const { data, error: err } = await supabase
+        .from('sibling_groups')
+        .insert({ tenant_id: me.tenant_id, facility_id: editing.facility_id, label })
+        .select('*')
+        .single();
+      if (err) throw new Error(err.message);
+      const created = data as SiblingGroupRow;
+      setSiblingGroups((prev) => [...prev, created].sort((a, b) => a.label.localeCompare(b.label, 'ja')));
+      setEditing({ ...editing, sibling_group_id: created.id });
+      setNewSiblingLabel('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '兄弟グループの作成に失敗しました');
+    } finally {
+      setSavingSiblingGroup(false);
+    }
   };
 
   const handleSave = async () => {
@@ -291,10 +361,15 @@ export default function ChildrenSettingsFull({ scope }: Props) {
         municipality: editing.municipality && editing.municipality.trim() !== '' ? editing.municipality.trim() : null,
         copay_tier: editing.copay_tier,
         copay_freeform_amount: freeformAmt,
-        kumon_monthly_fee:
-          editing.kumon_monthly_fee != null && editing.kumon_monthly_fee > 0
-            ? Math.floor(editing.kumon_monthly_fee)
-            : null,
+        sibling_group_id: editing.sibling_group_id,
+        /* 旧列 kumon_monthly_fee は migration 222 で children_fee_amounts へ移行済み。
+           外部から読む処理が将来現れても壊れないよう、組込項目 'material' の額と同期して書き続ける。 */
+        kumon_monthly_fee: (() => {
+          const materialItem = perChildFeeItems.find((i) => i.system_key === 'material');
+          if (!materialItem) return null;
+          const v = editing.fee_amounts[materialItem.id];
+          return v != null && v > 0 ? Math.floor(v) : null;
+        })(),
       };
       let targetId = editing.id;
       if (editing.isNew) {
@@ -313,6 +388,35 @@ export default function ChildrenSettingsFull({ scope }: Props) {
           .update(payload)
           .eq('id', editing.id);
         if (updErr) throw new Error(updErr.message);
+      }
+
+      /* children_fee_amounts（児童ごとの月額）を反映。
+         空欄 / 0 は「計上しない」なので行ごと削除する（0 円の行を残すと料金表に ¥0 が出るため）。 */
+      for (const item of perChildFeeItems) {
+        const raw = editing.fee_amounts[item.id];
+        const amount = raw != null && raw > 0 ? Math.floor(raw) : null;
+        if (amount == null) {
+          const { error: delFeeErr } = await supabase
+            .from('children_fee_amounts')
+            .delete()
+            .eq('child_id', targetId)
+            .eq('fee_item_id', item.id);
+          if (delFeeErr) throw new Error(delFeeErr.message);
+        } else {
+          const { error: upFeeErr } = await supabase
+            .from('children_fee_amounts')
+            .upsert(
+              {
+                tenant_id: me.tenant_id,
+                facility_id: editing.facility_id,
+                child_id: targetId,
+                fee_item_id: item.id,
+                amount,
+              },
+              { onConflict: 'child_id,fee_item_id' },
+            );
+          if (upFeeErr) throw new Error(upFeeErr.message);
+        }
       }
 
       // child_area_eligible_staff を全置換。
@@ -475,7 +579,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
               >
                 ↕
               </th>
-              {['氏名', '学年', '上限', '教材印刷代', '迎マーク', '送マーク', '専用エリア', 'ステータス'].map((h) => (
+              {['氏名', '学年', '上限', '月額項目', '兄弟', '迎マーク', '送マーク', '専用エリア', 'ステータス'].map((h) => (
                 <th key={h} className="px-3 py-2 text-left font-semibold" style={{ background: 'var(--ink)', color: '#fff' }}>{h}</th>
               ))}
             </tr>
@@ -483,7 +587,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
           <tbody>
             {visibleChildren.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-4 text-center" style={{ color: 'var(--ink-3)' }}>
+                <td colSpan={10} className="px-3 py-4 text-center" style={{ color: 'var(--ink-3)' }}>
                   児童が登録されていません
                 </td>
               </tr>
@@ -589,15 +693,48 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                       );
                     })()}
                   </td>
-                  {/* 教材印刷代 */}
+                  {/* 児童ごとの月額（請求項目の合計）。内訳は title で見せる */}
                   <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)', fontVariantNumeric: 'tabular-nums' }}>
-                    {c.kumon_monthly_fee != null && c.kumon_monthly_fee > 0 ? (
-                      <span style={{ color: 'var(--red)', fontWeight: 700 }}>
-                        ¥{c.kumon_monthly_fee.toLocaleString('ja-JP')}
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--ink-3)' }}>—</span>
-                    )}
+                    {(() => {
+                      const parts = perChildFeeItems
+                        .map((i) => ({ name: i.name, amount: childFeeAmounts.get(`${c.id}|${i.id}`) ?? 0 }))
+                        .filter((p) => p.amount > 0);
+                      const sum = parts.reduce((s, p) => s + p.amount, 0);
+                      if (sum <= 0) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+                      return (
+                        <span
+                          style={{ color: 'var(--red)', fontWeight: 700 }}
+                          title={parts.map((p) => `${p.name}: ¥${p.amount.toLocaleString('ja-JP')}`).join(' / ')}
+                        >
+                          ¥{sum.toLocaleString('ja-JP')}
+                          {parts.length > 1 && (
+                            <span style={{ color: 'var(--ink-3)', fontWeight: 400, fontSize: '0.75rem' }}>
+                              {' '}({parts.length}項目)
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  {/* 兄弟グループ */}
+                  <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)' }}>
+                    {(() => {
+                      const g = c.sibling_group_id
+                        ? siblingGroups.find((s) => s.id === c.sibling_group_id)
+                        : null;
+                      if (!g) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+                      const mates = children
+                        .filter((o) => o.sibling_group_id === g.id && o.id !== c.id)
+                        .map((o) => o.name);
+                      return (
+                        <span
+                          style={{ color: 'var(--gold)', fontWeight: 700 }}
+                          title={mates.length > 0 ? `きょうだい: ${mates.join(', ')}` : 'このグループはこの児童のみ'}
+                        >
+                          {g.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2" style={{ borderBottom: '1px solid var(--rule)', color: pickupCount > 0 ? 'var(--accent)' : 'var(--ink-3)' }}>
                     {pickupCount === 0 ? '—' : `${pickupCount}件`}
@@ -696,12 +833,31 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                       )}
                     </span>
                   </div>
+                  {/* 児童ごとの月額（請求項目ごとに 1 行）。項目が無ければ何も出さない */}
+                  {perChildFeeItems.map((item) => {
+                    const amount = childFeeAmounts.get(`${c.id}|${item.id}`) ?? 0;
+                    return (
+                      <div key={item.id} className="flex items-center justify-between">
+                        <span style={{ color: 'var(--ink-3)' }}>{item.name}</span>
+                        <span className="tabular-nums">
+                          {amount > 0
+                            ? <span style={{ color: 'var(--red)', fontWeight: 700 }}>¥{amount.toLocaleString('ja-JP')}</span>
+                            : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
                   <div className="flex items-center justify-between">
-                    <span style={{ color: 'var(--ink-3)' }}>教材印刷代</span>
-                    <span className="tabular-nums">
-                      {c.kumon_monthly_fee != null && c.kumon_monthly_fee > 0
-                        ? <span style={{ color: 'var(--red)', fontWeight: 700 }}>¥{c.kumon_monthly_fee.toLocaleString('ja-JP')}</span>
-                        : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                    <span style={{ color: 'var(--ink-3)' }}>兄弟</span>
+                    <span>
+                      {(() => {
+                        const g = c.sibling_group_id
+                          ? siblingGroups.find((s) => s.id === c.sibling_group_id)
+                          : null;
+                        return g
+                          ? <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{g.label}</span>
+                          : <span style={{ color: 'var(--ink-3)' }}>—</span>;
+                      })()}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -926,34 +1082,97 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   </p>
                 </div>
 
-                {/* 教材印刷代 — 赤系（red） */}
+                {/* 児童ごとの月額（請求項目設定で calc_type='児童ごとの月額' にした項目ぶん）— 赤系（red）。
+                    旧「教材印刷代」固定欄を置き換え、項目マスタから動的に生成する（migration 222）。 */}
+                {perChildFeeItems.length === 0 ? (
+                  <div
+                    className="flex flex-col gap-1.5 p-3 rounded"
+                    style={{ background: 'var(--white)', borderLeft: '3px solid var(--red)' }}
+                  >
+                    <label className="text-xs font-bold" style={{ color: 'var(--red)' }}>✏️ 児童ごとの月額</label>
+                    <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+                      「児童ごとの月額」の請求項目がありません。<b>請求項目設定</b>で作成すると、ここに金額欄が出ます。
+                    </p>
+                  </div>
+                ) : (
+                  perChildFeeItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-1.5 p-3 rounded"
+                      style={{ background: 'var(--white)', borderLeft: '3px solid var(--red)' }}
+                    >
+                      <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--red)' }}>
+                        ✏️ {item.name} 月額
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={editing.fee_amounts[item.id] != null
+                          ? `¥${editing.fee_amounts[item.id]!.toLocaleString('ja-JP')}`
+                          : ''}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^\d]/g, '');
+                          const n = raw === '' ? null : Math.max(0, parseInt(raw, 10));
+                          setEditing({
+                            ...editing,
+                            fee_amounts: { ...editing.fee_amounts, [item.id]: n != null && n > 0 ? n : null },
+                          });
+                        }}
+                        className="outline-none font-semibold"
+                        style={{ ...inputStyle, color: 'var(--ink)' }}
+                        placeholder="例）¥2,000 ／ 空欄=計上しない"
+                        aria-label={`${item.name} 月額`}
+                      />
+                      <p className="text-[11px]" style={{ color: 'var(--red)', fontWeight: 500 }}>
+                        💡 施設・児童ごとに金額が違うため自由入力。空欄なら料金表の「{item.name}」列は空白
+                      </p>
+                    </div>
+                  ))
+                )}
+
+                {/* 兄弟グループ（migration 223）— 金色（gold） */}
                 <div
                   className="flex flex-col gap-1.5 p-3 rounded"
-                  style={{ background: 'var(--white)', borderLeft: '3px solid var(--red)' }}
+                  style={{ background: 'var(--white)', borderLeft: '3px solid var(--gold)' }}
                 >
-                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--red)' }}>
-                    ✏️ 教材印刷代 月額
+                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--gold)' }}>
+                    👨‍👩‍👧 兄弟グループ
                   </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={editing.kumon_monthly_fee != null
-                      ? `¥${editing.kumon_monthly_fee.toLocaleString('ja-JP')}`
-                      : ''}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^\d]/g, '');
-                      const n = raw === '' ? null : Math.max(0, parseInt(raw, 10));
-                      setEditing({
-                        ...editing,
-                        kumon_monthly_fee: n != null && n > 0 ? n : null,
-                      });
-                    }}
+                  <select
+                    value={editing.sibling_group_id ?? ''}
+                    onChange={(e) => setEditing({ ...editing, sibling_group_id: e.target.value || null })}
                     className="outline-none font-semibold"
                     style={{ ...inputStyle, color: 'var(--ink)' }}
-                    placeholder="例）¥2,000 ／ 空欄=計上しない"
-                  />
-                  <p className="text-[11px]" style={{ color: 'var(--red)', fontWeight: 500 }}>
-                    💡 施設・児童ごとに金額が違うため自由入力。空欄なら料金表の「教材印刷代」列は空白
+                    aria-label="兄弟グループ"
+                  >
+                    <option value="">（単独）</option>
+                    {siblingGroups
+                      .filter((g) => g.facility_id === editing.facility_id)
+                      .map((g) => (
+                        <option key={g.id} value={g.id}>{g.label}</option>
+                      ))}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newSiblingLabel}
+                      onChange={(e) => setNewSiblingLabel(e.target.value)}
+                      className="outline-none flex-1"
+                      style={{ ...inputStyle }}
+                      placeholder="新しいグループ名（例）川島"
+                      aria-label="新しい兄弟グループ名"
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={handleCreateSiblingGroup}
+                      disabled={savingSiblingGroup || newSiblingLabel.trim() === ''}
+                    >
+                      {savingSiblingGroup ? '作成中…' : '＋ 作成'}
+                    </Button>
+                  </div>
+                  <p className="text-[11px]" style={{ color: 'var(--gold)', fontWeight: 500 }}>
+                    💡 同じグループの児童は利用料金表で隣り合って並び、直下に「きょうだい合計」行が出ます。
+                    各児童の請求額は個別のままです
                   </p>
                 </div>
               </div>

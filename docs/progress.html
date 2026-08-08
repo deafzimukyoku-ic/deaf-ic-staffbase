@@ -69,6 +69,30 @@
   </table>
 </div>
 
+<!-- 2026-08-08 利用料金表 Phase B: 請求項目の可変化 / 兄弟合算 / 他施設利用 -->
+<div class="phase">
+  <h2>利用料金表 Phase B: 請求項目の可変化 + 兄弟合算 + 他施設利用（2026-08-08） <span class="phase-pct">実装完了 / UI確認はユーザー待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">おやつ等・教材印刷代がコードにハードコードされており、事業所が項目を足す/抜くことができなかった。請求項目マスタに一般化し、④「他施設利用」も <code>checkbox</code> 型の 1 項目として同じ仕組みに載せる。③ 兄弟は「各行は個別のまま、グループごとの小計行」。仕様書 docs/features/billing-configurable-items.md（承認済）。</tr>
+      <tr><td>B-1 migration 222（請求項目マスタ 3 テーブル）</td><td class="files">supabase/migrations/222_billing_fee_items.sql, scripts/apply-migration-222.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>適用済。<code>billing_fee_items</code> / <code>children_fee_amounts</code> / <code>billing_summary_fee_amounts</code> + RLS 6本。<b><code>fee_item_id</code> は on delete restrict</b>＝スナップショットを持つ項目は物理削除不可（過去月の紙を守る）。<code>system_key</code> 部分UNIQUE で移行を冪等化。rollback付きで 4方式INSERT / system_key重複拒否 / 不正calc_type拒否 / <b>override の 0 と null の区別</b> / 負値拒否 / DELETE の RESTRICT と許可 を実証。RLS は shift_manager 込みの述語を<b>直接記述</b>し 140 の上書きに依存しない</td></tr>
+      <tr><td>B-1 migration 223（兄弟グループ）</td><td class="files">supabase/migrations/223_children_sibling_group.sql, scripts/apply-migration-223.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>適用済。<code>sibling_groups</code> + <code>children.sibling_group_id</code>(set null)。<b>既存 children 78行すべて null ＝ 現行の表示・計算に影響しない後方互換を実証</b>。グループ削除で児童が残ることも rollback付きで確認</td></tr>
+      <tr><td>B-2 データ移行（金額不変が合格条件）</td><td class="files">scripts/migrate-billing-fee-items.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>dry-run → 検証 → apply。4事業所 × 3組込項目をシード / kumon 26件 → children_fee_amounts / 302サマリ × 2項目 = 604件をスナップショット複写。<b>移行前後の突合 302件・不一致 0件・合計 ¥278,350 完全一致</b>（不一致なら自動 ROLLBACK する設計）。再実行で「新規0/既存12」＝冪等性も確認</td></tr>
+      <tr><td>B-3 純関数の一般化</td><td class="files">lib/logic/computeBilling.ts, lib/types.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>resolveFeeAmount</code> / <code>computeDefaultFeeAmount</code> / <code>stepFeeAmount</code> / <code>isFeeOverridable</code> / <code>computeSiblingSubtotals</code> 新設。<b>旧 snack 専用関数 3 本を統合削除</b>（式の二重定義を作らない）。<code>computeBillingRow</code> を項目配列ベースに拡張し <b>BillingFull 側の請求額計算をこの純関数に一本化</b>。<b>checkbox は OFF なら override が残っていても必ず 0</b>（誤課金防止）</td></tr>
+      <tr><td>B-4 請求項目設定ページ + ナビ</td><td class="files">components/shift/BillingItemSettingsFull.tsx, app/(admin)/admin/shifts/billing-items/, app/(manager)/mgr/shifts/billing-items/, layout.tsx ×2, Breadcrumb.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>CRUD / ▲▼並び替え / 有効OFF / 削除ガード。組込項目は<b>計算方式を変更不可</b>（過去月の意味が変わるため）。スナップショット使用中の項目は削除ボタンを無効化し理由を表示（DB の restrict と UI を一致させ、押してからエラーになるのを防ぐ）。金額未設定(0円)の有効項目に ⚠ 警告。<code>/admin/shifts</code> 配下なので shift_manager も到達可</td></tr>
+      <tr><td>B-5 児童設定の改修</td><td class="files">components/shift/ChildrenSettingsFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>固定の「教材印刷代」欄を廃し <b><code>per_child_monthly</code> 項目ぶんの金額欄を動的生成</b>。兄弟グループの選択＋<b>その場で新規作成</b>（児童設定を離れずに 2 人目を同じグループに入れられる）。一覧に「月額項目（合計＋内訳 title）」「兄弟（きょうだい名 title）」列。空欄/0 は行ごと delete（¥0 行を残さない）。旧列 kumon_monthly_fee は material 項目と同期して書き続ける</td></tr>
+      <tr><td>B-6 料金表の動的列化 + 兄弟小計</td><td class="files">components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>列 = # / 市町村 / 氏名 / 兄弟 / 出席日数 / 利用負担額 / <b>請求項目(動的)</b> / イベント(動的) / 参加費合計 / 請求額。兄弟は隣接表示（未所属児の順序は不変な安定並べ替え）＋直下に「きょうだい合計」行。<b>全体合計は児童行のみ集計＝二重計上しない</b>。印刷密度を「イベント数」→「動的列の総数」に変更。Excel も動的列＋小計行に追従。保存は fee_amounts を <b>upsert（delete しない）</b>＝無効化した項目の過去スナップショットを消さない</td></tr>
+      <tr><td>B-7 ロジック検証（<b>本番の .ts を直接実行</b>）</td><td class="files">scripts/verify-billing-fee-items.ts, scripts/_ts-alias-hooks.mjs, scripts/_register-alias.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>Node の module フックで <code>@/</code> alias を解決し、<b>lib/logic/computeBilling.ts をそのまま import して実行</b>（.mjs に写経すると写し間違いを検証できないため）。単体 18項目 + 兄弟小計 5項目 全パス。<b>実 DB 302件で移行前後の請求額を突合 → 不一致 0件・合計 ¥944,762 完全一致</b></td></tr>
+      <tr><td>型チェック / lint / build</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0エラー / eslint 変更行に指摘なし / <b>npm run build 成功</b>（新ルート /admin/shifts/billing-items, /mgr/shifts/billing-items を確認）。残る警告は既存（layout.tsx の ScrollArea 未使用 / set-state-in-effect、ChildrenSettingsFull の facilityMap 未使用）でスコープ外</td></tr>
+      <tr><td>ローカル UI 確認</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>ログインが必要なためユーザー実施（アシスタントは認証情報を入力しない方針）</td></tr>
+      <tr><td>台帳更新</td><td class="files">docs/reference-map.md, docs/migration-applied.md, CLAUDE.md §8</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>222 / 223 / データ移行の 3 行を追加。SNACK_FEE_PER_DAY の役割変更（アプリ計算では未使用→シード既定値のみ）を明記</td></tr>
+      <tr><td><b>要確認</b>: lib/constants.ts のコメント変更</td><td class="files">lib/constants.ts</td><td><span class="status todo">要確認</span></td><td class="pct">—</td><td>CLAUDE.md §7 で lib/constants.ts は承認必須。<b>値は一切変えず SNACK_FEE_PER_DAY の説明コメントのみ</b>実態に合わせて修正した（旧コメント「出席日数 × この値で算出」は 222 以降 事実と異なるため）。差し戻し可</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 移行直後に過去月（7月など）を開いて金額が1円も変わらないか ② 単価を変えても保存済み月が変わらず、未保存の月だけ追従するか ③ 項目を「有効OFF」にして過去月を開くと金額が残るか ④ 使用中の項目が削除できないか ⑤ 他施設利用にチェック→請求額が加算されるか ⑥ 兄弟2名を同グループ→隣接＋小計、<b>全体合計が二重計上されないか</b> ⑦ 印刷 A4横に収まるか ⑧ Excel が画面と一致するか ⑨ amount_override=0 が自動算出に戻らないか ⑩ shift_manager で請求項目設定を編集できるか</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 2026-08-08 利用料金表 Phase A: イベント参加チェックを利用表に追従 -->
 <div class="phase">
   <h2>利用料金表 Phase A: イベント参加チェックを利用表に追従（2026-08-08） <span class="phase-pct">実装完了 / UI確認はユーザー待ち</span></h2>

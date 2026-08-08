@@ -31,6 +31,7 @@ const LABELS: Record<string, { label: string; icon: string }> = {
   '/admin/shifts/staff-settings': { label: '職員管理', icon: '👔' },
   '/admin/shifts/facility-settings': { label: '事業所設定', icon: '🗺️' },
   '/admin/shifts/events': { label: 'イベント設定', icon: '🎉' },
+  '/admin/shifts/billing-items': { label: '請求項目設定', icon: '🧾' },
   '/admin/requests': { label: '休み希望', icon: '📝' },
   // mgr
   '/mgr/dashboard': { label: 'ダッシュボード', icon: '🏠' },
@@ -52,6 +53,7 @@ const LABELS: Record<string, { label: string; icon: string }> = {
   '/mgr/shifts/staff-settings': { label: '職員管理', icon: '👔' },
   '/mgr/shifts/facility-settings': { label: '事業所設定', icon: '🗺️' },
   '/mgr/shifts/events': { label: 'イベント設定', icon: '🎉' },
+  '/mgr/shifts/billing-items': { label: '請求項目設定', icon: '🧾' },
   '/mgr/requests': { label: '休み希望', icon: '📝' },
   // my
   '/my/dashboard': { label: 'ホーム', icon: '🏠' },

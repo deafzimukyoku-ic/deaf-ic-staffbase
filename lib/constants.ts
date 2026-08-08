@@ -115,9 +115,16 @@ export const PUBLISH_STATUSES = ['draft', 'ready', 'published'] as const;
 export type PublishStatusConst = (typeof PUBLISH_STATUSES)[number];
 
 // --- Phase 66: 利用料金表 / 児童料金属性 (migration 126〜128) ---
-/** おやつ消耗品代（円/日、固定）。出席日数 × この値で算出 */
+/**
+ * おやつ消耗品代の初期単価（円/日）。
+ * migration 222 で請求項目が可変になったため、**アプリの計算はこの定数を参照しない**。
+ * 現在の役割は `scripts/migrate-billing-fee-items.mjs` が
+ * 組込項目「おやつ等」(per_day) をシードするときの単価・ステップ幅の既定値のみ。
+ * 実際の単価は `billing_fee_items.unit_amount`（請求項目設定で事業所ごとに変更可）が正。
+ */
 export const SNACK_FEE_PER_DAY = 50;
-/* 教材印刷代は児童ごとの kumon_monthly_fee（DB列名は旧称のまま）に統一。null=計上しない。 */
+/* 教材印刷代は migration 222 で children_fee_amounts（system_key='material' の項目）へ移行。
+   children.kumon_monthly_fee は後方互換のため同期して書き続けるだけの旧列。 */
 /** 利用者上限負担額の階層（migration 126 children.copay_tier の許容値）*/
 export const COPAY_TIERS = ['zero', '4600', '37200', 'freeform'] as const;
 export type CopayTierConst = (typeof COPAY_TIERS)[number];

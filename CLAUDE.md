@@ -234,11 +234,17 @@ shift-maker 由来:
 - `DEFAULT_MIN_QUALIFIED_STAFF=2`
 - `TRANSPORT_TRIP_GAP_MINUTES=30`
 
-利用料金表 (Phase 66, migration 126〜, 221):
-- `SNACK_FEE_PER_DAY=50`（おやつ消耗品代、円/日）。**定数の値は固定だが、金額は料金表セルで手動調整可**（migration 221）。この定数は「自動算出の単価」と「▲▼ 1 ステップ幅（＝1 日分）」の両方を兼ねる。参照は `lib/logic/computeBilling.ts` のみ
-  - `billing_summaries.snack_fee_override`: null=自動算出（出席日数に追従）/ not null=手動調整でその月は固定（出席日数の事後変更に追従しない）。`0`（手動0円）と `null`（自動）は別物なので `??` で判定し `||` を使わない
-  - 算出は `resolveSnackFee(attendanceDays, override)` に一元化。UI 側で式を再実装しない
-- 公文代: 児童ごとに `children.kumon_monthly_fee`（円、自然数、null=計上しない）。施設・児童で金額を変えられる
+利用料金表 (Phase 66, migration 126〜, 221, 222, 223):
+- **請求項目は migration 222 で可変化された**。おやつ等・教材印刷代・他施設利用などは定数ではなく `billing_fee_items`（事業所ごとのマスタ）で設定する。UI は「請求項目設定」ページ（`/admin/shifts/billing-items`）
+  - `calc_type`: `per_day`（出席日数 × 単価）/ `per_child_monthly`（児童ごとの月額。額は `children_fee_amounts`）/ `monthly_fixed`（月額固定）/ `checkbox`（チェックで加算。他施設利用がこれ）
+  - 月ごとの値は `billing_summary_fee_amounts`（`checked` / `amount_override` / 実効額 `amount` のスナップショット）
+  - `amount_override`: null=自動算出（出席日数・マスタ単価に追従）/ not null=その月は固定。**`0`（手動0円）と `null`（自動）は別物**なので `??` / `== null` で判定し `||` を使わない
+  - **`checkbox` は OFF なら `amount_override` が残っていても必ず 0**（誤課金の防止）
+  - 算出は `resolveFeeAmount(item, value, attendanceDays)` に一元化。UI 側で式を再実装しない
+  - **スナップショットを持つ項目は削除できない**（DB 側も `on delete restrict`）。今後の月から外すときは `is_active=false`。過去月の紙の金額を守るため
+- `SNACK_FEE_PER_DAY=50`: **migration 222 以降、アプリの計算では使われない**。移行スクリプトが組込項目「おやつ等」をシードするときの既定単価・ステップ幅のみ。実際の単価は `billing_fee_items.unit_amount`
+- `children.kumon_monthly_fee` は **旧列**（@deprecated）。実体は `children_fee_amounts`（`system_key='material'`）へ移行済。後方互換のため児童設定の保存時に同期して書き続けるだけ
+- 兄弟（migration 223）: `sibling_groups` + `children.sibling_group_id`。料金表では同一グループを隣接表示し直下に「きょうだい合計」行を出す。**各児童の行は個別金額のままで、全体合計には児童行のみを足す**（小計行を足すと二重計上）
 - `COPAY_TIERS=['zero','4600','37200','freeform']`
 - `NAGOYA_FREE_PRESCHOOL_MUNICIPALITY='名古屋市'`（preschool も無償化対象になる市）
 - `FREE_GRADES_NATIONWIDE=['nursery_3','nursery_4','nursery_5']`（全国無償化対象）

@@ -355,6 +355,68 @@ export interface EventRow {
   created_at: string;
 }
 
+/* 請求項目の計算方式 (migration 222 billing_fee_items.calc_type の許容値) */
+export type FeeCalcType = 'per_day' | 'per_child_monthly' | 'monthly_fixed' | 'checkbox';
+
+/* 請求項目マスタ (migration 222)。事業所ごとに おやつ等 / 教材印刷代 / 他施設利用 等を自由に設定する */
+export interface BillingFeeItemRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  name: string;
+  calc_type: FeeCalcType;
+  /** per_day=単価/日 / monthly_fixed=月額 / checkbox=チェック時の加算額。per_child_monthly では未使用 */
+  unit_amount: number;
+  /** ▲▼ の 1 ステップ幅（円）。null なら unit_amount を 1 ステップとする */
+  step_amount: number | null;
+  /** 移行でシードした組込項目の固定キー（snack / material / other_facility）。手動追加は null */
+  system_key: string | null;
+  /** false で以後の月の列から外れる。過去月はスナップショットが残るため金額は変わらない */
+  is_active: boolean;
+  display_order: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* calc_type='per_child_monthly' の項目の児童別月額 (migration 222) */
+export interface ChildFeeAmountRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  child_id: string;
+  fee_item_id: string;
+  amount: number; // 円
+  created_at: string;
+  updated_at: string;
+}
+
+/* 月次サマリ × 請求項目 の実績・調整・スナップショット (migration 222) */
+export interface BillingSummaryFeeAmountRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  billing_summary_id: string;
+  fee_item_id: string;
+  /** calc_type='checkbox' のときのみ意味を持つ */
+  checked: boolean;
+  /** null=自動算出（出席日数・マスタ単価に追従）/ not null=その月は固定。0 と null は別物 */
+  amount_override: number | null;
+  /** 実効額のスナップショット（保存時点の確定値） */
+  amount: number;
+  created_at: string;
+}
+
+/* 兄弟グループ (migration 223)。利用料金表で小計行を出すために使う */
+export interface SiblingGroupRow {
+  id: string;
+  tenant_id: string;
+  facility_id: string;
+  /** 小計行の見出しに使う（例「川島」「◯◯家」） */
+  label: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /* シフト表の日別メモ (migration 219 / 220 で3行に拡張)。学校行事・施設行事・会議など。
    公開フロー(publish_status)非連動 = 管理側の作成支援メモ。 */
 export interface ShiftDayNoteRow {
@@ -401,8 +463,13 @@ export interface ChildRow {
   municipality?: string | null;
   copay_tier?: CopayTier;
   copay_freeform_amount?: number | null;
-  /** 教材印刷代の月額（円、自然数）。null = 計上しない。施設・児童ごとに金額を変えられる。DB列名 kumon_monthly_fee は旧称のまま。 */
+  /**
+   * @deprecated migration 222 で `children_fee_amounts`（system_key='material' の項目）へ移行済み。
+   * 列自体は後方互換のため残しているが、料金表の計算は children_fee_amounts を参照する。
+   */
   kumon_monthly_fee?: number | null;
+  /** 兄弟グループ (migration 223)。null=単独。同一グループは料金表で隣接表示され直下に小計行が出る */
+  sibling_group_id?: string | null;
   created_at: string;
 }
 
