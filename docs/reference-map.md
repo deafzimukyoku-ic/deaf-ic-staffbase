@@ -1089,7 +1089,7 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | lib/logic/computeBilling.ts | `isFreeOfCharge` / `resolveCopayCap` / `computeDefaultCopayAmount` / `computeDefaultSnackFee` / `resolveSnackFee` / `stepSnackFee` / `computeBillingRow(child, days, events, copayOverride?, snackOverride?)`（純関数） |
 | components/shift/ChildrenSettingsFull.tsx | 児童編集モーダルに料金属性 UI、児童一覧テーブルに「上限 / 公文」列追加（事業所列削除）|
 | components/shift/EventSettingsFull.tsx | イベント設定 ページ（CRUD + 月切替）|
-| components/shift/BillingFull.tsx | 利用料金表 ページ（月選択 / 自動計算 / 手動オーバーライド / おやつ等の ▲▼ 調整 / 保存 / A4 横印刷 / Excel 出力）。`RowState.snackOverride` ⇄ `billing_summaries.snack_fee_override` |
+| components/shift/BillingFull.tsx | 利用料金表 ページ（月選択 / 自動計算 / 手動オーバーライド / おやつ等の ▲▼ 調整 / 保存 / A4 横印刷 / Excel 出力）。`RowState.snackOverride` ⇄ `billing_summaries.snack_fee_override`<br>**イベント参加チェックの初期値規則（2026-08-08 / `billing-event-check-follow.md`）**: `billing_event_participations` に**行があれば** `false` 含めその保存値を使う（職員の明示判断として尊重）。**行が無ければ**（未保存の月、または保存後に追加されたイベント）利用表の出席実績 `isAttended` から初期化する。判定は `partsMap.get(id) ?? false` ではなく **`partsMap.has(id)`**（`??` だと出席していても永久に OFF になる。実 DB で 52 件検出）。保存値は自動で書き換えず、出席実績とのズレは `RowState.attendedByEvent` と突き合わせて ⚠/＋ で提示し、「出席実績に合わせる」を押したときだけ揃える |
 | app/(admin)/admin/shifts/events/, app/(manager)/mgr/shifts/events/ | EventSettingsFull のページラッパ |
 | app/(admin)/admin/shifts/output/billing/, app/(manager)/mgr/shifts/output/billing/ | BillingFull のページラッパ |
 | app/(admin)/layout.tsx, app/(manager)/layout.tsx | サイドバーに「💰 利用料金表」追加 / 「⚙️ シフト設定」をアコーディオン化 |

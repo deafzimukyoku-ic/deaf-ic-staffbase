@@ -4,7 +4,9 @@
  * 利用料金表（月次）出力ページ — Phase 66-C
  *
  * - 月選択 → 児童一覧 + 当月イベント列を取得
- * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 教材印刷代 / 参加費合計 / イベント参加（既定 false）
+ * - 各児童について自動計算: 出席日数 / 利用負担額（初期値）/ おやつ / 教材印刷代 / 参加費合計
+ * - イベント参加は「保存済みの明示値があればそれ、無ければ利用表の出席実績」で初期化する。
+ *   保存済みの値は自動で書き換えず、利用表とズレている場合のみ警告 + 一括で揃えるボタンを出す
  * - 参加費合計 (eventTotal) は別列で表示するが、請求額にも含む
  * - 手動オーバーライド可: 利用負担額 / おやつ等（▲▼ で ±1日分）/ イベント参加チェック / 受取日
  * - 「保存」で billing_summaries + billing_event_participations を upsert（再印刷時は同じ値）
@@ -57,6 +59,8 @@ type RowState = {
   receivedAt: string | null;
   /** event_id → 参加 boolean */
   participations: Record<string, boolean>;
+  /** event_id → その日に利用表で出席実績があるか。participations とのズレ検出用（保存対象ではない） */
+  attendedByEvent: Record<string, boolean>;
   summaryId: string | null;
   /** ローカルで変更があったか（保存対象判定）*/
   dirty: boolean;
@@ -229,14 +233,21 @@ export default function BillingFull({ scope }: Props) {
           : computeDefaultCopayAmount(childInput, attendanceDays);
         const partsMap = partsByChildId.get(c.id) ?? new Map<string, boolean>();
         const participations: Record<string, boolean> = {};
+        const attendedByEvent: Record<string, boolean> = {};
+        /* 保存済みの月に後からイベントを足すと participations 行が存在しない。
+           旧実装は `?? false` だったため、出席していても永久に OFF のままだった
+           （2026-08-08 の実 DB 調査で 52 件検出）。行の「有無」で分岐する。
+           保存済みの明示値は false も含めて職員の判断なので、ここでは書き換えない。 */
+        let filledFromAttendance = false;
         for (const ev of evs) {
-          if (existing) {
-            /* 既存サマリあり: 保存済の participated 値を使用（無ければ false） */
-            participations[ev.id] = partsMap.get(ev.id) ?? false;
+          const attended = attendedSet.has(attendedKey(c.id, ev.date));
+          attendedByEvent[ev.id] = attended;
+          if (existing && partsMap.has(ev.id)) {
+            participations[ev.id] = partsMap.get(ev.id)!;
           } else {
-            /* 未保存: 出席判定で初期値（時間あり ∧ 非欠席系の日 = 参加扱い）。
-               外したい児童は手動でチェックを外す運用。 */
-            participations[ev.id] = attendedSet.has(attendedKey(c.id, ev.date));
+            /* 未保存の月、または保存後に追加されたイベント → 出席実績から初期値 */
+            participations[ev.id] = attended;
+            if (existing) filledFromAttendance = true;
           }
         }
         return {
@@ -254,10 +265,12 @@ export default function BillingFull({ scope }: Props) {
           snackOverride: existing?.snack_fee_override ?? null,
           receivedAt: existing?.received_at ?? null,
           participations,
+          attendedByEvent,
           summaryId: existing?.id ?? null,
           /* 新規月、または保存済みでも出席日数が利用表とズレている月は dirty にして
-             「保存」で billing_summaries も最新化できるようにする（料金表を読むのはこの画面のみ）。 */
-          dirty: !existing || existing.attendance_days !== attendanceDays,
+             「保存」で billing_summaries も最新化できるようにする（料金表を読むのはこの画面のみ）。
+             出席実績から補完したイベントがある行も dirty にして、保存で永続化できるようにする。 */
+          dirty: !existing || existing.attendance_days !== attendanceDays || filledFromAttendance,
         };
       });
       setRows(newRows);
@@ -339,6 +352,46 @@ export default function BillingFull({ scope }: Props) {
     }
     return { attendanceDays, copay, snack, kumon, eventTotals, eventGrand, grand };
   }, [rows, computedById, events]);
+
+  /* イベント参加チェックと利用表の出席実績のズレ。
+     保存済みの明示値は「職員が意図的に外した/付けた」可能性があるため自動では直さず
+     （実 DB 調査で「出席なし × チェック ON」が 12 件実在）、検出して知らせるだけにする。
+     揃えるのは職員が「出席実績に合わせる」を押したときだけ。 */
+  const drift = useMemo(() => {
+    const cells: Array<{ childId: string; eventId: string; attended: boolean }> = [];
+    for (const r of rows) {
+      for (const ev of events) {
+        const attended = !!r.attendedByEvent[ev.id];
+        if (!!r.participations[ev.id] !== attended) {
+          cells.push({ childId: r.childId, eventId: ev.id, attended });
+        }
+      }
+    }
+    return cells;
+  }, [rows, events]);
+  const driftKeys = useMemo(
+    () => new Set(drift.map((d) => `${d.childId}_${d.eventId}`)),
+    [drift],
+  );
+
+  /* ズレているセルだけを出席実績に合わせる。ズレていないセルには一切触れない。 */
+  const handleAlignToAttendance = () => {
+    if (drift.length === 0) return;
+    const fixesByChild = new Map<string, Array<{ eventId: string; attended: boolean }>>();
+    for (const d of drift) {
+      if (!fixesByChild.has(d.childId)) fixesByChild.set(d.childId, []);
+      fixesByChild.get(d.childId)!.push({ eventId: d.eventId, attended: d.attended });
+    }
+    setRows((prev) =>
+      prev.map((r) => {
+        const fixes = fixesByChild.get(r.childId);
+        if (!fixes) return r;
+        const participations = { ...r.participations };
+        for (const f of fixes) participations[f.eventId] = f.attended;
+        return { ...r, participations, dirty: true };
+      }),
+    );
+  };
 
   const updateRow = (childId: string, patch: Partial<RowState>) => {
     setRows((prev) => prev.map((r) => (r.childId === childId ? { ...r, ...patch, dirty: true } : r)));
@@ -675,6 +728,8 @@ export default function BillingFull({ scope }: Props) {
               .billing-print-root[data-density="xs"] table { font-size: 6pt !important; }
               .billing-print-root[data-density="xs"] th,
               .billing-print-root[data-density="xs"] td { padding: 5px 1.5px !important; }
+              /* ズレ警告の塗りは画面だけ。紙は確定値のみ（インライン style を上書きするため important）*/
+              .billing-print-root .billing-drift-cell { background: transparent !important; }
               /* 印刷時もグリッド線を維持（black に切替で印刷時くっきり） */
               .billing-grid th, .billing-grid td { border: 0.5pt solid #000 !important; }
               .billing-grid thead th { border-bottom: 1.2pt solid #000 !important; border-top: 1pt solid #000 !important; }
@@ -715,6 +770,27 @@ export default function BillingFull({ scope }: Props) {
       {error && (
         <div className="px-4 py-2 rounded mb-2 print-hide" style={{ background: 'var(--red-pale)', color: 'var(--red)', fontSize: '0.85rem' }}>
           {error}
+        </div>
+      )}
+
+      {/* 利用表とのズレ通知。色だけでなくアイコン + 件数テキストでも伝える（CLAUDE.md §9）。
+          月切替の途中は events だけ先に差し替わって rows が前月のままの瞬間があるため、
+          読み込み中は出さない（誤った件数が一瞬見えるのを防ぐ）。 */}
+      {!loading && drift.length > 0 && (
+        <div
+          className="flex items-center justify-between flex-wrap gap-2 px-4 py-2 rounded mb-2 print-hide"
+          style={{ background: 'var(--gold-pale)', color: 'var(--gold)', fontSize: '0.85rem' }}
+        >
+          <span>
+            <span aria-hidden="true">⚠ </span>
+            イベント参加チェックが利用表の出席実績と {drift.length} 件ズレています。
+            <span style={{ color: 'var(--ink-3)' }}>
+              {' '}（意図して外した分は そのままで構いません）
+            </span>
+          </span>
+          <Button variant="secondary" onClick={handleAlignToAttendance}>
+            出席実績に合わせる（{drift.length}件）
+          </Button>
         </div>
       )}
 
@@ -903,9 +979,22 @@ export default function BillingFull({ scope }: Props) {
                     </td>
                     {events.map((ev) => {
                       const participated = !!r.participations[ev.id];
+                      /* 利用表とのズレは 背景色 + アイコン + title の 3 点で示す（色だけで伝えない）。
+                         紙には出さない（print-hide）ので、印刷結果は確定値のみ。 */
+                      const drifted = driftKeys.has(`${r.childId}_${ev.id}`);
+                      const attended = !!r.attendedByEvent[ev.id];
+                      const driftHint = !drifted
+                        ? undefined
+                        : attended
+                          ? `${r.childName} は ${format(new Date(ev.date), 'M/d')} に利用表で出席実績がありますが、チェックが外れています`
+                          : `${r.childName} は ${format(new Date(ev.date), 'M/d')} に利用表で出席実績がありませんが、チェックが入っています`;
                       return (
-                        <td key={ev.id} className="px-2 py-2 text-center">
-                          <label className="inline-flex items-center gap-1 cursor-pointer print-hide">
+                        <td
+                          key={ev.id}
+                          className={`px-2 py-2 text-center${drifted ? ' billing-drift-cell' : ''}`}
+                          style={drifted ? { background: 'var(--gold-pale)' } : undefined}
+                        >
+                          <label className="inline-flex items-center gap-1 cursor-pointer print-hide" title={driftHint}>
                             <input
                               type="checkbox"
                               checked={participated}
@@ -914,7 +1003,13 @@ export default function BillingFull({ scope }: Props) {
                             <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem', color: participated ? 'var(--ink)' : 'var(--ink-3)' }}>
                               {participated ? fmtYen(ev.price) : '—'}
                             </span>
+                            {drifted && (
+                              <span aria-hidden="true" style={{ color: 'var(--gold)', fontWeight: 700 }}>
+                                {attended ? '⚠' : '＋'}
+                              </span>
+                            )}
                           </label>
+                          {drifted && <span className="sr-only">{driftHint}</span>}
                           <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
                             {participated ? fmtYen(ev.price) : ''}
                           </span>
@@ -954,7 +1049,11 @@ export default function BillingFull({ scope }: Props) {
       <p className="text-xs mt-3 print-hide" style={{ color: 'var(--ink-3)' }}>
         ※ 利用負担額の初期値は児童設定の上限額。デイロボで算出した金額をこの欄に上書きしてください。
         <br />
-        ※ イベント参加チェックは初期値 OFF。当月実績に応じてチェックしてください。
+        ※ イベント参加チェックは、その日に利用表で出席実績がある児童に自動で入ります
+        （保存後にイベントを追加した場合も同じ）。手動で付け外しした分は保存され、あとから勝手に変わりません。
+        利用表とズレている場合は <span style={{ color: 'var(--gold)', fontWeight: 700 }}>⚠</span>（出席あり・チェック無し）/
+        <span style={{ color: 'var(--gold)', fontWeight: 700 }}> ＋</span>（出席無し・チェック有り）で示され、
+        上部の「出席実績に合わせる」でまとめて揃えられます。
         <br />
         ※ 出席日数 = 利用予定で時間が入っている日のカウント（欠席 / お休み / キャンセル待ちは除外）。
         利用表に時間さえ入れれば自動でカウントされます。

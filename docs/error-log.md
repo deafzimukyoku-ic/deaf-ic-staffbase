@@ -51,10 +51,11 @@
 - **解決方法**: `_db.mjs` の `loadEnv()`（repo ルート基準で解決）に寄せて 8 本を修正。
   読み取り専用の 4 本を実行して復旧を確認（`verify-vault-secrets` は Vault secret を正しく取得）。
   残る `cleanup-orphan-storage.mjs` は `pg` を使わず supabase-js のため当時のスコープ外だったが、
-  同日 9 本目として同様に `loadEnv()` へ寄せて修正済（`fs`/`path`/`url`/`__dirname` は
+  翌日 9 本目として同様に `loadEnv()` へ寄せて修正済（`fs`/`path`/`url`/`__dirname` は
   `orphan-pdf-paths.json` の解決に使うため残置、`envPath` のみ削除）。
-  ただし本体は **dry-run 分岐を持たず起動＝即削除**のため、`loadEnv()` の解決のみ
-  別ハーネスで確認し、スクリプト自体の実行は見送っている（＝起動確認は未実施のまま）
+  本体は **dry-run 分岐を持たず起動＝即削除**だったため、既定 dry-run + `--execute` 明示フラグの
+  ガードを追加。既定実行で env 読込〜対象 8 件の列挙まで通り exit 0（削除は走らない）を確認済。
+  実削除は `node scripts/cleanup-orphan-storage.mjs --execute` の時だけ行う
 - **再発防止**:
   - **worktree で書いたスクリプトを `scripts/` にコピーするときはパス解決を必ず見直す**。
     特に gitignore されたファイル（`.env.local`）への相対パスは worktree と本体で意味が変わる
@@ -1211,5 +1212,47 @@
   - 観測コードを残し、再現時の真因確定後に修正
   - root-cause-fix「再現できていないのに修正を書かない」原則を遵守
 - **関連**: docs/reference-map.md 末尾 / components/messages/MessagesView.tsx (観測コード)
+---
+## 利用料金表: 保存後に追加したイベントの参加チェックが、出席していても永久に OFF のまま
+
+- **発生日**: 2026-08-08（ユーザー指摘「利用表が保存された時点で交差セルにチェックが出るか調査」から発覚）
+- **発生箇所**: `components/shift/BillingFull.tsx` `fetchAll()` の row 構築（旧 232-241 行）
+- **エラー内容**: 例外は出ない。**静かに請求漏れになる**タイプの不具合。
+  利用料金表の「イベント × 氏名」交差セルで、児童が当日出席しているのにチェックが入らず、
+  参加費が請求額に加算されない。
+- **原因**:
+  ```ts
+  participations[ev.id] = existing ? (partsMap.get(ev.id) ?? false) : attended;
+  ```
+  `partsMap` は保存済みの `billing_event_participations` を引いた Map。
+  **料金表を保存した後にイベントを追加すると、その event_id の行は存在しない**ため
+  `partsMap.get()` が `undefined` を返し、`?? false` で OFF に落ちる。
+  以後この月を何度開いても出席実績は参照されず、職員が手で気づいて付けない限り OFF のまま。
+  `?? false` が「行が無い」と「保存された false」を**同じ値に潰していた**のが真因。
+  加えて保存済み月では利用表の修正にも一切追従しないため、ズレが発生しても画面に手掛かりが無かった。
+- **実測（`scripts/probe-billing-event-check.mjs`）**: `billing_summaries` 302行 /
+  `billing_event_participations` 1,702行に対し、**participations 行の欠落 52件**、
+  **出席あり × チェック OFF 100件**、出席なし × チェック ON 12件。
+- **解決方法**:
+  - 値ではなく**行の有無**で分岐する。`partsMap.has(ev.id)` が真のときだけ保存値（`false` 含む）を尊重し、
+    偽なら利用表の出席実績（`isAttended`）から初期化する。補完が起きた行は `dirty` にして保存で永続化。
+  - 出席実績とのズレは `RowState.attendedByEvent` と突き合わせて検出し、⚠/＋ アイコン + 背景色 + title で提示。
+    **自動では書き換えない**（「出席なし × ON」12件は職員の意図的なチェックの可能性があるため）。
+    揃えるのは「出席実績に合わせる」を押したときだけ。
+  - 実 DB データで新旧ロジックを突き合わせる検証スクリプト `scripts/verify-billing-event-check.mjs` を作成し、
+    **保存済みの明示値が変化したセル = 0 件**を実証した。
+- **再発防止**:
+  - **`?? false` / `|| 0` は「未設定」と「明示的な偽値」を潰す**。Map / DB 由来の任意値を既定値に落とすときは、
+    `has()` や `== null` で**存在の有無**を先に判定する。同種の罠は `snack_fee_override` の
+    `0`（手動0円）と `null`（自動）の区別でも既に踏んでおり（CLAUDE.md §8）、本件はその第2例。
+  - **件数を数える probe は必ず `.range()` でページングする**。本件の初回調査は PostgREST の
+    既定上限 1000 行に当たって「participations 1000件 / 欠落 754件」と誤読していた。
+    ページング後の正しい値は 1,702件 / 52件。**上限ちょうどの件数が出たら打ち切りを疑う。**
+  - スナップショット系テーブルは「保存後にマスタ（events）が増える」経路を必ず想定する。
+    子テーブルの行が無い＝未参加、と解釈してよいのは「マスタが増えない」場合だけ。
+  - 画面の注記が実装と矛盾していた（「※ イベント参加チェックは初期値 OFF」だが実際は自動 ON）。
+    **注記も仕様の一部**として実装変更時に同時更新する。
+- **関連**: `docs/features/billing-event-check-follow.md` / `scripts/probe-billing-event-check.mjs` /
+  `scripts/verify-billing-event-check.mjs` / `docs/reference-map.md`（BillingFull.tsx の行）
 ---
 *(以降、新規エラーがあれば追記)*

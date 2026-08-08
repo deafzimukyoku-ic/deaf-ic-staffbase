@@ -69,6 +69,28 @@
   </table>
 </div>
 
+<!-- 2026-08-08 利用料金表 Phase A: イベント参加チェックを利用表に追従 -->
+<div class="phase">
+  <h2>利用料金表 Phase A: イベント参加チェックを利用表に追従（2026-08-08） <span class="phase-pct">実装完了 / UI確認はユーザー待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">イベント×氏名の交差セルのチェックは「料金表を未保存の月」だけ出席実績から自動生成され、保存後は一切追従しなかった。とくに<b>保存後に追加したイベントは <code>?? false</code> に落ちて出席していても永久に OFF</b>。仕様書 docs/features/billing-event-check-follow.md（承認済）。<b>DB 変更なし・migration なし</b>。</td></tr>
+      <tr><td>調査（実 DB 突合）</td><td class="files">scripts/probe-billing-event-check.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>summaries 302行 / participations 1,702行。<b>出席あり×OFF 100件 / 出席なし×ON 12件 / participations 行の欠落 52件</b>を検出。<b>初回 probe は PostgREST の既定上限1000行に当たって件数を誤っていた</b>ため <code>.range()</code> でページングし再取得（件数を数える probe の必須作法）</td></tr>
+      <tr><td>仕様書作成・承認</td><td class="files">docs/features/billing-event-check-follow.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「未保存イベントのみ自動＋ズレ警告」をユーザー確定。<b>出席なし×ON が12件実在するため無条件追従は不採用</b>（職員の手入力を壊すため）</td></tr>
+      <tr><td>participations 初期値を has() 判定へ</td><td class="files">components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>partsMap.get(ev.id) ?? false</code> → <code>partsMap.has(ev.id)</code> で行の<b>有無</b>を分岐。行があれば false 含め保存値を尊重、無ければ出席実績から初期化。補完が起きた行は dirty にして「保存」で永続化できるようにした</td></tr>
+      <tr><td>ズレ警告（ヘッダ + セル）</td><td class="files">components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>RowState に attendedByEvent 追加。セルは <b>背景色 + ⚠/＋ アイコン + title + sr-only テキスト</b>（色のみで伝えない: CLAUDE.md §9）。印刷では <code>.billing-drift-cell</code> を <code>background: transparent !important</code> で消し、紙は確定値のみ</td></tr>
+      <tr><td>「出席実績に合わせる」一括ボタン</td><td class="files">components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>ズレているセルだけを揃える。<b>押すまで何も変わらない</b>（自動上書きしない）。保存は既存の「保存」ボタンを通し、書き込み経路を二重化しない</td></tr>
+      <tr><td>注記の修正（実装と矛盾していた）</td><td class="files">components/shift/BillingFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「※ イベント参加チェックは初期値 OFF」は<b>コードと矛盾</b>（実際は出席から自動 ON）。実態に合わせて書き換え + ファイル冒頭コメントも修正</td></tr>
+      <tr><td>ロジック検証（実 DB データでシミュレーション）</td><td class="files">scripts/verify-billing-event-check.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>対象1,754セル。補完52件（うち OFF→ON 12件）/ <b>保存済みの明示値が変化したセル = 0 件（✅ 最重要の安全性）</b> / ズレ 124→112件 / dirty になる行 52/302。残112件は ⚠/＋ で提示され職員判断</td></tr>
+      <tr><td>型チェック / lint / build</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0エラー / eslint 0エラー0警告 / <b>npm run build 成功（exit 0）</b></td></tr>
+      <tr><td>ローカル UI 確認</td><td class="files">—</td><td><span class="status todo">未着手</span></td><td class="pct">0%</td><td>ログインが必要なためユーザー実施（アシスタントは認証情報を入力しない方針）</td></tr>
+      <tr><td>台帳更新</td><td class="files">docs/reference-map.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>BillingFull.tsx の行に participations 初期値の規則を明記</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 保存済みのチェックが勝手に変わっていないか（検証スクリプトで 0 件を実証済、実画面でも確認）② 8月パズルを開くとズレ84件が ⚠ 表示され、押すまで変わらないか ③「出席実績に合わせる」後に保存 → 再読込でズレ0になるか ④ 印刷/Excel に警告の塗り・アイコンが出ないか ⑤ イベント0件の月でエラーにならないか ⑥ shift_manager でも同じ動作か</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 2026-07-17 利用料金表: おやつ等の手動調整 -->
 <div class="phase">
   <h2>利用料金表: 「おやつ等」を ▲▼ で 50円ずつ手動調整（2026-07-17） <span class="phase-pct">完了 / UI確認済 / push済（デプロイ status のみ未確認）</span></h2>
