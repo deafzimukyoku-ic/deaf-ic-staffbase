@@ -134,6 +134,8 @@ export default function BillingFull({ scope }: Props) {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [feeItems, setFeeItems] = useState<BillingFeeItemRow[]>([]);
   const [siblingGroups, setSiblingGroups] = useState<SiblingGroupRow[]>([]);
+  /** 請求担当事業所の名前表示用（兄弟が別事業所に通うケース。migration 224） */
+  const [facilityNames, setFacilityNames] = useState<Map<string, string>>(new Map());
   const [rows, setRows] = useState<RowState[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -162,7 +164,7 @@ export default function BillingFull({ scope }: Props) {
     setError('');
     try {
       /* 並列 fetch */
-      const [facRes, childRes, eventRes, entryRes, sumRes, itemRes, cfaRes, sgRes] = await Promise.all([
+      const [facRes, childRes, eventRes, entryRes, sumRes, itemRes, cfaRes, sgRes, allFacRes] = await Promise.all([
         supabase.from('facilities').select('*').eq('id', facilityId).maybeSingle(),
         supabase
           .from('children')
@@ -209,11 +211,13 @@ export default function BillingFull({ scope }: Props) {
           .select('child_id, fee_item_id, amount')
           .eq('tenant_id', me.tenant_id)
           .eq('facility_id', facilityId),
+        /* 兄弟グループは法人全体スコープ（migration 224）。他事業所が作ったグループに
+           自事業所の児童が入っていることがあるので facility では絞らない。 */
         supabase
           .from('sibling_groups')
           .select('*')
-          .eq('tenant_id', me.tenant_id)
-          .eq('facility_id', facilityId),
+          .eq('tenant_id', me.tenant_id),
+        supabase.from('facilities').select('id, name').eq('tenant_id', me.tenant_id),
       ]);
 
       setFacility((facRes.data ?? null) as Facility | null);
@@ -230,6 +234,9 @@ export default function BillingFull({ scope }: Props) {
       setEvents(evs);
       setFeeItems(items);
       setSiblingGroups((sgRes.data ?? []) as SiblingGroupRow[]);
+      setFacilityNames(
+        new Map(((allFacRes.data ?? []) as { id: string; name: string }[]).map((f) => [f.id, f.name])),
+      );
 
       /* 既存 summary から participations と請求項目の値を取得 */
       const summaryIds = summaries.map((s) => s.id);
@@ -462,6 +469,10 @@ export default function BillingFull({ scope }: Props) {
 
   const siblingLabelById = useMemo(
     () => new Map(siblingGroups.map((g) => [g.id, g.label])),
+    [siblingGroups],
+  );
+  const siblingGroupById = useMemo(
+    () => new Map(siblingGroups.map((g) => [g.id, g])),
     [siblingGroups],
   );
   /* 兄弟ごとの請求額小計。表示専用で、全体合計には足さない（足すと二重計上） */
@@ -1370,9 +1381,32 @@ export default function BillingFull({ scope }: Props) {
                         <td className="px-2 py-2 billing-sticky-col billing-sticky-col-1" />
                         <td className="px-2 py-2 billing-sticky-col billing-sticky-col-2" />
                         <td className="px-2 py-2 billing-sticky-col billing-sticky-col-3" />
-                        {/* 請求額の直前まで（出席日数〜チェック型項目）を 1 セルにまとめて見出しにする */}
+                        {/* 請求額の直前まで（出席日数〜チェック型項目）を 1 セルにまとめて見出しにする。
+                            合計は**この事業所の児童だけ**。兄弟が別事業所に通う場合、
+                            請求担当が他事業所なら二重請求を防ぐため明示する（migration 224）。 */}
                         <td className="px-2 py-2 text-right" colSpan={totalCols - 5} style={{ fontSize: '0.8rem' }}>
-                          <span aria-hidden="true">👨‍👩‍👧 </span>きょうだい合計
+                          {(() => {
+                            const grp = r.siblingGroupId ? siblingGroupById.get(r.siblingGroupId) : null;
+                            const billFacId = grp?.billing_facility_id ?? null;
+                            const isOther = billFacId != null && billFacId !== facilityId;
+                            return (
+                              <>
+                                <span aria-hidden="true">👨‍👩‍👧 </span>
+                                きょうだい合計（当事業所分）
+                                {isOther && (
+                                  <span style={{ color: 'var(--red)', fontWeight: 700 }}>
+                                    {' '}／ <span aria-hidden="true">⚠ </span>
+                                    請求は {facilityNames.get(billFacId) ?? '他事業所'} が担当
+                                  </span>
+                                )}
+                                {billFacId != null && !isOther && (
+                                  <span style={{ color: 'var(--green)', fontWeight: 700 }}>
+                                    {' '}／ 請求担当: この事業所
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {fmtYen(siblingSubtotals.get(r.siblingGroupId!) ?? 0)}
@@ -1432,6 +1466,11 @@ export default function BillingFull({ scope }: Props) {
         <br />
         ※ 兄弟グループは児童設定で設定します。同じグループの児童は隣接表示され、直下に「きょうだい合計」行が出ます。
         各児童の行は個別金額のままで、いちばん下の合計は児童行だけを足しています（きょうだい合計は二重に足しません）。
+        <br />
+        ※ 兄弟グループは<b>全事業所共通</b>です。兄弟が別の事業所に通っていても同じグループに入れられますが、
+        <b>「きょうだい合計」はこの事業所の児童だけ</b>を足します（他事業所の金額は表示しません）。
+        児童設定で「請求担当の事業所」を決めておくと、担当が他事業所のときに
+        <span style={{ color: 'var(--red)', fontWeight: 700 }}>⚠ 請求は◯◯が担当</span> と表示され、二重請求を防げます。
       </p>
     </div>
   );

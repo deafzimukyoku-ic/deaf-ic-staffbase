@@ -406,13 +406,17 @@ export interface BillingSummaryFeeAmountRow {
   created_at: string;
 }
 
-/* 兄弟グループ (migration 223)。利用料金表で小計行を出すために使う */
+/* 兄弟グループ (migration 223 / 224)。利用料金表で小計行を出すために使う。
+   migration 224 で**法人全体スコープ**に変更（兄弟が別事業所に通うケースがあるため）。 */
 export interface SiblingGroupRow {
   id: string;
   tenant_id: string;
+  /** 作成元の事業所（記録用）。migration 224 以降アクセス制御には使わない */
   facility_id: string;
-  /** 小計行の見出しに使う（例「川島」「◯◯家」） */
+  /** 小計行の見出しに使う（例「川島」「◯◯家」）。法人全体で一意 */
   label: string;
+  /** この世帯の請求を出す事業所。null=未設定（各事業所が自分の分を請求）。migration 224 */
+  billing_facility_id: string | null;
   created_at: string;
   updated_at: string;
 }

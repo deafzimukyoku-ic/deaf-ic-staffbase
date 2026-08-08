@@ -105,6 +105,8 @@ export default function ChildrenSettingsFull({ scope }: Props) {
   const [me, setMe] = useState<{ id: string; tenant_id: string; facility_id: string | null; role: string } | null>(null);
 
   const [facilities, setFacilities] = useState<Facility[]>([]);
+  /** 兄弟グループの請求担当事業所を選ぶ用。manager でも全事業所が必要（migration 224） */
+  const [allFacilities, setAllFacilities] = useState<Facility[]>([]);
   const [children, setChildren] = useState<ChildRow[]>([]);
   // facility ごとの pickup/dropoff_area_labels
   const [facilityAreas, setFacilityAreas] = useState<Record<string, { pickup: AreaLabel[]; dropoff: AreaLabel[] }>>({});
@@ -151,6 +153,9 @@ export default function ChildrenSettingsFull({ scope }: Props) {
           ? allFacs.filter((f) => f.id === meRow.facility_id)
           : allFacs;
       setFacilities(scopedFacs);
+      /* 兄弟グループは法人全体スコープ（migration 224）なので、請求担当事業所の選択肢には
+         manager でも全事業所が要る。facilities の SELECT は全ロール tenant 全域で許可されている。 */
+      setAllFacilities(allFacs);
 
       // children（RLS で自動スコープ。admin は全 facility、manager は自facility）
       const { data: childData } = await supabase
@@ -314,9 +319,9 @@ export default function ChildrenSettingsFull({ scope }: Props) {
     setSavingSiblingGroup(true);
     setError('');
     try {
-      const existing = siblingGroups.find(
-        (g) => g.facility_id === editing.facility_id && g.label === label,
-      );
+      /* migration 224 でラベルは法人全体で一意。別事業所が先に作っていればそれを再利用する
+         （事業所ごとに「川島」が乱立して世帯が分断されるのを防ぐ）。 */
+      const existing = siblingGroups.find((g) => g.label === label);
       if (existing) {
         setEditing({ ...editing, sibling_group_id: existing.id });
         setNewSiblingLabel('');
@@ -334,6 +339,26 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       setNewSiblingLabel('');
     } catch (e) {
       setError(e instanceof Error ? e.message : '兄弟グループの作成に失敗しました');
+    } finally {
+      setSavingSiblingGroup(false);
+    }
+  };
+
+  /* 請求担当事業所はグループ単位の設定。児童の「保存」とは別に即時反映する。 */
+  const handleChangeBillingFacility = async (groupId: string, facilityId: string | null) => {
+    setSavingSiblingGroup(true);
+    setError('');
+    try {
+      const { error: err } = await supabase
+        .from('sibling_groups')
+        .update({ billing_facility_id: facilityId })
+        .eq('id', groupId);
+      if (err) throw new Error(err.message);
+      setSiblingGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, billing_facility_id: facilityId } : g)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '請求担当事業所の変更に失敗しました');
     } finally {
       setSavingSiblingGroup(false);
     }
@@ -1138,6 +1163,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--gold)' }}>
                     👨‍👩‍👧 兄弟グループ
                   </label>
+                  {/* migration 224: グループは法人全体スコープ。兄弟が別事業所に通う場合も同じグループに入れる */}
                   <select
                     value={editing.sibling_group_id ?? ''}
                     onChange={(e) => setEditing({ ...editing, sibling_group_id: e.target.value || null })}
@@ -1146,11 +1172,9 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     aria-label="兄弟グループ"
                   >
                     <option value="">（単独）</option>
-                    {siblingGroups
-                      .filter((g) => g.facility_id === editing.facility_id)
-                      .map((g) => (
-                        <option key={g.id} value={g.id}>{g.label}</option>
-                      ))}
+                    {siblingGroups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.label}</option>
+                    ))}
                   </select>
                   <div className="flex items-center gap-2">
                     <input
@@ -1170,9 +1194,37 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                       {savingSiblingGroup ? '作成中…' : '＋ 作成'}
                     </Button>
                   </div>
+                  {/* 請求担当事業所。グループ単位の設定なので、選ぶと即その場で保存する
+                      （児童の「保存」を待つと、別事業所の職員と編集が競合したときに分かりにくいため）。 */}
+                  {editing.sibling_group_id && (
+                    <>
+                      <label className="text-xs font-bold mt-1" style={{ color: 'var(--gold)' }}>
+                        請求担当の事業所
+                      </label>
+                      <select
+                        value={
+                          siblingGroups.find((g) => g.id === editing.sibling_group_id)?.billing_facility_id ?? ''
+                        }
+                        onChange={(e) => void handleChangeBillingFacility(editing.sibling_group_id!, e.target.value || null)}
+                        disabled={savingSiblingGroup}
+                        className="outline-none"
+                        style={{ ...inputStyle, color: 'var(--ink)' }}
+                        aria-label="請求担当の事業所"
+                      >
+                        <option value="">（未設定 — 各事業所が自分の分を請求）</option>
+                        {allFacilities.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                   <p className="text-[11px]" style={{ color: 'var(--gold)', fontWeight: 500 }}>
                     💡 同じグループの児童は利用料金表で隣り合って並び、直下に「きょうだい合計」行が出ます。
-                    各児童の請求額は個別のままです
+                    各児童の請求額は個別のままです。
+                    <br />
+                    💡 グループは<b>全事業所共通</b>です。兄弟が別の事業所に通っていても同じグループに入れられます。
+                    ただし<b>きょうだい合計はその事業所の児童だけ</b>を足します（他事業所の金額は表示しません）。
+                    「請求担当の事業所」を決めておくと、担当でない事業所の料金表には「請求は◯◯」と出るので二重請求を防げます
                   </p>
                 </div>
               </div>
