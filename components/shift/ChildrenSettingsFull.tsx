@@ -30,6 +30,15 @@ import type {
   SiblingGroupRow,
 } from '@/lib/types';
 
+/** RPC get_sibling_candidates() の戻り（migration 225）。氏名と事業所だけで、金額・連絡先は含まない */
+interface SiblingCandidate {
+  id: string;
+  name: string;
+  facility_id: string;
+  facility_name: string;
+  sibling_group_id: string | null;
+}
+
 interface StaffLite {
   id: string;
   last_name: string;
@@ -61,8 +70,10 @@ type EditableChild = {
   municipality: string | null;
   copay_tier: CopayTier;
   copay_freeform_amount: number | null;
-  /** 兄弟グループ（migration 223）。null = 単独 */
+  /** 現在の兄弟グループ（migration 223〜225）。UI には出さない内部値。null = 単独 */
   sibling_group_id: string | null;
+  /** きょうだいとして選ばれている**他の児童**の id（migration 225。UI はこちらを見せる） */
+  sibling_child_ids: string[];
   /** calc_type='per_child_monthly' の請求項目ごとの月額（migration 222）。fee_item_id → 円 / null=計上しない */
   fee_amounts: Record<string, number | null>;
   isNew?: boolean;
@@ -116,7 +127,9 @@ export default function ChildrenSettingsFull({ scope }: Props) {
   /** `${child_id}|${fee_item_id}` → 円 */
   const [childFeeAmounts, setChildFeeAmounts] = useState<Map<string, number>>(new Map());
   const [siblingGroups, setSiblingGroups] = useState<SiblingGroupRow[]>([]);
-  const [newSiblingLabel, setNewSiblingLabel] = useState('');
+  /** きょうだい選択の候補（テナント全域・最小列のみ。RPC get_sibling_candidates / migration 225） */
+  const [siblingCandidates, setSiblingCandidates] = useState<SiblingCandidate[]>([]);
+  const [siblingQuery, setSiblingQuery] = useState('');
   const [savingSiblingGroup, setSavingSiblingGroup] = useState(false);
   const [editing, setEditing] = useState<EditableChild | null>(null);
   const [draggingChildIdx, setDraggingChildIdx] = useState<number | null>(null);
@@ -201,6 +214,11 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       );
       setSiblingGroups((sgRes.data ?? []) as SiblingGroupRow[]);
 
+      /* きょうだい選択の候補（テナント全域）。children の RLS は自事業所のみなので、
+         別事業所の児童を選べるようにするには SECURITY DEFINER RPC を通す（migration 225）。 */
+      const { data: candData } = await supabase.rpc('get_sibling_candidates');
+      setSiblingCandidates((candData ?? []) as SiblingCandidate[]);
+
       // 在職職員（eligibility 用）
       const { data: staffRows } = await supabase
         .from('employees')
@@ -267,6 +285,7 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       copay_tier: 'zero',
       copay_freeform_amount: null,
       sibling_group_id: null,
+      sibling_child_ids: [],
       fee_amounts: {},
       isNew: true,
     });
@@ -304,44 +323,28 @@ export default function ChildrenSettingsFull({ scope }: Props) {
       copay_tier: (child.copay_tier ?? 'zero') as CopayTier,
       copay_freeform_amount: child.copay_freeform_amount ?? null,
       sibling_group_id: child.sibling_group_id ?? null,
+      /* 同じグループに居る**他の**児童を「選択済みのきょうだい」として復元する。
+         別事業所の児童も候補 RPC 経由で取れているのでここに出る。 */
+      sibling_child_ids: child.sibling_group_id
+        ? siblingCandidates
+            .filter((c) => c.sibling_group_id === child.sibling_group_id && c.id !== child.id)
+            .map((c) => c.id)
+        : [],
       fee_amounts: Object.fromEntries(
         perChildFeeItems.map((i) => [i.id, childFeeAmounts.get(`${child.id}|${i.id}`) ?? null]),
       ),
     });
   };
 
-  /* 兄弟グループを作ってそのまま編集中の児童に割り当てる。
-     児童設定を離れずに「新しいきょうだいを作る → 2 人目を同じグループに入れる」が完結するようにする。 */
-  const handleCreateSiblingGroup = async () => {
-    if (!editing || !me) return;
-    const label = newSiblingLabel.trim();
-    if (label === '') return;
-    setSavingSiblingGroup(true);
-    setError('');
-    try {
-      /* migration 224 でラベルは法人全体で一意。別事業所が先に作っていればそれを再利用する
-         （事業所ごとに「川島」が乱立して世帯が分断されるのを防ぐ）。 */
-      const existing = siblingGroups.find((g) => g.label === label);
-      if (existing) {
-        setEditing({ ...editing, sibling_group_id: existing.id });
-        setNewSiblingLabel('');
-        return;
-      }
-      const { data, error: err } = await supabase
-        .from('sibling_groups')
-        .insert({ tenant_id: me.tenant_id, facility_id: editing.facility_id, label })
-        .select('*')
-        .single();
-      if (err) throw new Error(err.message);
-      const created = data as SiblingGroupRow;
-      setSiblingGroups((prev) => [...prev, created].sort((a, b) => a.label.localeCompare(b.label, 'ja')));
-      setEditing({ ...editing, sibling_group_id: created.id });
-      setNewSiblingLabel('');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '兄弟グループの作成に失敗しました');
-    } finally {
-      setSavingSiblingGroup(false);
-    }
+  const toggleSibling = (childId: string) => {
+    if (!editing) return;
+    const cur = editing.sibling_child_ids;
+    setEditing({
+      ...editing,
+      sibling_child_ids: cur.includes(childId)
+        ? cur.filter((id) => id !== childId)
+        : [...cur, childId],
+    });
   };
 
   /* 請求担当事業所はグループ単位の設定。児童の「保存」とは別に即時反映する。 */
@@ -386,7 +389,8 @@ export default function ChildrenSettingsFull({ scope }: Props) {
         municipality: editing.municipality && editing.municipality.trim() !== '' ? editing.municipality.trim() : null,
         copay_tier: editing.copay_tier,
         copay_freeform_amount: freeformAmt,
-        sibling_group_id: editing.sibling_group_id,
+        /* sibling_group_id はここで書かない。別事業所の児童も同時に更新する必要があるため
+           RPC set_child_siblings に一本化する（migration 225）。 */
         /* 旧列 kumon_monthly_fee は migration 222 で children_fee_amounts へ移行済み。
            外部から読む処理が将来現れても壊れないよう、組込項目 'material' の額と同期して書き続ける。 */
         kumon_monthly_fee: (() => {
@@ -414,6 +418,14 @@ export default function ChildrenSettingsFull({ scope }: Props) {
           .eq('id', editing.id);
         if (updErr) throw new Error(updErr.message);
       }
+
+      /* きょうだいの紐付け。別事業所の児童の sibling_group_id も更新する必要があるため
+         SECURITY DEFINER RPC を通す（触るのは sibling_group_id だけ。migration 225）。 */
+      const { error: sibErr } = await supabase.rpc('set_child_siblings', {
+        p_child_id: targetId,
+        p_sibling_ids: editing.sibling_child_ids,
+      });
+      if (sibErr) throw new Error(sibErr.message);
 
       /* children_fee_amounts（児童ごとの月額）を反映。
          空欄 / 0 は「計上しない」なので行ごと削除する（0 円の行を残すと料金表に ¥0 が出るため）。 */
@@ -744,19 +756,18 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   {/* 兄弟グループ */}
                   <td className="px-3 py-2 whitespace-nowrap" style={{ borderBottom: '1px solid var(--rule)' }}>
                     {(() => {
-                      const g = c.sibling_group_id
-                        ? siblingGroups.find((s) => s.id === c.sibling_group_id)
-                        : null;
-                      if (!g) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
-                      const mates = children
-                        .filter((o) => o.sibling_group_id === g.id && o.id !== c.id)
-                        .map((o) => o.name);
+                      if (!c.sibling_group_id) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+                      /* 候補 RPC はテナント全域なので、別事業所のきょうだいもここに出る */
+                      const mates = siblingCandidates.filter(
+                        (o) => o.sibling_group_id === c.sibling_group_id && o.id !== c.id,
+                      );
+                      if (mates.length === 0) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+                      const label = mates
+                        .map((m) => (m.facility_id === c.facility_id ? m.name : `${m.name}（${m.facility_name}）`))
+                        .join('・');
                       return (
-                        <span
-                          style={{ color: 'var(--gold)', fontWeight: 700 }}
-                          title={mates.length > 0 ? `きょうだい: ${mates.join(', ')}` : 'このグループはこの児童のみ'}
-                        >
-                          {g.label}
+                        <span style={{ color: 'var(--gold)', fontWeight: 700 }} title={`きょうだい: ${label}`}>
+                          {label}
                         </span>
                       );
                     })()}
@@ -873,15 +884,19 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     );
                   })}
                   <div className="flex items-center justify-between">
-                    <span style={{ color: 'var(--ink-3)' }}>兄弟</span>
+                    <span style={{ color: 'var(--ink-3)' }}>きょうだい</span>
                     <span>
                       {(() => {
-                        const g = c.sibling_group_id
-                          ? siblingGroups.find((s) => s.id === c.sibling_group_id)
-                          : null;
-                        return g
-                          ? <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{g.label}</span>
-                          : <span style={{ color: 'var(--ink-3)' }}>—</span>;
+                        const mates = c.sibling_group_id
+                          ? siblingCandidates.filter(
+                              (o) => o.sibling_group_id === c.sibling_group_id && o.id !== c.id)
+                          : [];
+                        if (mates.length === 0) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+                        return (
+                          <span style={{ color: 'var(--gold)', fontWeight: 700 }}>
+                            {mates.map((m) => m.name).join('・')}
+                          </span>
+                        );
                       })()}
                     </span>
                   </div>
@@ -1161,42 +1176,100 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                   style={{ background: 'var(--white)', borderLeft: '3px solid var(--gold)' }}
                 >
                   <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--gold)' }}>
-                    👨‍👩‍👧 兄弟グループ
+                    👨‍👩‍👧 きょうだい
                   </label>
-                  {/* migration 224: グループは法人全体スコープ。兄弟が別事業所に通う場合も同じグループに入れる */}
-                  <select
-                    value={editing.sibling_group_id ?? ''}
-                    onChange={(e) => setEditing({ ...editing, sibling_group_id: e.target.value || null })}
-                    className="outline-none font-semibold"
-                    style={{ ...inputStyle, color: 'var(--ink)' }}
-                    aria-label="兄弟グループ"
+                  {/* migration 225: グループ名を考えさせず、きょうだいの児童を直接選ぶ。
+                      候補は RPC でテナント全域を取得しているので、別事業所の児童も選べる。 */}
+                  {editing.sibling_child_ids.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {editing.sibling_child_ids.map((sid) => {
+                        const cand = siblingCandidates.find((c) => c.id === sid);
+                        return (
+                          <button
+                            key={sid}
+                            type="button"
+                            onClick={() => toggleSibling(sid)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded"
+                            style={{
+                              background: 'var(--gold-pale)', color: 'var(--gold)',
+                              border: '1px solid var(--gold)', fontSize: '0.78rem', fontWeight: 700,
+                            }}
+                            title="クリックで解除"
+                            aria-label={`${cand?.name ?? sid} をきょうだいから外す`}
+                          >
+                            {cand?.name ?? '（不明な児童）'}
+                            {cand && cand.facility_id !== editing.facility_id && (
+                              <span style={{ fontWeight: 400, opacity: 0.8 }}>（{cand.facility_name}）</span>
+                            )}
+                            <span aria-hidden="true">✕</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    value={siblingQuery}
+                    onChange={(e) => setSiblingQuery(e.target.value)}
+                    className="outline-none"
+                    style={{ ...inputStyle }}
+                    placeholder="児童名で絞り込む"
+                    aria-label="きょうだいを名前で絞り込む"
+                  />
+                  <div
+                    className="rounded"
+                    style={{
+                      maxHeight: '180px', overflowY: 'auto',
+                      border: '1px solid var(--rule)', background: 'var(--white)',
+                    }}
                   >
-                    <option value="">（単独）</option>
-                    {siblingGroups.map((g) => (
-                      <option key={g.id} value={g.id}>{g.label}</option>
-                    ))}
-                  </select>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newSiblingLabel}
-                      onChange={(e) => setNewSiblingLabel(e.target.value)}
-                      className="outline-none flex-1"
-                      style={{ ...inputStyle }}
-                      placeholder="新しいグループ名（例）川島"
-                      aria-label="新しい兄弟グループ名"
-                    />
-                    <Button
-                      variant="secondary"
-                      onClick={handleCreateSiblingGroup}
-                      disabled={savingSiblingGroup || newSiblingLabel.trim() === ''}
-                    >
-                      {savingSiblingGroup ? '作成中…' : '＋ 作成'}
-                    </Button>
+                    {(() => {
+                      const q = siblingQuery.trim();
+                      const list = siblingCandidates.filter(
+                        (c) => c.id !== editing.id && (q === '' || c.name.includes(q)),
+                      );
+                      if (list.length === 0) {
+                        return (
+                          <div className="px-3 py-3 text-[11px]" style={{ color: 'var(--ink-3)' }}>
+                            {siblingCandidates.length === 0
+                              ? '候補を読み込めませんでした。ページを再読み込みしてください。'
+                              : '該当する児童がいません。'}
+                          </div>
+                        );
+                      }
+                      /* 自事業所の児童を先に出す。別事業所は事業所名を添えて後ろに */
+                      const sorted = [...list].sort((a, b) => {
+                        const ao = a.facility_id === editing.facility_id ? 0 : 1;
+                        const bo = b.facility_id === editing.facility_id ? 0 : 1;
+                        return ao !== bo ? ao - bo : a.name.localeCompare(b.name, 'ja');
+                      });
+                      return sorted.map((c) => {
+                        const checked = editing.sibling_child_ids.includes(c.id);
+                        const otherFacility = c.facility_id !== editing.facility_id;
+                        return (
+                          <label
+                            key={c.id}
+                            className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
+                            style={{ borderBottom: '1px solid var(--rule)', fontSize: '0.82rem' }}
+                          >
+                            <input type="checkbox" checked={checked} onChange={() => toggleSibling(c.id)} />
+                            <span style={{ color: 'var(--ink)', fontWeight: checked ? 700 : 400 }}>{c.name}</span>
+                            {otherFacility && (
+                              <span style={{ color: 'var(--ink-3)', fontSize: '0.72rem' }}>{c.facility_name}</span>
+                            )}
+                          </label>
+                        );
+                      });
+                    })()}
                   </div>
                   {/* 請求担当事業所。グループ単位の設定なので、選ぶと即その場で保存する
                       （児童の「保存」を待つと、別事業所の職員と編集が競合したときに分かりにくいため）。 */}
-                  {editing.sibling_group_id && (
+                  {editing.sibling_child_ids.length > 0 && !editing.sibling_group_id && (
+                    <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+                      💡 請求担当の事業所は、いちど「保存」したあとに設定できます
+                    </p>
+                  )}
+                  {editing.sibling_group_id && editing.sibling_child_ids.length > 0 && (
                     <>
                       <label className="text-xs font-bold mt-1" style={{ color: 'var(--gold)' }}>
                         請求担当の事業所
@@ -1219,11 +1292,13 @@ export default function ChildrenSettingsFull({ scope }: Props) {
                     </>
                   )}
                   <p className="text-[11px]" style={{ color: 'var(--gold)', fontWeight: 500 }}>
-                    💡 同じグループの児童は利用料金表で隣り合って並び、直下に「きょうだい合計」行が出ます。
+                    💡 きょうだいの児童にチェックを入れるだけです。相手側の児童を開いて設定し直す必要はありません。
+                    <br />
+                    💡 きょうだいは利用料金表で隣り合って並び、直下に「きょうだい合計」行が出ます。
                     各児童の請求額は個別のままです。
                     <br />
-                    💡 グループは<b>全事業所共通</b>です。兄弟が別の事業所に通っていても同じグループに入れられます。
-                    ただし<b>きょうだい合計はその事業所の児童だけ</b>を足します（他事業所の金額は表示しません）。
+                    💡 <b>別の事業所に通うきょうだいも選べます</b>。ただし
+                    <b>きょうだい合計はその事業所の児童だけ</b>を足します（他事業所の金額は表示しません）。
                     「請求担当の事業所」を決めておくと、担当でない事業所の料金表には「請求は◯◯」と出るので二重請求を防げます
                   </p>
                 </div>

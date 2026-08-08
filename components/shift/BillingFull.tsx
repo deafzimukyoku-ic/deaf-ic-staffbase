@@ -91,6 +91,15 @@ interface BillingSummaryRow {
   received_at: string | null;
 }
 
+/** RPC get_sibling_candidates() の戻り（migration 225）。氏名と事業所だけで金額は含まない */
+interface SiblingCandidate {
+  id: string;
+  name: string;
+  facility_id: string;
+  facility_name: string;
+  sibling_group_id: string | null;
+}
+
 interface FeeAmountRow {
   billing_summary_id: string;
   fee_item_id: string;
@@ -136,6 +145,8 @@ export default function BillingFull({ scope }: Props) {
   const [siblingGroups, setSiblingGroups] = useState<SiblingGroupRow[]>([]);
   /** 請求担当事業所の名前表示用（兄弟が別事業所に通うケース。migration 224） */
   const [facilityNames, setFacilityNames] = useState<Map<string, string>>(new Map());
+  /** きょうだいの表示名を組み立てる材料（テナント全域・氏名と事業所のみ。migration 225 の RPC） */
+  const [siblingCandidates, setSiblingCandidates] = useState<SiblingCandidate[]>([]);
   const [rows, setRows] = useState<RowState[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -237,6 +248,10 @@ export default function BillingFull({ scope }: Props) {
       setFacilityNames(
         new Map(((allFacRes.data ?? []) as { id: string; name: string }[]).map((f) => [f.id, f.name])),
       );
+      /* きょうだいの表示名用。children の RLS は自事業所のみなので、別事業所に通う
+         きょうだいの名前を出すには RPC を通す（返るのは氏名と事業所だけ。migration 225）。 */
+      const { data: candData } = await supabase.rpc('get_sibling_candidates');
+      setSiblingCandidates((candData ?? []) as SiblingCandidate[]);
 
       /* 既存 summary から participations と請求項目の値を取得 */
       const summaryIds = summaries.map((s) => s.id);
@@ -467,9 +482,37 @@ export default function BillingFull({ scope }: Props) {
     return out;
   }, [rows]);
 
-  const siblingLabelById = useMemo(
-    () => new Map(siblingGroups.map((g) => [g.id, g.label])),
-    [siblingGroups],
+  /* きょうだいの表示名。migration 225 でグループ名を廃したので、児童名から組み立てる。
+     候補 RPC はテナント全域なので、別事業所に通うきょうだいも（事業所名付きで）出せる。 */
+  const siblingNamesById = useMemo(() => {
+    const byGroup = new Map<string, SiblingCandidate[]>();
+    for (const c of siblingCandidates) {
+      if (!c.sibling_group_id) continue;
+      if (!byGroup.has(c.sibling_group_id)) byGroup.set(c.sibling_group_id, []);
+      byGroup.get(c.sibling_group_id)!.push(c);
+    }
+    return byGroup;
+  }, [siblingCandidates]);
+
+  /** その児童から見た「他のきょうだい」の表示名（別事業所なら事業所名を添える） */
+  const siblingMatesLabel = useCallback(
+    (groupId: string | null, selfChildId: string) => {
+      if (!groupId) return '';
+      return (siblingNamesById.get(groupId) ?? [])
+        .filter((m) => m.id !== selfChildId)
+        .map((m) => (m.facility_id === facilityId ? m.name : `${m.name}（${m.facility_name}）`))
+        .join('・');
+    },
+    [siblingNamesById, facilityId],
+  );
+
+  /** グループ全体の児童名（きょうだい合計行の見出し用） */
+  const siblingGroupLabel = useCallback(
+    (groupId: string) =>
+      (siblingNamesById.get(groupId) ?? [])
+        .map((m) => (m.facility_id === facilityId ? m.name : `${m.name}（${m.facility_name}）`))
+        .join('・'),
+    [siblingNamesById, facilityId],
   );
   const siblingGroupById = useMemo(
     () => new Map(siblingGroups.map((g) => [g.id, g])),
@@ -830,7 +873,7 @@ export default function BillingFull({ scope }: Props) {
         c?.eventTotal ?? 0,
         ...checkboxFeeItems.map((i) => feeAmountByKey.get(`${r.childId}|${i.id}`) ?? 0),
         c?.totalAmount ?? 0,
-        r.siblingGroupId ? (siblingLabelById.get(r.siblingGroupId) ?? '') : '',
+        siblingMatesLabel(r.siblingGroupId, r.childId),
       ];
       const row = ws.addRow(dataRow);
       row.eachCell((cell, colNum) => {
@@ -844,7 +887,7 @@ export default function BillingFull({ scope }: Props) {
 
       /* 兄弟グループの最終行の直下に小計行 */
       if (r.siblingGroupId && lastRowIdxOfGroup.get(r.siblingGroupId) === idx) {
-        const label = siblingLabelById.get(r.siblingGroupId) ?? '';
+        const label = siblingGroupLabel(r.siblingGroupId);
         const subRow = ws.addRow([
           '', '', '', '', '',
           ...mainFeeItems.map(() => ''),
@@ -1286,7 +1329,7 @@ export default function BillingFull({ scope }: Props) {
                 const prev = idx > 0 ? orderedRows[idx - 1] : null;
                 const isGroupBoundary =
                   prev != null && underElem(prev.child.gradeType) !== underElem(r.child.gradeType);
-                const siblingLabel = r.siblingGroupId ? (siblingLabelById.get(r.siblingGroupId) ?? '') : '';
+                const siblingLabel = siblingMatesLabel(r.siblingGroupId, r.childId);
                 const isLastOfSiblingGroup =
                   r.siblingGroupId != null && lastRowIdxOfGroup.get(r.siblingGroupId) === idx;
                 return (
@@ -1392,6 +1435,7 @@ export default function BillingFull({ scope }: Props) {
                             return (
                               <>
                                 <span aria-hidden="true">👨‍👩‍👧 </span>
+                                {r.siblingGroupId ? `${siblingGroupLabel(r.siblingGroupId)} ` : ''}
                                 きょうだい合計（当事業所分）
                                 {isOther && (
                                   <span style={{ color: 'var(--red)', fontWeight: 700 }}>
