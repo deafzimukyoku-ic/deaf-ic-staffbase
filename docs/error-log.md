@@ -1286,4 +1286,31 @@
 - **関連**: `scripts/resync-kumon-legacy-column.mjs` / `scripts/verify-billing-fee-items.ts` /
   `docs/features/billing-configurable-items.md`
 ---
+## 利用料金表でページ全体が横スクロールし、右側に広大な余白ができる
+
+- **発生日**: 2026-08-08（ユーザー報告「ここ横にスクロールされるの直してほしい」「スクロール増えました」）
+- **発生箇所**: `components/shift/BillingFull.tsx` の表スクロール用 `div.overflow-auto`
+- **エラー内容**: 例外なし。表は内部スクロールしているのに、**`main` 自体も横スクロール**し、
+  右側に何も無い巨大な余白ができる。ボタン行やズレ通知バナーごと横にずれる。
+- **原因**: 入れ子のスクロール領域（`overflow:auto`）のはみ出し量が、
+  Chrome では**祖先の `scrollWidth` に伝播する**。
+  スクローラー自身は正しく clip していた（client 1067 / scroll 2010）にもかかわらず、
+  `main.scrollWidth` が 2034px（client 1137px）に膨らんでいた。
+- **調査で分かったこと（推測を潰した記録）**:
+  - スクローラーの外に幅を持つ要素は **0 件**（DOM 全走査で確認）。負の margin も無関係
+  - `position: sticky` の解除 → 変化なし（2034 のまま）＝ sticky は無関係
+  - table の `min-width` を 0 → 1826。減るが解消せず ＝ min-width も主因ではない
+  - スクローラーに `width:100%` → 変化なし
+  - **スクローラーに `contain: paint` → 2034 → 1137（はみ出しゼロ）** ＝ これが真因
+- **解決方法**: スクローラーに `contain: paint` を当て、塗りと overflow を border box に閉じ込める。
+  ただし**印刷時は表を紙面に流す必要がある**ため `@media screen` 限定にする
+  （`@media print` 側には contain を書かない）。sticky 列・thead は影響を受けない。
+- **再発防止**:
+  - **横に広い表を `overflow:auto` の div に入れるだけでは、祖先の横スクロールは止まらない。**
+    画面内で完結させたいスクロール領域には `contain: paint` を併記する
+  - レイアウト崩れは見た目の推測で直さない。`scrollWidth` / `clientWidth` を要素チェーンで
+    実測し、候補を 1 つずつ潰す（今回は sticky・min-width・負 margin の 3 つが濡れ衣だった）
+  - 印刷に影響する CSS を足すときは `@media screen` / `@media print` の切り分けを必ず確認する
+- **関連**: `components/shift/BillingFull.tsx`（`.billing-scroll`）
+---
 *(以降、新規エラーがあれば追記)*

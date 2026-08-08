@@ -1057,6 +1057,14 @@ export default function BillingFull({ scope }: Props) {
             }
             /* スクリーン表示: 見出し（thead）と先頭3列（# / 市町村 / 氏名）を固定 */
             @media screen {
+              /* 表の横スクロールを this div の中で完結させる。
+                 overflow:auto だけだと Chrome は入れ子スクロール領域のはみ出し量を
+                 祖先 (main) の scrollWidth に伝播させ、**ページ全体が横スクロール**して
+                 右側に広大な余白ができる（2026-08-08 実測: main 1137 → 2034px）。
+                 contain:paint で塗りと overflow を borderbox に閉じ込めると解消する
+                 （実測で 2034 → 1137 = はみ出しゼロ）。sticky 列・thead は影響を受けない。
+                 印刷時は表を紙面に流す必要があるため、この指定は screen 限定にする。 */
+              .billing-print-root .billing-scroll { contain: paint; }
               .billing-grid thead th {
                 position: sticky;
                 top: 0;
@@ -1123,6 +1131,12 @@ export default function BillingFull({ scope }: Props) {
               .billing-print-root[data-density="xs"] td { padding: 5px 1.5px !important; }
               /* ズレ警告の塗りは画面だけ。紙は確定値のみ（インライン style を上書きするため important）*/
               .billing-print-root .billing-drift-cell { background: transparent !important; }
+              /* きょうだいの色分けは紙にも出す（既定では背景が印刷されないため明示する）。
+                 金額の文字も入っているので、白黒印刷でも情報は失われない。 */
+              .billing-print-root .billing-sibling-cell {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
               /* 印刷時もグリッド線を維持（black に切替で印刷時くっきり） */
               .billing-grid th, .billing-grid td { border: 0.5pt solid #000 !important; }
               .billing-grid thead th { border-bottom: 1.2pt solid #000 !important; border-top: 1pt solid #000 !important; }
@@ -1195,7 +1209,7 @@ export default function BillingFull({ scope }: Props) {
         <div className="text-sm" style={{ color: 'var(--ink-3)' }}>児童が登録されていません。</div>
       ) : (
         <div
-          className="overflow-auto rounded border"
+          className="overflow-auto rounded border billing-scroll"
           style={{
             borderColor: 'var(--rule-strong)',
             background: 'var(--white)',
@@ -1378,7 +1392,7 @@ export default function BillingFull({ scope }: Props) {
                           + (billFacId != null && !isOther ? '／請求担当: この事業所' : '');
                         return (
                           <td
-                            className="px-2 py-2 text-right whitespace-nowrap"
+                            className="px-2 py-2 text-right whitespace-nowrap billing-sibling-cell"
                             style={{
                               background: siblingColorById.get(r.siblingGroupId),
                               fontVariantNumeric: 'tabular-nums',
