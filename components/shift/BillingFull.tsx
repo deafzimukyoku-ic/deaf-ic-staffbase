@@ -12,7 +12,11 @@
  *     per_child_monthly      … 児童設定の金額を読み取り専用表示
  * - イベント参加は「保存済みの明示値があればそれ、無ければ利用表の出席実績」で初期化する。
  *   保存済みの値は自動で書き換えず、利用表とズレている場合のみ警告 + 一括で揃えるボタンを出す
- * - 兄弟グループの児童は隣接表示し、グループ直下に「きょうだい小計」行を出す。
+ * - 列順（先方要望 2026-08-08）:
+ *     # / 市町村 / 氏名 / 出席日数 / 利用負担額 / 【常時かかる項目】/ 各イベント /
+ *     参加費合計 / 【チェック型の項目（他施設利用など）】/ 請求額 / 兄弟
+ *   チェック型は「その月だけ発生する追加費用」なので、性質の近い参加費合計の右へ寄せる。
+ * - 兄弟グループの児童は隣接表示し、グループ直下に「きょうだい合計」行を出す。
  *   **各児童の行は個別金額のまま**で、全体合計には児童行のみを足す（小計を足すと二重計上になる）
  * - 参加費合計 (eventTotal) は別列で表示するが、請求額にも含む
  * - 「保存」で billing_summaries + billing_event_participations + billing_summary_fee_amounts を upsert
@@ -387,6 +391,20 @@ export default function BillingFull({ scope }: Props) {
     [feeItemInputs],
   );
 
+  /* 列の配置（先方要望 2026-08-08）:
+       ... / 利用負担額 / 【常時かかる項目】/ 各イベント / 参加費合計 / 【チェック型の項目】/ 請求額 / 兄弟
+     チェック型（他施設利用など）は「その月だけ発生する追加費用」なので、
+     同じ性質の参加費合計の右に寄せる。常時かかる項目（おやつ等・教材印刷代）は従来どおり左側。
+     どちらのグループも display_order 順を保つ。 */
+  const mainFeeItems = useMemo(
+    () => feeItems.filter((i) => i.calc_type !== 'checkbox'),
+    [feeItems],
+  );
+  const checkboxFeeItems = useMemo(
+    () => feeItems.filter((i) => i.calc_type === 'checkbox'),
+    [feeItems],
+  );
+
   /* 行の派生値。請求額の式は computeBillingRow が唯一の定義（UI 側で再実装しない）。
      参加費合計 (eventTotal) は別列「参加費合計」として表示すると同時に、請求額にも含める。 */
   const computed = useMemo(() => {
@@ -575,6 +593,137 @@ export default function BillingFull({ scope }: Props) {
     patchFeeValue(childId, itemId, { checked: !value.checked });
   };
 
+  /* 請求項目セル 1 個分。計算方式ごとに UI を変える。
+     「常時かかる項目」と「チェック型」は表の左右に分かれて描画されるため、
+     同じ見た目・同じ操作になるようここに一本化する（2 箇所に書くとズレる）。
+     調整済みは 色 + ✎ + title の 3 点で示す（色だけで伝えない: CLAUDE.md §9）。 */
+  const renderFeeCell = (r: RowState, item: BillingFeeItemRow) => {
+    const itemInput = feeItemInputById.get(item.id);
+    const value = r.feeValues[item.id] ?? EMPTY_FEE_VALUE;
+    const fee = feeAmountByKey.get(`${r.childId}|${item.id}`) ?? 0;
+    const adjusted = value.amountOverride != null;
+    const autoFee = itemInput ? computeDefaultFeeAmount(itemInput, value, r.attendanceDays) : 0;
+    const hint = adjusted
+      ? `手動調整済み（自動算出は ${fmtYen(autoFee)}）。↺ で自動に戻せます`
+      : item.calc_type === 'per_day'
+        ? `自動算出（出席 ${r.attendanceDays}日 × ${fmtYen(item.unit_amount)}）`
+        : item.calc_type === 'per_child_monthly'
+          ? '児童設定で入力した月額'
+          : item.calc_type === 'checkbox'
+            ? `チェックで ${fmtYen(item.unit_amount)} 加算`
+            : `月額固定 ${fmtYen(item.unit_amount)}`;
+
+    return (
+      <td key={item.id} className="px-2 py-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {item.calc_type === 'per_child_monthly' ? (
+          /* 児童設定が正。ここでは読み取り専用 */
+          <div className="text-right" title={hint}>
+            {fee > 0 ? fmtYen(fee) : ''}
+          </div>
+        ) : item.calc_type === 'checkbox' ? (
+          <>
+            <label className="flex items-center justify-end gap-1 cursor-pointer print-hide" title={hint}>
+              <input
+                type="checkbox"
+                checked={value.checked}
+                onChange={() => handleToggleFeeCheckbox(r.childId, item.id)}
+                aria-label={`${r.childName} の${item.name}`}
+              />
+              <span style={{ fontSize: '0.78rem', color: value.checked ? 'var(--ink)' : 'var(--ink-3)' }}>
+                {value.checked ? fmtYen(fee) : '—'}
+              </span>
+            </label>
+            <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {value.checked ? fmtYen(fee) : ''}
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-end gap-1 print-hide">
+              <button
+                type="button"
+                style={feeBtnStyle}
+                onClick={() => handleStepFee(r.childId, item.id, -1)}
+                aria-label={`${r.childName} の${item.name}を減らす`}
+                title={`${fmtYen(item.step_amount ?? item.unit_amount)} 減らす`}
+              >
+                ▼
+              </button>
+              <span
+                title={hint}
+                style={{
+                  minWidth: '52px',
+                  textAlign: 'right',
+                  fontSize: '0.78rem',
+                  fontVariantNumeric: 'tabular-nums',
+                  color: adjusted ? 'var(--accent)' : 'var(--ink)',
+                  fontWeight: adjusted ? 700 : 400,
+                }}
+              >
+                {adjusted && <span aria-hidden="true">✎</span>}
+                {fmtYen(fee)}
+              </span>
+              <button
+                type="button"
+                style={feeBtnStyle}
+                onClick={() => handleStepFee(r.childId, item.id, 1)}
+                aria-label={`${r.childName} の${item.name}を増やす`}
+                title={`${fmtYen(item.step_amount ?? item.unit_amount)} 増やす`}
+              >
+                ▲
+              </button>
+              {/* 調整時のみ ↺。未調整でも幅を確保して行のガタつきを防ぐ */}
+              {adjusted ? (
+                <button
+                  type="button"
+                  style={{ ...feeBtnStyle, color: 'var(--accent)' }}
+                  onClick={() => handleResetFee(r.childId, item.id)}
+                  aria-label={`${r.childName} の${item.name}を自動算出に戻す`}
+                  title={`自動算出（${fmtYen(autoFee)}）に戻す`}
+                >
+                  ↺
+                </button>
+              ) : (
+                <span style={{ width: '24px', flexShrink: 0 }} aria-hidden="true" />
+              )}
+            </div>
+            {/* 印刷: 操作 UI を消して金額のみ。未調整で 0 円の場合は従来どおり空欄 */}
+            <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {adjusted || fee > 0 ? fmtYen(fee) : ''}
+            </span>
+          </>
+        )}
+      </td>
+    );
+  };
+
+  /* 請求項目の列見出し 1 個分。左右のグループで同じ見た目にするため一本化する。 */
+  const renderFeeHeader = (item: BillingFeeItemRow) => (
+    <th
+      key={item.id}
+      className="px-2 py-2 text-center font-semibold"
+      style={{ width: isFeeOverridable(item.calc_type) ? '130px' : '90px' }}
+      title={
+        item.calc_type === 'per_day' ? `出席日数 × ${fmtYen(item.unit_amount)}（▲▼ で調整可）`
+        : item.calc_type === 'monthly_fixed' ? `月額 ${fmtYen(item.unit_amount)}（▲▼ で調整可）`
+        : item.calc_type === 'checkbox' ? `チェックで ${fmtYen(item.unit_amount)} 加算`
+        : '児童設定で入力した月額'
+      }
+    >
+      <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
+      {item.calc_type === 'per_day' && (
+        <div style={{ fontSize: '0.65rem', color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>
+          {fmtYen(item.unit_amount)}/日
+        </div>
+      )}
+      {item.calc_type === 'checkbox' && (
+        <div style={{ fontSize: '0.65rem', color: item.unit_amount > 0 ? 'var(--ink-3)' : 'var(--red)', whiteSpace: 'nowrap' }}>
+          {item.unit_amount > 0 ? fmtYen(item.unit_amount) : '⚠ 金額未設定'}
+        </div>
+      )}
+    </th>
+  );
+
   const handleToggleEvent = (childId: string, eventId: string) => {
     setRows((prev) =>
       prev.map((r) =>
@@ -602,8 +751,10 @@ export default function BillingFull({ scope }: Props) {
     const sheetName = `${year}年${month}月`;
     const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 4, xSplit: 3 }] });
 
-    const FIXED_LEFT = 6; // # / 市町村 / 氏名 / 兄弟 / 出席日数 / 利用負担額
-    const lastCol = FIXED_LEFT + feeItems.length + events.length + 2;
+    /* 画面と同じ列順:
+       # / 市町村 / 氏名 / 出席日数 / 利用負担額 / 常時項目 / イベント / 参加費合計 / チェック型 / 請求額 / 兄弟 */
+    const FIXED_LEFT = 5; // # / 市町村 / 氏名 / 出席日数 / 利用負担額
+    const lastCol = FIXED_LEFT + mainFeeItems.length + events.length + 1 + checkboxFeeItems.length + 2;
 
     /* タイトル行 */
     ws.mergeCells(1, 1, 1, lastCol);
@@ -621,10 +772,12 @@ export default function BillingFull({ scope }: Props) {
 
     /* ヘッダー (row 3) */
     const headerRow = [
-      '#', '市町村', '氏名', '兄弟', '出席日数', '利用負担額',
-      ...feeItems.map((i) => i.name),
+      '#', '市町村', '氏名', '出席日数', '利用負担額',
+      ...mainFeeItems.map((i) => i.name),
       ...events.map((ev) => `${ev.name} (${format(new Date(ev.date), 'M/d')} ¥${ev.price.toLocaleString('ja-JP')})`),
-      '参加費合計', '請求額',
+      '参加費合計',
+      ...checkboxFeeItems.map((i) => i.name),
+      '請求額', '兄弟',
     ];
     ws.addRow([]);  /* row 2 空 */
     const hRow = ws.addRow(headerRow);
@@ -642,13 +795,15 @@ export default function BillingFull({ scope }: Props) {
     ws.getColumn(1).width = 5;
     ws.getColumn(2).width = 12;
     ws.getColumn(3).width = 18;
-    ws.getColumn(4).width = 10;
-    ws.getColumn(5).width = 9;
-    ws.getColumn(6).width = 12;
-    for (let i = 0; i < feeItems.length; i++) ws.getColumn(FIXED_LEFT + 1 + i).width = 12;
-    for (let i = 0; i < events.length; i++) ws.getColumn(FIXED_LEFT + feeItems.length + 1 + i).width = 14;
-    ws.getColumn(lastCol - 1).width = 12;
-    ws.getColumn(lastCol).width = 14;
+    ws.getColumn(4).width = 9;
+    ws.getColumn(5).width = 12;
+    let col = FIXED_LEFT + 1;
+    for (let i = 0; i < mainFeeItems.length; i++) ws.getColumn(col++).width = 12;
+    for (let i = 0; i < events.length; i++) ws.getColumn(col++).width = 14;
+    ws.getColumn(col++).width = 12;                                          // 参加費合計
+    for (let i = 0; i < checkboxFeeItems.length; i++) ws.getColumn(col++).width = 12;
+    ws.getColumn(col++).width = 14;                                          // 請求額
+    ws.getColumn(col).width = 10;                                            // 兄弟
 
     /* データ行（兄弟小計行を挟みながら） */
     orderedRows.forEach((r, idx) => {
@@ -657,18 +812,20 @@ export default function BillingFull({ scope }: Props) {
         idx + 1,
         r.municipality ?? '',
         r.childName,
-        r.siblingGroupId ? (siblingLabelById.get(r.siblingGroupId) ?? '') : '',
         r.attendanceDays,
         r.copayAmount ?? 0,
-        ...feeItems.map((i) => feeAmountByKey.get(`${r.childId}|${i.id}`) ?? 0),
+        ...mainFeeItems.map((i) => feeAmountByKey.get(`${r.childId}|${i.id}`) ?? 0),
         ...events.map((ev) => (r.participations[ev.id] ? Math.max(0, Math.floor(ev.price)) : 0)),
         c?.eventTotal ?? 0,
+        ...checkboxFeeItems.map((i) => feeAmountByKey.get(`${r.childId}|${i.id}`) ?? 0),
         c?.totalAmount ?? 0,
+        r.siblingGroupId ? (siblingLabelById.get(r.siblingGroupId) ?? '') : '',
       ];
       const row = ws.addRow(dataRow);
       row.eachCell((cell, colNum) => {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        if (colNum >= 5) {
+        /* 数値列は 出席日数(4) 〜 請求額(lastCol-1)。兄弟(lastCol) は文字列なので除く */
+        if (colNum >= 4 && colNum <= lastCol - 1) {
           cell.numFmt = '#,##0';
           cell.alignment = { horizontal: 'right' };
         }
@@ -678,17 +835,19 @@ export default function BillingFull({ scope }: Props) {
       if (r.siblingGroupId && lastRowIdxOfGroup.get(r.siblingGroupId) === idx) {
         const label = siblingLabelById.get(r.siblingGroupId) ?? '';
         const subRow = ws.addRow([
-          '', '', '', label, '', '',
-          ...feeItems.map(() => ''),
+          '', '', '', '', '',
+          ...mainFeeItems.map(() => ''),
           ...events.map(() => ''),
-          'きょうだい小計',
+          '',
+          ...checkboxFeeItems.map(() => ''),
           siblingSubtotals.get(r.siblingGroupId) ?? 0,
+          `${label} きょうだい合計`,
         ]);
         subRow.eachCell((cell, colNum) => {
           cell.font = { bold: true, italic: true };
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF6E3' } };
           cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-          if (colNum === lastCol) {
+          if (colNum === lastCol - 1) {
             cell.numFmt = '#,##0';
             cell.alignment = { horizontal: 'right' };
           }
@@ -698,19 +857,21 @@ export default function BillingFull({ scope }: Props) {
 
     /* 合計行（児童行のみの集計。兄弟小計は含めない） */
     const totalRow = ws.addRow([
-      '', '', '合計', '',
+      '', '', '合計',
       totals.attendanceDays,
       totals.copay,
-      ...feeItems.map((i) => totals.feeTotals[i.id] ?? 0),
+      ...mainFeeItems.map((i) => totals.feeTotals[i.id] ?? 0),
       ...events.map((ev) => totals.eventTotals[ev.id] ?? 0),
       totals.eventGrand,
+      ...checkboxFeeItems.map((i) => totals.feeTotals[i.id] ?? 0),
       totals.grand,
+      '',
     ]);
     totalRow.eachCell((cell, colNum) => {
       cell.font = { bold: true };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
       cell.border = { top: { style: 'medium' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-      if (colNum >= 5) {
+      if (colNum >= 4 && colNum <= lastCol - 1) {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
       }
@@ -843,8 +1004,9 @@ export default function BillingFull({ scope }: Props) {
   }
 
   const dirtyCount = rows.filter((r) => r.dirty).length;
-  /* 固定 6 列 (# / 市町村 / 氏名 / 兄弟 / 出席日数 / 利用負担額) + 動的列 + 参加費合計 + 請求額 */
-  const totalCols = 6 + feeItems.length + events.length + 2;
+  /* # / 市町村 / 氏名 / 出席日数 / 利用負担額 (5) + 請求項目 + イベント
+     + 参加費合計 + 請求額 + 兄弟 (3) */
+  const totalCols = 5 + feeItems.length + events.length + 3;
 
   /* 動的列（請求項目 + イベント）の総数に応じた印刷密度。
      旧実装はイベント数だけで判定していたが、請求項目も列を増やすので合算で見る。 */
@@ -1044,7 +1206,8 @@ export default function BillingFull({ scope }: Props) {
             ref={tableRef}
             className="w-full text-sm billing-grid"
             style={{
-              minWidth: `${730 + feeItems.length * 130 + events.length * 80}px`,
+              /* 固定列の実幅合計: 40+90+140(氏名)+70(出席)+110(負担額)+100(参加費計)+110(請求額)+80(兄弟) */
+              minWidth: `${740 + feeItems.length * 130 + events.length * 80}px`,
               borderCollapse: 'collapse',
               ['--sticky-c2' as string]: `${stickyLeft.c2}px`,
               ['--sticky-c3' as string]: `${stickyLeft.c3}px`,
@@ -1056,34 +1219,9 @@ export default function BillingFull({ scope }: Props) {
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-1" style={{ width: '40px' }}>#</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-2" style={{ width: '90px' }}>市町村</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3" style={{ width: '140px' }}>氏名</th>
-                <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }} title="兄弟グループ。同じグループの児童は隣接表示され、直下に「きょうだい小計」行が出ます">兄弟</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '70px' }}>出席日数</th>
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>利用負担額</th>
-                {feeItems.map((item) => (
-                  <th
-                    key={item.id}
-                    className="px-2 py-2 text-center font-semibold"
-                    style={{ width: isFeeOverridable(item.calc_type) ? '130px' : '90px' }}
-                    title={
-                      item.calc_type === 'per_day' ? `出席日数 × ${fmtYen(item.unit_amount)}（▲▼ で調整可）`
-                      : item.calc_type === 'monthly_fixed' ? `月額 ${fmtYen(item.unit_amount)}（▲▼ で調整可）`
-                      : item.calc_type === 'checkbox' ? `チェックで ${fmtYen(item.unit_amount)} 加算`
-                      : '児童設定で入力した月額'
-                    }
-                  >
-                    <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
-                    {item.calc_type === 'per_day' && (
-                      <div style={{ fontSize: '0.65rem', color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>
-                        {fmtYen(item.unit_amount)}/日
-                      </div>
-                    )}
-                    {item.calc_type === 'checkbox' && (
-                      <div style={{ fontSize: '0.65rem', color: item.unit_amount > 0 ? 'var(--ink-3)' : 'var(--red)', whiteSpace: 'nowrap' }}>
-                        {item.unit_amount > 0 ? fmtYen(item.unit_amount) : '⚠ 金額未設定'}
-                      </div>
-                    )}
-                  </th>
-                ))}
+                {mainFeeItems.map((item) => renderFeeHeader(item))}
                 {events.map((ev) => {
                   /* イベント名が長いと列幅で折り返してしまうので、文字数に応じて自動縮小して 1 行に収める。
                      scaleX 系よりフォントサイズ縮小 + 微妙なトラッキング詰めの方が読みやすい。 */
@@ -1116,7 +1254,16 @@ export default function BillingFull({ scope }: Props) {
                 >
                   参加費合計
                 </th>
+                {/* チェック型（他施設利用など）は「その月だけ発生する追加費用」なので参加費合計の右に置く */}
+                {checkboxFeeItems.map((item) => renderFeeHeader(item))}
                 <th className="px-2 py-2 text-center font-semibold whitespace-nowrap" style={{ width: '110px' }}>請求額</th>
+                <th
+                  className="px-2 py-2 text-center font-semibold whitespace-nowrap"
+                  style={{ width: '80px' }}
+                  title="兄弟グループ。同じグループの児童は隣接表示され、直下に「きょうだい合計」行が出ます"
+                >
+                  兄弟
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1138,9 +1285,6 @@ export default function BillingFull({ scope }: Props) {
                       <td className="px-2 py-2 text-center whitespace-nowrap billing-sticky-col billing-sticky-col-1">{idx + 1}</td>
                       <td className="px-2 py-2 whitespace-nowrap billing-sticky-col billing-sticky-col-2">{r.municipality ?? ''}</td>
                       <td className="px-2 py-2 font-semibold whitespace-nowrap billing-sticky-col billing-sticky-col-3">{r.childName}</td>
-                      <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem', color: 'var(--ink-3)' }}>
-                        {siblingLabel}
-                      </td>
                       <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {r.attendanceDays}
                       </td>
@@ -1166,109 +1310,7 @@ export default function BillingFull({ scope }: Props) {
                         </span>
                       </td>
 
-                      {/* 請求項目セル。計算方式ごとに UI を変える。
-                          調整済みは 色 + ✎ + title の 3 点で示す（色だけで伝えない: CLAUDE.md §9）。 */}
-                      {feeItems.map((item) => {
-                        const itemInput = feeItemInputById.get(item.id);
-                        const value = r.feeValues[item.id] ?? EMPTY_FEE_VALUE;
-                        const fee = feeAmountByKey.get(`${r.childId}|${item.id}`) ?? 0;
-                        const adjusted = value.amountOverride != null;
-                        const autoFee = itemInput
-                          ? computeDefaultFeeAmount(itemInput, value, r.attendanceDays)
-                          : 0;
-                        const hint = adjusted
-                          ? `手動調整済み（自動算出は ${fmtYen(autoFee)}）。↺ で自動に戻せます`
-                          : item.calc_type === 'per_day'
-                            ? `自動算出（出席 ${r.attendanceDays}日 × ${fmtYen(item.unit_amount)}）`
-                            : item.calc_type === 'per_child_monthly'
-                              ? '児童設定で入力した月額'
-                              : item.calc_type === 'checkbox'
-                                ? `チェックで ${fmtYen(item.unit_amount)} 加算`
-                                : `月額固定 ${fmtYen(item.unit_amount)}`;
-
-                        return (
-                          <td key={item.id} className="px-2 py-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {item.calc_type === 'per_child_monthly' ? (
-                              /* 児童設定が正。ここでは読み取り専用 */
-                              <div className="text-right" title={hint}>
-                                {fee > 0 ? fmtYen(fee) : ''}
-                              </div>
-                            ) : item.calc_type === 'checkbox' ? (
-                              <>
-                                <label className="flex items-center justify-end gap-1 cursor-pointer print-hide" title={hint}>
-                                  <input
-                                    type="checkbox"
-                                    checked={value.checked}
-                                    onChange={() => handleToggleFeeCheckbox(r.childId, item.id)}
-                                    aria-label={`${r.childName} の${item.name}`}
-                                  />
-                                  <span style={{ fontSize: '0.78rem', color: value.checked ? 'var(--ink)' : 'var(--ink-3)' }}>
-                                    {value.checked ? fmtYen(fee) : '—'}
-                                  </span>
-                                </label>
-                                <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                  {value.checked ? fmtYen(fee) : ''}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <div className="flex items-center justify-end gap-1 print-hide">
-                                  <button
-                                    type="button"
-                                    style={feeBtnStyle}
-                                    onClick={() => handleStepFee(r.childId, item.id, -1)}
-                                    aria-label={`${r.childName} の${item.name}を減らす`}
-                                    title={`${fmtYen(item.step_amount ?? item.unit_amount)} 減らす`}
-                                  >
-                                    ▼
-                                  </button>
-                                  <span
-                                    title={hint}
-                                    style={{
-                                      minWidth: '52px',
-                                      textAlign: 'right',
-                                      fontSize: '0.78rem',
-                                      fontVariantNumeric: 'tabular-nums',
-                                      color: adjusted ? 'var(--accent)' : 'var(--ink)',
-                                      fontWeight: adjusted ? 700 : 400,
-                                    }}
-                                  >
-                                    {adjusted && <span aria-hidden="true">✎</span>}
-                                    {fmtYen(fee)}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    style={feeBtnStyle}
-                                    onClick={() => handleStepFee(r.childId, item.id, 1)}
-                                    aria-label={`${r.childName} の${item.name}を増やす`}
-                                    title={`${fmtYen(item.step_amount ?? item.unit_amount)} 増やす`}
-                                  >
-                                    ▲
-                                  </button>
-                                  {/* 調整時のみ ↺。未調整でも幅を確保して行のガタつきを防ぐ */}
-                                  {adjusted ? (
-                                    <button
-                                      type="button"
-                                      style={{ ...feeBtnStyle, color: 'var(--accent)' }}
-                                      onClick={() => handleResetFee(r.childId, item.id)}
-                                      aria-label={`${r.childName} の${item.name}を自動算出に戻す`}
-                                      title={`自動算出（${fmtYen(autoFee)}）に戻す`}
-                                    >
-                                      ↺
-                                    </button>
-                                  ) : (
-                                    <span style={{ width: '24px', flexShrink: 0 }} aria-hidden="true" />
-                                  )}
-                                </div>
-                                {/* 印刷: 操作 UI を消して金額のみ。未調整で 0 円の場合は従来どおり空欄 */}
-                                <span className="hidden print:inline" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                  {adjusted || fee > 0 ? fmtYen(fee) : ''}
-                                </span>
-                              </>
-                            )}
-                          </td>
-                        );
-                      })}
+                      {mainFeeItems.map((item) => renderFeeCell(r, item))}
 
                       {events.map((ev) => {
                         const participated = !!r.participations[ev.id];
@@ -1313,8 +1355,12 @@ export default function BillingFull({ scope }: Props) {
                       <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums', background: 'var(--bg)', color: 'var(--ink-3)' }}>
                         {c && c.eventTotal > 0 ? fmtYen(c.eventTotal) : ''}
                       </td>
+                      {checkboxFeeItems.map((item) => renderFeeCell(r, item))}
                       <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {c ? fmtYen(c.totalAmount) : ''}
+                      </td>
+                      <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem', color: 'var(--gold)', fontWeight: siblingLabel ? 700 : 400 }}>
+                        {siblingLabel}
                       </td>
                     </tr>
 
@@ -1324,14 +1370,15 @@ export default function BillingFull({ scope }: Props) {
                         <td className="px-2 py-2 billing-sticky-col billing-sticky-col-1" />
                         <td className="px-2 py-2 billing-sticky-col billing-sticky-col-2" />
                         <td className="px-2 py-2 billing-sticky-col billing-sticky-col-3" />
-                        <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem' }}>
-                          {siblingLabel}
-                        </td>
+                        {/* 請求額の直前まで（出席日数〜チェック型項目）を 1 セルにまとめて見出しにする */}
                         <td className="px-2 py-2 text-right" colSpan={totalCols - 5} style={{ fontSize: '0.8rem' }}>
                           <span aria-hidden="true">👨‍👩‍👧 </span>きょうだい合計
                         </td>
                         <td className="px-2 py-2 text-right font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {fmtYen(siblingSubtotals.get(r.siblingGroupId!) ?? 0)}
+                        </td>
+                        <td className="px-2 py-2 text-center whitespace-nowrap" style={{ fontSize: '0.78rem', color: 'var(--gold)', fontWeight: 700 }}>
+                          {siblingLabel}
                         </td>
                       </tr>
                     )}
@@ -1340,10 +1387,10 @@ export default function BillingFull({ scope }: Props) {
               })}
               {/* 合計行（児童行のみの集計。きょうだい小計は含めない） */}
               <tr className="billing-total-row" style={{ background: 'var(--bg)', fontWeight: 700 }}>
-                <td colSpan={4} className="px-2 py-2 text-right billing-sticky-col billing-sticky-col-1">合計</td>
+                <td colSpan={3} className="px-2 py-2 text-right billing-sticky-col billing-sticky-col-1">合計</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{totals.attendanceDays}</td>
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.copay)}</td>
-                {feeItems.map((item) => (
+                {mainFeeItems.map((item) => (
                   <td key={item.id} className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {fmtYen(totals.feeTotals[item.id] ?? 0)}
                   </td>
@@ -1354,7 +1401,13 @@ export default function BillingFull({ scope }: Props) {
                   </td>
                 ))}
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums', background: 'var(--bg)', color: 'var(--ink-3)' }}>{fmtYen(totals.eventGrand)}</td>
+                {checkboxFeeItems.map((item) => (
+                  <td key={item.id} className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtYen(totals.feeTotals[item.id] ?? 0)}
+                  </td>
+                ))}
                 <td className="px-2 py-2 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtYen(totals.grand)}</td>
+                <td className="px-2 py-2" />
               </tr>
             </tbody>
           </table>
