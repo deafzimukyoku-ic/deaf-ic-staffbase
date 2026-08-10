@@ -200,14 +200,25 @@ export default function ShiftGridFull({
     );
   });
 
-  /* 今日列の自動スクロール */
+  /* 表示位置の初期化。**月が変わったときだけ**走らせる。
+     旧実装は依存が [todayInMonth, today] だったため、保存後の再取得でグリッドが
+     再マウントされるたびに今日の列へ引き戻されていた（先方指摘「月の後半を保存すると
+     1日ふきんに遷移してしまう」の一因）。月を変えていない再描画では位置を動かさない。 */
   const today = todayStr();
   const todayInMonth = dates.some((d) => d.dateStr === today);
   const todayHeaderRef = useRef<HTMLTableCellElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!todayInMonth) return;
-    todayHeaderRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
-  }, [todayInMonth, today]);
+    const el = scrollRef.current;
+    if (!el) return;
+    /* 月替わりは必ず 1日 から見せる（日数の違う月で中途半端な位置に残らないように） */
+    el.scrollLeft = 0;
+    if (todayInMonth) {
+      todayHeaderRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+    /* todayInMonth は year/month から導出されるため依存に含めない（月替わり時に必ず再評価される） */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, month]);
 
   const getDowColor = (dow: number, isHoliday = false) => {
     if (isHoliday || dow === 0) return 'var(--red)';
@@ -222,7 +233,11 @@ export default function ShiftGridFull({
   };
 
   return (
-    <div className="flex-1 overflow-auto border-2 rounded-xl" style={{ borderColor: 'var(--rule)', background: 'var(--white)' }}>
+    <div
+      ref={scrollRef}
+      className="flex-1 min-h-0 overflow-auto border-2 rounded-xl"
+      style={{ borderColor: 'var(--rule)', background: 'var(--white)' }}
+    >
       <table
         className="w-full border-separate border-spacing-0"
         style={{ minWidth: `${dates.length * 56 + 180}px`, fontSize: '0.85rem' }}

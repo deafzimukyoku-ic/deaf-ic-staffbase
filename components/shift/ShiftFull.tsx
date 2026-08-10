@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { format, getDaysInMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -75,6 +75,13 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   const [facilityId] = useShiftFacilityId();
 
   const [loading, setLoading] = useState(true);
+  /* 再取得中フラグ。**初回ロードと再取得を区別する**ための状態。
+     旧実装は再取得のたびに loading=true にしてグリッドを「読み込み中...」に差し替えていたため、
+     セル保存 → fetchAll のたびにグリッドが unmount → 再マウントされ、
+     scrollLeft が 0（=1日）に戻っていた（先方指摘「月の後半を保存すると1日ふきんに遷移」）。
+     再取得ではグリッドを描いたままにして、位置をブラウザに保持させる。 */
+  const [refreshing, setRefreshing] = useState(false);
+  const hasLoadedRef = useRef(false);
   const [error, setError] = useState('');
 
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -163,7 +170,9 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    /* 初回だけ全面「読み込み中...」。以降は控えめな更新中表示に留めてグリッドを保持する */
+    if (hasLoadedRef.current) setRefreshing(true);
+    else setLoading(true);
     setError('');
     try {
       const from = `${monthStr}-01`;
@@ -379,6 +388,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
       setError(e instanceof Error ? e.message : '読み込み失敗');
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      hasLoadedRef.current = true;
     }
   }, [supabase, facilityId, year, month, monthStr]);
 
@@ -869,7 +880,11 @@ export default function ShiftFull({ role }: ShiftFullProps) {
   return (
     // 親レイアウト (admin/manager) の p-6 lg:p-8 を打ち消して縦横をフルに使う
     // シフト表は情報密度が高いので余白を最小限に
-    <div className="flex flex-col h-full overflow-hidden shift-print-root -m-6 lg:-m-8">
+    <div /* 高さは「枠の内側」ではなく「枠の外側（縦パディングぶんを含む）」まで使う。
+             -m-6 / lg:-m-8 で上下パディングの外へ出ている一方、h-full は枠の**内容高さ**しか
+             返さないため、旧実装では下に padding ぶんの死んだ余白が残っていた（先方指摘）。
+             p-6=24px / lg:p-8=32px の上下ぶん (3rem / 4rem) を足して相殺する。 */
+          className="flex flex-col h-[calc(100%+3rem)] lg:h-[calc(100%+4rem)] overflow-hidden shift-print-root -m-6 lg:-m-8">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -1088,7 +1103,10 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         );
       })()}
 
-      <div className="flex-1 overflow-auto px-6 pb-6 pt-0">
+      {/* 縦 flex + min-h-0 で、下のグリッド枠に**残りの高さ**を確定して渡す。
+         こうしないとグリッドが content 高さに伸びきり、横スクロールバーが画面外の
+         最下部へ行き、sticky の日付ヘッダーも効かない（2026-08-09 先方指摘）。 */}
+      <div className="flex-1 min-h-0 overflow-auto px-6 pb-3 pt-0 flex flex-col">
         {/* admin のみ承認キュー表示 */}
         {role === 'admin' && (
           <ApprovalQueueFull
@@ -1128,6 +1146,16 @@ export default function ShiftFull({ role }: ShiftFullProps) {
           </div>
         )}
 
+        {/* 再取得中は控えめに知らせるだけ。グリッドは描いたままにして表示位置を保つ */}
+        {refreshing && (
+          <div
+            className="shrink-0 flex items-center gap-2 px-1 pb-1 text-xs"
+            style={{ color: 'var(--ink-3)' }}
+            role="status"
+          >
+            <span aria-hidden="true">⟳</span> 更新中…
+          </div>
+        )}
         {loading ? (
           <div
             className="h-96 flex items-center justify-center text-sm"
@@ -1138,8 +1166,9 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         ) : (
           /* シフト未生成時は骨格 (職員行+日付ヘッダー) をうっすら描画 + 中央オーバーレイカード。
              生成済 (cells.length > 0) と未生成で UI 差別化を強くするため pointer-events: none で完全に編集不可に。 */
-          <div className="relative flex flex-col h-full min-h-[500px]">
+          <div className="relative flex flex-col flex-1 min-h-0">
             <div
+              className="flex-1 min-h-0 flex flex-col"
               style={{
                 opacity: cells.length === 0 ? 0.28 : 1,
                 pointerEvents: cells.length === 0 ? 'none' : 'auto',

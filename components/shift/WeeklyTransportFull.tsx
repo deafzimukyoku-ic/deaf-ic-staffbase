@@ -278,7 +278,7 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
   return (
     /* 親レイアウト (admin/manager) の p-6 lg:p-8 を打ち消して縦横をフルに使う。
        シフト表 / 利用表 / 送迎表 / 日次出力 と padding を統一。 */
-    <div className="flex flex-col h-full overflow-hidden -m-6 lg:-m-8 weekly-transport-print-root">
+    <div className="flex flex-col h-[calc(100%+3rem)] lg:h-[calc(100%+4rem)] overflow-hidden -m-6 lg:-m-8 weekly-transport-print-root">
       {/* Phase 47 / 52 (rev): 週次送迎表の印刷 CSS。1 週 = A3 縦 1 ページに強制収納。
          7 日 ×（1 見出し + 12 行）= 91 行を A3 縦（420mm）に収める前提で、
          @page 余白・フォント・padding・day-block 間ギャップ・h2 を全圧縮。 */}
@@ -325,7 +325,7 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
         </Button>
       </div>
 
-      <div className="weekly-scroll flex-1 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
+      <div className="weekly-scroll flex-1 min-h-0 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
         {!facilityId && (
           <p className="text-center py-10 text-sm" style={{ color: 'var(--ink-3)' }}>
             ヘッダーから事業所を選択してください。

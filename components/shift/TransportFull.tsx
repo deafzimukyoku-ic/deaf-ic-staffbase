@@ -1018,7 +1018,7 @@ export default function TransportFull({ role }: Props) {
   return (
     /* 親レイアウト (admin/manager) の p-6 lg:p-8 を打ち消して縦横をフルに使う。
        シフト表 / 利用表 と padding を統一。 */
-    <div className="flex flex-col h-full overflow-hidden -m-6 lg:-m-8">
+    <div className="flex flex-col h-[calc(100%+3rem)] lg:h-[calc(100%+4rem)] overflow-hidden -m-6 lg:-m-8">
       <style
         dangerouslySetInnerHTML={{
           __html: `

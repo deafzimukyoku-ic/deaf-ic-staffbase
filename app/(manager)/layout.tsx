@@ -294,7 +294,10 @@ function ModeFab({
     <button
       type="button"
       onClick={onSwitch}
-      className="print-hide fixed bottom-6 right-6 z-50 flex items-center gap-2 h-14 rounded-full bg-brand-ink text-white shadow-lg hover:bg-black transition-all hover:shadow-xl group overflow-hidden whitespace-nowrap pl-3 pr-3 max-w-14 hover:max-w-xs hover:pr-5 duration-300"
+      /* 全画面表示のシフト表 / 利用表などでは、このボタンが表の右下セルに被る。
+         普段は薄くして下のセルを読めるようにし、マウスを乗せる / キーボードで
+         フォーカスしたときだけはっきり出す（先方指摘 2026-08-09）。 */
+      className="print-hide fixed bottom-6 right-6 z-50 flex items-center gap-2 h-14 rounded-full bg-brand-ink text-white shadow-lg hover:bg-black transition-all hover:shadow-xl group overflow-hidden whitespace-nowrap pl-3 pr-3 max-w-14 hover:max-w-xs hover:pr-5 duration-300 opacity-30 hover:opacity-100 focus-visible:opacity-100"
       aria-label={label}
       title={label}
     >
@@ -549,9 +552,18 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto relative">
-          <Breadcrumb />
-          <div className="mx-auto max-w-7xl p-6 lg:p-8 pb-24">
+        {/* main を縦 flex にして、コンテンツ枠に**確定した高さ**を渡す。
+            こうしないと枠が height:auto のままで、画面側の h-full（=height:100%）が解決されず
+            auto に落ちる。その結果 シフト表 / 利用表 / 送迎表 などの全画面表示が
+            画面内に収まらず伸びきり、(a) 横スクロールバーが画面外の最下部に行く
+            (b) sticky の日付ヘッダーが効かない という不具合になっていた（2026-08-09 実測）。
+            min-h-0 を付けるのは、flex アイテムの自動最小サイズで枠が縮まなくなるのを防ぐため。
+            通常の（縦に長い）ページは従来どおり main 側がスクロールする。 */}
+        <main className="flex-1 overflow-y-auto relative flex flex-col">
+          <div className="shrink-0">
+            <Breadcrumb />
+          </div>
+          <div className="mx-auto w-full max-w-7xl p-6 lg:p-8 pb-24 flex-1 min-h-0">
             {children}
           </div>
         </main>

@@ -448,7 +448,7 @@ export default function ScheduleFull({ scope }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden schedule-print-root -m-6 lg:-m-8">
+    <div className="flex flex-col h-[calc(100%+3rem)] lg:h-[calc(100%+4rem)] overflow-hidden schedule-print-root -m-6 lg:-m-8">
       <style
         dangerouslySetInnerHTML={{
           __html: `

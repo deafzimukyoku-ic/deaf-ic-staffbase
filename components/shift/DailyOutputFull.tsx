@@ -576,7 +576,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
   return (
     /* 親レイアウト (admin/manager) の p-6 lg:p-8 を打ち消して縦横をフルに使う。
        シフト表 / 利用表 / 送迎表 と padding を統一。 */
-    <div className="flex flex-col h-full overflow-hidden -m-6 lg:-m-8 daily-output-root">
+    <div className="flex flex-col h-[calc(100%+3rem)] lg:h-[calc(100%+4rem)] overflow-hidden -m-6 lg:-m-8 daily-output-root">
       {/* 印刷用 CSS: 印刷時はサイドバー・ヘッダー・ナビボタン非表示、A3縦に最適化 */}
       <style
         dangerouslySetInnerHTML={{
@@ -684,7 +684,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
         </Button>
       </div>
 
-      <div className="daily-output-body flex-1 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
+      <div className="daily-output-body flex-1 min-h-0 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
         {error && (
           <div
             className="mb-2 px-4 py-2 rounded"
