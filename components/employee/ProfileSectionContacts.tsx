@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,8 +25,20 @@ interface Props {
 }
 
 export function ProfileSectionContacts({ data, onChange, employeeId, customFieldDefs = [] }: Props) {
+  /* 常に「最新の data」に対してマージするための ref。
+     PostalCodeField の住所自動補完（非同期）から update が呼ばれるため、
+     props の `data` を直接使うとレンダー時にキャプチャした古い data を書き戻し、
+     直前に入力した郵便番号の末尾1桁が巻き戻る。
+     詳細と実害の件数は ProfileSection1Basic.tsx の同じ箇所のコメント参照。 */
+  const dataRef = useRef(data);
+  /* レンダー中に ref を書くと React の規約違反（lint も検出する）。
+     commit 後に同期する。住所検索の応答は数百ms後なので、これで十分間に合う。 */
+  useEffect(() => {
+    dataRef.current = data;
+  });
+
   function update<K extends keyof ContactFields>(key: K, value: ContactFields[K]) {
-    onChange({ ...data, [key]: value });
+    onChange({ ...dataRef.current, [key]: value });
   }
 
   return (

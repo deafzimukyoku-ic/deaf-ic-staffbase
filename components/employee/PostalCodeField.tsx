@@ -105,6 +105,18 @@ export function PostalCodeField({
         />
         {looking && <span className="text-xs text-brand-gray">検索中...</span>}
       </div>
+      {/* 桁数不足のまま保存されるのを防ぐ。入力途中に出続けると煩いので、
+          「1桁以上入っているのに 7 桁に満たない」ときだけ出す。 */}
+      {(() => {
+        const d = (value ?? '').replace(/\D/g, '');
+        if (d.length === 0 || d.length === 7) return null;
+        return (
+          <p className="text-xs text-brand-red">
+            <span aria-hidden="true">⚠ </span>
+            郵便番号は7桁です（現在 {d.length} 桁）
+          </p>
+        );
+      })()}
       {error && <p className="text-xs text-brand-red">{error}</p>}
     </div>
   );

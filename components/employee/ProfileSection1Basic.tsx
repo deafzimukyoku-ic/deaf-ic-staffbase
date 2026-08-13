@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,8 +57,22 @@ export function ProfileSection1Basic({ data, onChange, employeeId, showExtended 
     loadMasters();
   }, [supabase]);
 
+  /* 常に「最新の data」に対してマージするための ref。
+     この update は非同期コールバックからも呼ばれる（PostalCodeField の住所自動補完）。
+     props の `data` を直接使うと、レンダー時にキャプチャした**古い data** を書き戻してしまい、
+     fetch 中に更新された他の項目が巻き戻る。
+     実害: 郵便番号を7桁入力 → 住所検索が走る → 0.2秒後の onAddressFound が
+     古い data（郵便番号6桁の状態）で上書きし、**末尾1桁が消えた状態で保存されていた**
+     （2026-08-09 に本人住所23件 / 緊急連絡先1 11件 / 保証人13件で確認）。 */
+  const dataRef = useRef(data);
+  /* レンダー中に ref を書くと React の規約違反（lint も検出する）。
+     commit 後に同期する。住所検索の応答は数百ms後なので、これで十分間に合う。 */
+  useEffect(() => {
+    dataRef.current = data;
+  });
+
   function update<K extends keyof BasicFields>(key: K, value: BasicFields[K]) {
-    onChange({ ...data, [key]: value });
+    onChange({ ...dataRef.current, [key]: value });
   }
 
   const customValues = (data.custom_fields as Record<string, string>) || {};
