@@ -41,6 +41,13 @@ interface Props {
   role: 'admin' | 'manager';
 }
 
+/** 利用表（migration 226）のメモ 1 行分。ラベルは月ごとに変えられるので content と一緒に持つ */
+interface ScheduleNoteLine {
+  rowNo: number;
+  label: string;
+  content: string;
+}
+
 /** YYYY-MM-DD 文字列を返す */
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -115,6 +122,11 @@ export default function DailyReportFull({ role: _role }: Props) {
   const [shifts, setShifts] = useState<ShiftAssignmentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  /* migration 227: 業務日報「活動内容／連絡事項」の日別自由入力。key=YYYY-MM-DD */
+  const [dayNotes, setDayNotes] = useState<Map<string, string>>(new Map());
+  /* migration 226: 利用表のメモ3行を参照表示する（読み取り専用）。key=YYYY-MM-DD */
+  const [scheduleNotes, setScheduleNotes] = useState<Map<string, ScheduleNoteLine[]>>(new Map());
+  const [noteError, setNoteError] = useState('');
 
   const fetchAll = useCallback(async () => {
     if (!facilityId) {
@@ -135,7 +147,7 @@ export default function DailyReportFull({ role: _role }: Props) {
           return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
         });
 
-      const [facRes, childRes, entryRes, shiftRes] = await Promise.all([
+      const [facRes, childRes, entryRes, shiftRes, noteRes, schedNoteRes] = await Promise.all([
         supabase.from('facilities').select('*').eq('id', facilityId).single(),
         supabase.from('children').select('*').eq('facility_id', facilityId),
         supabase
@@ -150,12 +162,28 @@ export default function DailyReportFull({ role: _role }: Props) {
           .eq('facility_id', facilityId)
           .gte('date', dateFrom)
           .lte('date', dateTo),
+        /* migration 227: この画面で編集する日別メモ */
+        supabase
+          .from('daily_report_notes')
+          .select('date, content')
+          .eq('facility_id', facilityId)
+          .gte('date', dateFrom)
+          .lte('date', dateTo),
+        /* migration 226: 利用表のメモ3行（参照表示。ここでは編集しない） */
+        supabase
+          .from('schedule_day_notes')
+          .select('date, row_no, content')
+          .eq('facility_id', facilityId)
+          .gte('date', dateFrom)
+          .lte('date', dateTo),
       ]);
 
       if (facRes.error) throw facRes.error;
       if (childRes.error) throw childRes.error;
       if (entryRes.error) throw entryRes.error;
       if (shiftRes.error) throw shiftRes.error;
+      if (noteRes.error) throw noteRes.error;
+      if (schedNoteRes.error) throw schedNoteRes.error;
 
       setFacility(facRes.data as Facility);
 
@@ -182,12 +210,84 @@ export default function DailyReportFull({ role: _role }: Props) {
       setChildren((childRes.data ?? []) as ChildRow[]);
       setEntries((entryRes.data ?? []) as ScheduleEntryRow[]);
       setShifts((shiftRes.data ?? []) as ShiftAssignmentRow[]);
+
+      /* migration 227: 日別メモ */
+      const noteMap = new Map<string, string>();
+      for (const n of (noteRes.data ?? []) as Array<{ date: string; content: string }>) {
+        noteMap.set(n.date, n.content);
+      }
+      setDayNotes(noteMap);
+
+      /* migration 226: 利用表のメモ3行 + 行ラベル。
+         ラベルは「施設 × 月 × 行番号」なので、期間がまたぐ月をすべて引く。 */
+      const months = Array.from(new Set(listDates(dateFrom, dateTo).map((d) => d.slice(0, 7))));
+      const { data: labelRows } = await supabase
+        .from('schedule_day_note_labels')
+        .select('month, row_no, label')
+        .eq('facility_id', facilityId)
+        .in('month', months);
+      const labelMap = new Map<string, string>();
+      for (const l of (labelRows ?? []) as Array<{ month: string; row_no: number; label: string }>) {
+        labelMap.set(`${l.month}_${l.row_no}`, l.label);
+      }
+      const schedMap = new Map<string, ScheduleNoteLine[]>();
+      for (const n of (schedNoteRes.data ?? []) as Array<{ date: string; row_no: number; content: string }>) {
+        if (!n.content) continue;
+        const arr = schedMap.get(n.date) ?? [];
+        arr.push({
+          rowNo: n.row_no,
+          label: labelMap.get(`${n.date.slice(0, 7)}_${n.row_no}`) || `メモ${n.row_no}`,
+          content: n.content,
+        });
+        schedMap.set(n.date, arr);
+      }
+      schedMap.forEach((arr) => arr.sort((a, b) => a.rowNo - b.rowNo));
+      setScheduleNotes(schedMap);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   }, [facilityId, dateFrom, dateTo, supabase]);
+
+  /* migration 227: 日別メモの保存（blur 時）。空文字は行削除でゴミレコードを残さない。
+     利用表・シフト表のメモ行と同じ「非制御 input + onBlur 保存」方式に揃えている。 */
+  const handleDayNoteSave = useCallback(
+    async (date: string, text: string) => {
+      if (!facilityId || !facility) return;
+      const content = text.trim();
+      const prev = dayNotes.get(date) ?? '';
+      if (content === prev) return;
+      try {
+        if (!content) {
+          const { error: e } = await supabase
+            .from('daily_report_notes')
+            .delete()
+            .eq('facility_id', facilityId)
+            .eq('date', date);
+          if (e) throw new Error(e.message);
+          setDayNotes((p) => {
+            const m = new Map(p);
+            m.delete(date);
+            return m;
+          });
+        } else {
+          const { error: e } = await supabase.from('daily_report_notes').upsert(
+            { tenant_id: facility.tenant_id, facility_id: facilityId, date, content },
+            { onConflict: 'tenant_id,facility_id,date' }
+          );
+          if (e) throw new Error(e.message);
+          setDayNotes((p) => new Map(p).set(date, content));
+        }
+        setNoteError('');
+      } catch (e) {
+        /* この画面はトースト基盤を持たないので、操作バーにインラインで出す
+           （保存できていないのに気づかず印刷される事故を防ぐ） */
+        setNoteError(`活動内容の保存に失敗しました: ${e instanceof Error ? e.message : '不明なエラー'}`);
+      }
+    },
+    [supabase, facilityId, facility, dayNotes]
+  );
 
   useEffect(() => {
     fetchAll();
@@ -449,7 +549,14 @@ export default function DailyReportFull({ role: _role }: Props) {
     ah.getCell(1).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     ah.height = 20;
 
-    const actBodyRowNum = ws.addRow([facility?.daily_report_template ?? ' ']).number;
+    /* 画面の枠と同じ 3 段（定型文 / 利用表メモ / 日別自由入力）を 1 セルに結合して出す。
+       Excel でも紙と同じ内容になるようにする（片方だけ欠けると突き合わせができない）。 */
+    const actParts = [
+      facility?.daily_report_template ?? '',
+      ...(scheduleNotes.get(day.date) ?? []).map((n) => `${n.label}: ${n.content}`),
+      dayNotes.get(day.date) ?? '',
+    ].filter((v) => v && v.trim());
+    const actBodyRowNum = ws.addRow([actParts.join('\n') || ' ']).number;
     ws.mergeCells(actBodyRowNum, 1, actBodyRowNum, 6);
     const ab = ws.getRow(actBodyRowNum);
     ab.getCell(1).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
@@ -467,7 +574,7 @@ export default function DailyReportFull({ role: _role }: Props) {
     };
 
     return await wb.xlsx.writeBuffer() as ArrayBuffer;
-  }, [facility, facilityDisplayName, facilityHasPreschool]);
+  }, [facility, facilityDisplayName, facilityHasPreschool, scheduleNotes, dayNotes]);
 
   /* 期間内の全日について .xlsx を生成し JSZip で一括 .zip ダウンロード。
      ファイル名は ZIP 内が `YYYY-MM-DD_業務日報.xlsx`（日付ソート用に先頭に日付）、
@@ -536,6 +643,17 @@ export default function DailyReportFull({ role: _role }: Props) {
       {loading && <p className="p-8 text-center text-sm text-brand-gray-light">読み込み中...</p>}
       {error && <p className="p-8 text-center text-sm text-brand-red">エラー: {error}</p>}
 
+      {/* 保存失敗はページ全体を差し替えず、印刷前に気づけるよう上部に固定表示する。
+         ろう者向け納品のため音は使わず、色 + アイコン + 日本語文言で示す（CLAUDE.md §9）。 */}
+      {noteError && (
+        <p
+          className="no-print mx-4 mt-2 rounded border border-brand-red/40 bg-brand-red/5 px-3 py-2 text-sm text-brand-red"
+          role="alert"
+        >
+          ⚠ {noteError}
+        </p>
+      )}
+
       {!loading && !error && dates.length === 0 && (
         <p className="p-8 text-center text-sm text-brand-gray-light">期間が不正です。</p>
       )}
@@ -559,7 +677,13 @@ export default function DailyReportFull({ role: _role }: Props) {
 
             <StaffTable rows={day.staffRows} />
 
-            <ActivityBox template={facility?.daily_report_template ?? ''} />
+            <ActivityBox
+              date={day.date}
+              template={facility?.daily_report_template ?? ''}
+              scheduleNotes={scheduleNotes.get(day.date) ?? []}
+              note={dayNotes.get(day.date) ?? ''}
+              onNoteSave={handleDayNoteSave}
+            />
           </section>
         ))}
       </div>
@@ -580,6 +704,20 @@ export default function DailyReportFull({ role: _role }: Props) {
           /* 親レイアウト由来の sidebar / header を消す（既存の他出力と同じ手法） */
           aside, header[class*="sticky"], nav {
             display: none !important;
+          }
+          /* 親レイアウトのコンテンツ枠 (.app-content-frame = mx-auto p-6 lg:p-8 pb-24) の
+             余白を紙では完全に消す。
+             これが残ると「.report-page の 194mm + 左右 padding 24px」が印刷可能幅 194mm
+             (A4 210mm − @page margin 8mm × 2) を超え、Chrome がページ全体を縮小して
+             『少し小さくて余白が広い』レイアウトになる（2026-09-08 先方報告）。
+             シフト表・利用表などは画面側の -m-6 lg:-m-8 で相殺しているが、業務日報は
+             A4 用紙を中央寄せする画面なので負マージンを使えず、印刷時のみここで打ち消す。
+             この style ブロックは業務日報を表示している間しか挿入されないため、
+             他画面の印刷レイアウトには影響しない。 */
+          .app-content-frame {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: none !important;
           }
         }
 
@@ -633,6 +771,12 @@ export default function DailyReportFull({ role: _role }: Props) {
             font-size: 11px;
             line-height: 1.55;
           }
+          /* 入力欄は紙に出さない。値は .activity-print-note（print-only の div）で印字する。
+             textarea をそのまま印刷すると、入力欄の高さを超えた行が切れてしまうため。 */
+          .activity-print-note {
+            white-space: pre-line;
+            margin-top: 4px;
+          }
         }
 
         .report-title {
@@ -685,6 +829,43 @@ export default function DailyReportFull({ role: _role }: Props) {
           white-space: pre-line;
           line-height: 1.7;
           min-height: 60mm;
+          /* 定型文 / 利用表メモ / 自由入力欄 を縦に積み、入力欄が残りの高さを吸う */
+          display: flex;
+          flex-direction: column;
+        }
+        /* 利用表（migration 226）から持ってきたメモ。編集はできないので出典が分かるよう左罫線で区切る */
+        .activity-schedule-notes {
+          margin: 4px 0;
+          padding-left: 6px;
+          border-left: 2px solid #ccc;
+        }
+        .activity-schedule-note {
+          display: flex;
+          gap: 6px;
+          align-items: baseline;
+        }
+        .activity-note-label {
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .activity-note-label::after { content: ':'; }
+        /* 自由入力欄。枠の残りいっぱいまで広げて、日報の白紙部分をそのまま入力領域にする */
+        .activity-input {
+          flex: 1;
+          width: 100%;
+          min-height: 24mm;
+          margin-top: 4px;
+          border: none;
+          outline: none;
+          resize: vertical;
+          background: transparent;
+          font: inherit;
+          line-height: inherit;
+          color: inherit;
+          padding: 0;
+        }
+        .activity-input:focus {
+          background: rgba(65, 105, 225, 0.06);
         }
         .activity-box-title {
           text-align: center;
@@ -882,12 +1063,50 @@ function StaffTable({ rows }: { rows: { staff: StaffRow; time: string; displayOr
   );
 }
 
-/* ========== 活動内容/連絡事項枠 ========== */
-function ActivityBox({ template }: { template: string }) {
+/* ========== 活動内容/連絡事項枠 ==========
+   3 段構成:
+     1. template      … 事業所共通の定型文（facilities.daily_report_template / migration 121）
+     2. scheduleNotes … 利用表のメモ3行の参照表示（migration 226・ここでは編集しない）
+     3. note          … この日の自由入力（migration 227・ここで編集して保存する）
+   印刷では textarea をそのまま出すと入力欄の高さを超えた分が切れるため、
+   画面用 textarea (.no-print) と印刷用 div (.print-only) を出し分ける。 */
+function ActivityBox({
+  date,
+  template,
+  scheduleNotes,
+  note,
+  onNoteSave,
+}: {
+  date: string;
+  template: string;
+  scheduleNotes: ScheduleNoteLine[];
+  note: string;
+  onNoteSave: (date: string, text: string) => void;
+}) {
   return (
     <div className="activity-box">
       <div className="activity-box-title">活動内容／連絡事項</div>
-      {template || ' '}
+      {template && <div className="activity-template">{template}</div>}
+      {scheduleNotes.length > 0 && (
+        <div className="activity-schedule-notes">
+          {scheduleNotes.map((n) => (
+            <div key={n.rowNo} className="activity-schedule-note">
+              <span className="activity-note-label">{n.label}</span>
+              <span>{n.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <textarea
+        /* 非制御。key に保存値を含めて、再取得で値が変わったときだけ remount して同期する */
+        key={`${date}_${note}`}
+        defaultValue={note}
+        onBlur={(e) => onNoteSave(date, e.currentTarget.value)}
+        className="activity-input no-print"
+        placeholder="この日の活動内容・連絡事項を入力（入力欄から離れると自動保存）"
+        aria-label={`${date} の活動内容・連絡事項`}
+      />
+      <div className="activity-print-note print-only">{note}</div>
     </div>
   );
 }

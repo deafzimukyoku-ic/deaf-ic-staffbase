@@ -1209,7 +1209,7 @@ export default function BillingFull({ scope }: Props) {
         <div className="text-sm" style={{ color: 'var(--ink-3)' }}>児童が登録されていません。</div>
       ) : (
         <div
-          className="overflow-auto rounded border billing-scroll"
+          className="grid-scroll overflow-auto rounded border billing-scroll"
           style={{
             borderColor: 'var(--rule-strong)',
             background: 'var(--white)',

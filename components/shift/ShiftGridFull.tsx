@@ -235,7 +235,7 @@ export default function ShiftGridFull({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 min-h-0 overflow-auto border-2 rounded-xl"
+      className="grid-scroll flex-1 min-h-0 overflow-auto border-2 rounded-xl"
       style={{ borderColor: 'var(--rule)', background: 'var(--white)' }}
     >
       <table

@@ -325,7 +325,7 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
         </Button>
       </div>
 
-      <div className="weekly-scroll flex-1 min-h-0 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
+      <div className="grid-scroll weekly-scroll flex-1 min-h-0 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
         {!facilityId && (
           <p className="text-center py-10 text-sm" style={{ color: 'var(--ink-3)' }}>
             ヘッダーから事業所を選択してください。

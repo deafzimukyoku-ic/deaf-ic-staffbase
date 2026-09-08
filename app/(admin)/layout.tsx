@@ -11,6 +11,7 @@ import { Breadcrumb } from '@/components/admin/Breadcrumb';
 import { Logo } from '@/components/branding/Logo';
 import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { useShiftFacilityId, setStoredFacilityId } from '@/lib/shift-facility';
+import { isFullBleedRoute } from '@/lib/layout/full-bleed-routes';
 import type { Facility } from '@/lib/types';
 
 type Mode = 'staff' | 'shift';
@@ -561,7 +562,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="shrink-0">
             <Breadcrumb />
           </div>
-          <div className="mx-auto w-full max-w-7xl p-6 lg:p-8 pb-24 flex-1 min-h-0">
+          <div
+            /* app-content-frame: 各画面の印刷 CSS から枠の余白を打ち消すためのフック */
+            className={`app-content-frame mx-auto w-full p-6 lg:p-8 pb-24 flex-1 min-h-0 ${
+              /* 横に長い表・帳票の画面だけ 1280px の上限を外す（左右に余白が出ないように）。
+                 判定は lib/layout/full-bleed-routes.ts に集約。 */
+              isFullBleedRoute(pathname) ? 'max-w-none' : 'max-w-7xl'
+            }`}
+          >
             {children}
           </div>
         </main>

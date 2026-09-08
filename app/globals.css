@@ -249,6 +249,38 @@
   background: rgba(90, 90, 85, 0.55);
 }
 
+/* 表・帳票のスクロール枠専用: 縦横とも太めで掴みやすくする（利用表 / シフト表 / 送迎表 /
+   利用料金表 / 週次送迎 / 日次出力）。
+   グローバル既定は width しか指定していないため、縦 5px に対し横は Chrome 既定の 15px という
+   バラバラな太さになっていた（2026-09-08 実測）。ここでは height も明示して縦横を揃える。
+
+   Chrome は同じ要素に scrollbar-width / scrollbar-color が指定されていると
+   ::-webkit-scrollbar 系の指定を**まるごと無視**して標準スクロールバー（=15px）を描く。
+   実測で確認済み（webkit のみ → 12px / scrollbar-width 併記 → 15px）。
+   そのため標準プロパティはあえて書かない。Firefox は既定の auto（十分太い）のままになる。 */
+.grid-scroll::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.grid-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.grid-scroll::-webkit-scrollbar-thumb {
+  background: rgba(90, 90, 85, 0.4);
+  border-radius: 6px;
+  /* 枠線ぶんの余白を作り、細く見せずに角丸を保つ */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.grid-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(90, 90, 85, 0.6);
+  background-clip: content-box;
+}
+/* 縦横のバーが交わる角。既定のグレーが出ると表の枠線と干渉するため透明にする */
+.grid-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* =====================================================================
    印刷共通スタイル（shift-puzzle Phase 47 を deaf-ic 化）
    - サイドバー・ヘッダー・印刷ボタン等を非表示

@@ -12,6 +12,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, getDaysInMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 import Button from '@/components/shift-compat/Button';
 import Modal from '@/components/shift-compat/Modal';
 import { GRADE_LABELS } from '@/lib/shift-utils';
@@ -103,6 +104,13 @@ export default function ScheduleFull({ scope }: Props) {
   // ペースト（コピペ取り込み）モーダル
   const [excelModalOpen, setExcelModalOpen] = useState(false);
 
+  /* migration 226: 日別メモ3行 + 行名称ラベル。保存先は利用表専用の
+     schedule_day_notes / schedule_day_note_labels。
+     シフト表（shift_day_notes / 219・220）とは**独立**で、同じ日でも別々の内容を書ける
+     （先方指示 2026-09-08「利用表の自由入力3行はシフトとは別で入力可能に」）。 */
+  const [dayNotes, setDayNotes] = useState<Map<string, string>>(new Map());
+  const [dayNoteLabels, setDayNoteLabels] = useState<Map<number, string>>(new Map());
+
   // セル編集モーダル
   const [selectedCell, setSelectedCell] = useState<{ childId: string; date: string } | null>(null);
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>('planned');
@@ -135,6 +143,9 @@ export default function ScheduleFull({ scope }: Props) {
        fallback は削除した。 */
   }, [supabase, scope, shiftFacilityId, setShiftFacilityId]);
 
+  /** 'YYYY-MM'。メモ行ラベルのキー（施設×月×行）に使う */
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+
   const fetchAll = useCallback(async () => {
     if (!me || !selectedFacilityId) return;
     setLoading(true);
@@ -162,6 +173,30 @@ export default function ScheduleFull({ scope }: Props) {
         .lte('date', to);
       const entries = ((entriesData ?? []) as ScheduleEntryRow[]);
 
+      // migration 226: 日別メモ3行 + 行名称ラベル（施設×月）。利用表専用テーブル
+      const { data: noteRows } = await supabase
+        .from('schedule_day_notes')
+        .select('date, row_no, content')
+        .eq('facility_id', selectedFacilityId)
+        .gte('date', from)
+        .lte('date', to);
+      const notesMap = new Map<string, string>();
+      for (const n of (noteRows ?? []) as Array<{ date: string; row_no: number; content: string }>) {
+        notesMap.set(`${n.date}_${n.row_no}`, n.content);
+      }
+      setDayNotes(notesMap);
+
+      const { data: labelRows } = await supabase
+        .from('schedule_day_note_labels')
+        .select('row_no, label')
+        .eq('facility_id', selectedFacilityId)
+        .eq('month', monthStr);
+      const labelsMap = new Map<number, string>();
+      for (const l of (labelRows ?? []) as Array<{ row_no: number; label: string }>) {
+        labelsMap.set(l.row_no, l.label);
+      }
+      setDayNoteLabels(labelsMap);
+
       setChildren(ch);
       setRawEntries(entries);
       setCells(
@@ -183,7 +218,77 @@ export default function ScheduleFull({ scope }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [supabase, me, selectedFacilityId, year, month]);
+  }, [supabase, me, selectedFacilityId, year, month, monthStr]);
+
+  /* migration 226: 日別メモの保存（blur 時）。空文字は行削除でゴミレコードを残さない。
+     実装はシフト表 ShiftFull と同型だが、保存先テーブルは利用表専用のもの。 */
+  const handleDayNoteSave = useCallback(
+    async (date: string, rowNo: 1 | 2 | 3, text: string) => {
+      if (!selectedFacilityId || !me) return;
+      const content = text.trim().slice(0, 50);
+      const key = `${date}_${rowNo}`;
+      try {
+        if (!content) {
+          const { error: e } = await supabase
+            .from('schedule_day_notes')
+            .delete()
+            .eq('facility_id', selectedFacilityId)
+            .eq('date', date)
+            .eq('row_no', rowNo);
+          if (e) throw new Error(e.message);
+          setDayNotes((prev) => {
+            const m = new Map(prev);
+            m.delete(key);
+            return m;
+          });
+        } else {
+          const { error: e } = await supabase.from('schedule_day_notes').upsert(
+            { tenant_id: me.tenant_id, facility_id: selectedFacilityId, date, row_no: rowNo, content },
+            { onConflict: 'tenant_id,facility_id,date,row_no' }
+          );
+          if (e) throw new Error(e.message);
+          setDayNotes((prev) => new Map(prev).set(key, content));
+        }
+      } catch (e) {
+        toast.error(`メモの保存に失敗しました: ${e instanceof Error ? e.message : '不明なエラー'}`);
+      }
+    },
+    [supabase, selectedFacilityId, me]
+  );
+
+  /* migration 226: メモ行名称の保存（施設×月×行）。空文字は削除して「メモN」表示に戻す */
+  const handleDayNoteLabelSave = useCallback(
+    async (rowNo: 1 | 2 | 3, text: string) => {
+      if (!selectedFacilityId || !me) return;
+      const label = text.trim().slice(0, 20);
+      try {
+        if (!label) {
+          const { error: e } = await supabase
+            .from('schedule_day_note_labels')
+            .delete()
+            .eq('facility_id', selectedFacilityId)
+            .eq('month', monthStr)
+            .eq('row_no', rowNo);
+          if (e) throw new Error(e.message);
+          setDayNoteLabels((prev) => {
+            const m = new Map(prev);
+            m.delete(rowNo);
+            return m;
+          });
+        } else {
+          const { error: e } = await supabase.from('schedule_day_note_labels').upsert(
+            { tenant_id: me.tenant_id, facility_id: selectedFacilityId, month: monthStr, row_no: rowNo, label },
+            { onConflict: 'tenant_id,facility_id,month,row_no' }
+          );
+          if (e) throw new Error(e.message);
+          setDayNoteLabels((prev) => new Map(prev).set(rowNo, label));
+        }
+      } catch (e) {
+        toast.error(`メモ名称の保存に失敗しました: ${e instanceof Error ? e.message : '不明なエラー'}`);
+      }
+    },
+    [supabase, selectedFacilityId, me, monthStr]
+  );
 
   useEffect(() => { loadBasics().then(() => setLoading(false)); }, [loadBasics]);
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -459,11 +564,28 @@ export default function ScheduleFull({ scope }: Props) {
               .schedule-print-root table { font-size: 6.5pt !important; width: 100% !important; min-width: 0 !important; table-layout: fixed !important; border-collapse: collapse !important; }
               .schedule-print-root table, .schedule-print-root thead, .schedule-print-root tbody, .schedule-print-root tr { page-break-inside: avoid !important; break-inside: avoid !important; }
               .schedule-print-root th, .schedule-print-root td { min-width: 0 !important; padding: 0 1px !important; font-size: 6.5pt !important; line-height: 1.05 !important; overflow: hidden; }
-              .schedule-print-root tbody td:first-child > div:nth-child(2) { display: none !important; }
+              /* 紙では学年バッジを落として氏名列を詰める（出席数は残す）。
+                 セル構造を「氏名+学年バッジ / 出席数」の2行に変えたため、
+                 旧セレクタ（td:first-child > div:nth-child(2)）では当たらなくなった */
+              .schedule-print-root .schedule-grade-badge { display: none !important; }
               .schedule-print-root tbody td .flex.flex-col { flex-direction: row !important; flex-wrap: wrap !important; gap: 0 4px !important; line-height: 1.0 !important; }
               .schedule-print-root tbody td .flex.flex-col > span { white-space: nowrap !important; font-size: 6pt !important; }
-              .schedule-print-root thead th > div:first-child, .schedule-print-root thead th > div:last-child { display: none !important; }
+              /* 日付ヘッダは「曜日 / 日 / 人数」の3行。紙では日だけ残す（月は表題に出る）。
+                 :last-child だと人数行が無い日に日付そのものが消えるため nth-child で固定する */
+              .schedule-print-root thead th > div:nth-child(1),
+              .schedule-print-root thead th > div:nth-child(3) { display: none !important; }
               .schedule-print-root tbody tr { height: 16px !important; }
+              /* 日別メモ3行: 画面用 input をそのまま印字（値は印刷される）。枠や余白は消す。
+                 行名称の input も同様（左端セル）。シフト表 ShiftFull の印刷 CSS と同型 */
+              .schedule-print-root .day-note-input,
+              .schedule-print-root tbody input[type="text"] {
+                border: none !important;
+                background: transparent !important;
+                font-size: 6pt !important;
+                padding: 0 1px !important;
+                width: 100% !important;
+                color: #000 !important;
+              }
               .schedule-print-root thead th:first-child, .schedule-print-root tbody td:first-child { width: 60px !important; min-width: 60px !important; padding: 0 3px !important; }
               .schedule-print-title { display: block !important; font-size: 11pt; font-weight: 700; margin-bottom: 2mm; }
             }
@@ -590,6 +712,10 @@ export default function ScheduleFull({ scope }: Props) {
               children={childrenForGrid}
               cells={cells}
               onCellClick={handleCellClick}
+              dayNotes={dayNotes}
+              onDayNoteSave={handleDayNoteSave}
+              dayNoteLabels={dayNoteLabels}
+              onDayNoteLabelSave={handleDayNoteLabelSave}
             />
           </div>
         )}

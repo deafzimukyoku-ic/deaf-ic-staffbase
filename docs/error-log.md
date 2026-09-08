@@ -5,6 +5,98 @@
 
 ---
 
+## 業務日報の印刷が縮小されてレイアウトが崩れる（親レイアウトの padding が紙に残る）
+
+- **発生日**: 2026-09-08（先方報告「業務日報の印刷が若干レイアウト崩れています」）
+- **発生箇所**: `components/shift/DailyReportFull.tsx` の `@media print` / `(admin)`・`(manager)` layout のコンテンツ枠
+- **エラー内容**: 印刷プレビューで全体が少し小さく描画され、左右の余白が想定（8mm）より広い。
+  用紙下部にも余白が残り、活動内容枠がページ下端まで届かない。
+- **原因**: 親レイアウトのコンテンツ枠 `mx-auto w-full max-w-* p-6 lg:p-8 pb-24` の
+  **左右パディングが印刷時にも残っていた**。`.report-page` は `width: 194mm` 固定
+  （A4 210mm − `@page margin: 8mm` × 2 ＝ 印刷可能幅ぴったり）なので、
+  そこに枠の padding が加わると印刷可能幅を超え、**Chrome がページ全体を縮小して収める**。
+  シフト表・利用表・送迎表は画面側の `-m-6 lg:-m-8` で相殺していたが、業務日報は
+  A4 用紙を中央寄せする画面なので負マージンを使っておらず、この打ち消しが無かった。
+- **解決方法**: 両 layout のコンテンツ枠に `app-content-frame` クラスを付け、
+  業務日報の `@media print` 内で `padding: 0 / margin: 0 / max-width: none` を `!important` で当てる。
+  `<style jsx global>` は業務日報を表示している間しか挿入されないので他画面に影響しない。
+- **再発防止**:
+  - **mm 単位の固定幅で用紙を作る画面は、祖先の padding / max-width を印刷時に必ず打ち消す**。
+    「`@page` の margin だけ合わせれば良い」は誤り。
+  - 印刷レイアウトは目視やスクリーンショットではなく、Playwright の
+    `page.emulateMedia({ media: 'print' })` + `getBoundingClientRect()` で**必要幅を実測**して確認する。
+    今回は screen 210.9mm（超過）→ print 194mm（ぴったり）を数値で確認した。
+
+---
+
+## `set_updated_at` トリガの検証で「発火していない」と誤診した（now() はトランザクション開始時刻）
+
+- **発生日**: 2026-09-08
+- **発生箇所**: `scripts/apply-migration-227.mjs` の検証パート
+- **エラー内容**: BEGIN 〜 ROLLBACK の中で upsert を 2 回実行し `updated_at` を比較したが値が同じで、
+  「updated_at トリガが発火していない」と判定された。
+- **原因**: `public.set_updated_at()` は `NEW.updated_at = now()` を入れる。
+  **Postgres の `now()` はトランザクション開始時刻**を返すため、同一トランザクション内で何回書いても同じ値になる。
+  トリガは正常に動いていた。次に「過去日時を書いてから UPDATE して前進を見る」方式に変えたが、
+  **その過去日時の書き込み自体もトリガに上書きされる**ため、やはり差が出ず二重に誤診した。
+- **解決方法**: 「`updated_at` に `2000-01-01` を明示指定して UPDATE し、
+  戻り値が 2000 年でない（＝トリガが `now()` で握りつぶした）こと」で判定する形に変更。
+- **再発防止**:
+  - 同一トランザクション内で `now()` ベースの値の**前進**を期待しない。
+    経過時間が要るなら `clock_timestamp()`、あるいは「明示値が上書きされるか」で見る。
+  - 検証が落ちたとき、まず**検証コードの前提**を疑う。今回はマイグレーション自体は正しかった。
+
+---
+
+## Chrome で `::-webkit-scrollbar` のサイズ指定が効かない（`scrollbar-width` 併記が原因）
+
+- **発生日**: 2026-09-08
+- **発生箇所**: `app/globals.css` の `.grid-scroll`（利用表・シフト表・送迎表・利用料金表ほかのスクロール枠）
+- **エラー内容**: `.grid-scroll::-webkit-scrollbar { width:12px; height:12px }` を書いたのに、
+  実測すると縦横とも **15px**（Chrome 既定）のままだった。
+- **原因**: 同じ要素に標準プロパティ `scrollbar-width: auto` / `scrollbar-color: …` を併記していた。
+  **Chrome は標準プロパティが指定されていると `::-webkit-scrollbar` 系の指定をまるごと無視し、
+  標準スクロールバーを描く。** localhost:6001 での実測:
+  | 指定 | 縦 | 横 |
+  |---|---|---|
+  | 何もなし（グローバルの 5px のみ） | 4px | 15px |
+  | `::-webkit-scrollbar{width:12px;height:12px}` のみ | 12px | 12px |
+  | 上記 + `scrollbar-width` / `scrollbar-color` | 15px | 15px |
+- **解決方法**: `.grid-scroll` から標準プロパティを削除し、webkit 指定のみにした。
+- **再発防止**:
+  - スクロールバーの太さを webkit 疑似要素で決める要素には、`scrollbar-width` / `scrollbar-color` を書かない（併記＝無効化）。
+  - 「CSS を書いたから効いているはず」で終えず、`offsetWidth - clientWidth`（枠線ぶんを引く）で**実測**して確認する。
+  - 既存の `.sidebar-scroll` も同じ理由で webkit 8px が効かず標準の 10px になっている（今回は無変更）。
+
+---
+
+## 利用表だけ祝日を判定しておらず、同じ画面のモーダルと基準が食い違っていた
+
+- **発生日**: 2026-09-08（先方指摘「利用表とシフトのページの日付表示ロジックが違う」から調査）
+- **発生箇所**: `components/shift/ScheduleGridFull.tsx` の日付ヘッダ（`営 / 休` 表示・曜日色）
+- **エラー内容**: 2 件。
+  1. `営/休` を `dow === 0 || dow === 6` だけで判定しており、祝日が「営」のままだった
+     （例: 2026-09-21 敬老の日 / 09-22 休日 / 09-23 秋分の日）。グリッド系コンポーネントのうち
+     `isJpHoliday` を使っていないのは `ScheduleGridFull` だけだった。
+     しかも**同じ利用表**のセル編集モーダルは `inferChildDefaultTimes` → `isWeekendOrHoliday`（土日祝）で
+     初期時刻を出しており、1 画面の中で基準が矛盾していた。
+  2. 曜日色（日曜=赤 / 土曜=青）が**一度も適用されていなかった**。ヘッダ `th` の style が
+     `...getDowStyle(d.dow), color: isTodayCol ? 'var(--accent)' : undefined,` の順で、
+     **オブジェクトリテラルは値が `undefined` でも後勝ちでキーを上書きする**ため、
+     スプレッドで入れた色が毎回潰されていた。
+- **原因**: 1 は移植時に祝日対応が入らなかったもの。2 は「`undefined` を入れれば無指定になる」という
+  React の style 適用挙動（`undefined` はスタイルとして出力されない）と、
+  **JS オブジェクトのキー上書き**（こちらは値に関係なく上書きされる）を混同していた。
+- **解決方法**: `isWeekendOrHoliday()` に統一し祝日を「休」＋赤字＋`title` に祝日名。
+  色は `...(isTodayCol ? { color: 'var(--accent)' } : {})` の条件スプレッドに変更。
+- **再発防止**:
+  - 日付の「営業日 / 休業日」判定は必ず `lib/logic/inferDefaultTimes.isWeekendOrHoliday`
+    （表示色だけなら `lib/date/holidays.isJpHoliday`）を使う。曜日番号だけで判定しない。
+  - style オブジェクトでスプレッドの後に条件付きのキーを置くときは、
+    `key: cond ? v : undefined` ではなく **`...(cond ? { key: v } : {})`** を使う。
+
+---
+
 ## Supabase 接続スクリプトが TLS 証明書検証を全部切っていた（`rejectUnauthorized:false` × 58 ファイル）
 
 - **発生日**: 2026-07-17

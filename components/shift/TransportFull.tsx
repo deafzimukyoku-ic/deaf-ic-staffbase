@@ -1040,7 +1040,7 @@ export default function TransportFull({ role }: Props) {
         <DateStepperFull value={selectedDate} onChange={handleSelectDate} dayStates={dayStates} />
       </div>
 
-      <div className="px-6 py-3 overflow-y-auto">
+      <div className="grid-scroll px-6 py-3 overflow-y-auto">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-3">
             {/* 当日利用人数 + Phase 64: キャンセル待ち件数 */}

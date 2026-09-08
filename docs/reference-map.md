@@ -62,6 +62,8 @@
 | 217 | 217_facility_shift_view_employees_rpc.sql | **`get_my_facility_shift_view_employees(uuid[])` RPC 新設**。/my/requests?tab=facility-shift で employee が自分しか見えなかった件の解消。全ロール対応・最小列のみ返す SECURITY DEFINER | ✅ 適用済 |
 | 218 | 218_shift_assignment_halfday.sql | **`shift_assignments_assignment_type_check` に `am_off`/`pm_off` 追加**。半休をシフト割当でも表現可能に。docs/features/shift-halfday-availability-reflection.md | ✅ 適用済 |
 | 219 | 219_shift_day_notes.sql | **シフト表 日別メモ2行 (先方要望①)**。新テーブル `shift_day_notes(tenant_id, facility_id, date, row_no 1\|2, content)` UNIQUE(tenant,facility,date,row_no) + set_updated_at トリガ + RLS 2本（admin=テナント全域 / manager・shift_manager=管轄施設。employee ポリシーなし）。publish_status 非連動の作成支援メモ。docs/features/shift-notes-copypaste-crossfacility.md | ✅ 適用済 |
+| 226 | 226_schedule_day_notes.sql | **利用表 日別メモ3行（先方要望 2026-09-08）**。新テーブル `schedule_day_notes(tenant_id, facility_id, date, row_no 1\|2\|3, content)` + `schedule_day_note_labels(tenant_id, facility_id, month, row_no, label)`。219/220 と同型（UNIQUE + set_updated_at + RLS 各2本）だが**シフト表とは独立**したデータ。docs/features/schedule-fullwidth-notes-total.md | ✅ 適用済 |
+| 227 | 227_daily_report_notes.sql | **業務日報の日別自由入力（先方要望 2026-09-08）**。新テーブル `daily_report_notes(tenant_id, facility_id, date, content)` UNIQUE(tenant,facility,date) + set_updated_at + RLS 2本。枠は「事業所定型文(121) / 利用表メモ(226 参照表示) / この日の自由入力(227)」の 3 段構成になる。docs/features/daily-report-free-input.md | ✅ 適用済 |
 
 ---
 
@@ -567,6 +569,7 @@ A 施設で勤務時間を登録 → B 施設のシフト表に「A 勤務」と
 - `lib/shift-utils.ts` → `staffDisplayName`
 - `lib/shift-logic/resolveTransportSpec.ts` → `resolveEntryTransportSpec`
 - `lib/date/holidays.ts` → `isJpHoliday / jpHolidayName`
+  - 2026-09-08: `ScheduleGridFull` も `jpHolidayName` + `lib/logic/inferDefaultTimes.isWeekendOrHoliday` を参照（利用表だけ祝日判定が無かったのを解消）
 - `lib/shift-facility.ts` → `useShiftFacilityId`
 - `lib/types.ts` → `StaffRow / ChildRow / ScheduleEntryRow / ShiftAssignmentRow / TransportAssignmentRow / AreaLabel`
 - `lib/constants.ts` → `GradeType`
@@ -962,7 +965,7 @@ admin / manager レイアウトは **社員モード** と **シフトモード*
 | **supabase/migrations/124_attendance_waitlist.sql** | **CHECK に 'waitlist' 追加 / `waitlist_order smallint` 列追加（範囲 1-10、status='waitlist' 以外で NULL 強制）/ RPC を `(uuid, text, smallint default null)` で再定義** |
 | lib/types.ts | `AttendanceStatus` union に 'waitlist' / `ScheduleEntryRow.waitlist_order: number \| null` |
 | components/shift/ScheduleFull.tsx | RPC 呼び出しに `p_waitlist_order` 追加、4 ボタン + 5×2 順番ピッカー + 注意書き、`waitlist_order` state 管理、carry-over（waitlist→他→waitlist で番号復元） |
-| components/shift/ScheduleGridFull.tsx | セル「キャ待 ①」表示、利用数行の下にキャンセル待ち件数行、`hasAnyWaitlist` で行を出し分け。氏名 sticky 列に児童ごとの月間「出{N}/待{M}」集計を追加（2026-06-08、`isAttended`/`isWaitlist` で日別カウントも一元化） |
+| components/shift/ScheduleGridFull.tsx | セル「キャ待 ①」表示、利用数行の下にキャンセル待ち件数行、`hasAnyWaitlist` で行を出し分け。氏名 sticky 列に児童ごとの月間「出{N}/待{M}」集計を追加（2026-06-08、`isAttended`/`isWaitlist` で日別カウントも一元化）。2026-09-08: 利用数/キャンセル待ち行の左端に月合計「計 N」、日付ヘッダ直下に日別メモ3行（**利用表専用** `schedule_day_notes` / migration 226）、`営/休` を `isWeekendOrHoliday`（祝日込み）に統一、`.grid-scroll` 付与、マス寸法をシフト表に一致（列56px・氏名セル2行・時刻0.62rem）、日付ヘッダをシフト表と同型化（曜日/日/人数・`getDowColor`） |
 | components/shift/TransportFull.tsx | 通常テーブルから waitlist 除外、`currentDayWaitlist` memo + 集約バー + 「利用に変える」確認モーダル、ヘッダ「⏳ 待 N人」バッジ、generate 入力から除外、staff area marks ループから除外 |
 | components/shift/ShiftFull.tsx | `childrenCountByDate` から waitlist 除外、新規 `childrenWaitlistCountByDate` |
 | components/shift/ShiftGridFull.tsx | 日付ヘッダに「待 N」バッジ |

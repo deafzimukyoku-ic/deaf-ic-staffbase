@@ -1285,7 +1285,8 @@ export default function ShiftFull({ role }: ShiftFullProps) {
         onClose={() => setEditingCell(null)}
         title={
           editingCell && editingStaff
-            ? `${editingStaff.name} — ${format(new Date(editingCell.date), 'M/d（E）', { locale: ja })}`
+            /* 日付書式は利用表（ScheduleFull.formatDateLabel）と統一する */
+            ? `${editingStaff.name} — ${format(new Date(editingCell.date), 'M月d日（E）', { locale: ja })}`
             : ''
         }
       >

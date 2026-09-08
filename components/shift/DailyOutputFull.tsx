@@ -684,7 +684,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
         </Button>
       </div>
 
-      <div className="daily-output-body flex-1 min-h-0 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
+      <div className="grid-scroll daily-output-body flex-1 min-h-0 overflow-auto px-6 py-3" style={{ background: 'var(--white)' }}>
         {error && (
           <div
             className="mb-2 px-4 py-2 rounded"

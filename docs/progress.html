@@ -1216,6 +1216,63 @@ function hasGateDefinition(fieldName, customFieldGates) {
   </table>
 </div>
 
+<!-- 利用表 4点改善 (2026-09-08) -->
+<div class="phase">
+  <h2>利用表 改善（全幅化 / スクロールバー / 利用合計 / 自由入力3行 / マス寸法 / 日付ロジック統一）（2026-09-08） <span class="phase-pct">コード実装完了 / tsc 0 エラー / ハーネス実測済 / 実機（要ログイン）確認待ち</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">先方要望4点。<b>migration 226 適用済</b>（利用表専用の schedule_day_notes / schedule_day_note_labels を新設。当初はシフト表と共用にしたが、先方指示で別データに変更）。仕様書 docs/features/schedule-fullwidth-notes-total.md</td></tr>
+
+      <tr><td>① 枠の全幅化（左右パディング解消）</td><td class="files">lib/layout/full-bleed-routes.ts（新規）, app/(admin)/layout.tsx:564, app/(manager)/layout.tsx:566</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>真因＝枠の <code>mx-auto max-w-7xl</code>(1280px)。各画面の <code>-m-6 lg:-m-8</code> はパディングしか打ち消していない。pathname 判定で表系のみ <code>max-w-none</code>。対象9ルート×admin/mgr（シフト表・利用表・送迎表・イベント設定・日次出力・業務日報・利用料金表・同席日数・週次送迎）。<b>/admin/shifts は完全一致</b>でダッシュボード等は従来通り中央寄せ</td></tr>
+
+      <tr><td>② スクロールバー 12px 化</td><td class="files">app/globals.css, ScheduleGridFull.tsx, ShiftGridFull.tsx, TransportFull.tsx, BillingFull.tsx, WeeklyTransportFull.tsx, DailyOutputFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>実測（localhost:6001）で<b>縦5px / 横15px</b>とバラバラだった（globals.css が width のみ指定で height 未指定＝Chrome 既定）。新クラスで縦横とも12px + thumb 可視化。グローバル既定は変更せず表系の枠にのみ付与</td></tr>
+
+      <tr><td>③ 利用合計（月合計）</td><td class="files">components/shift/ScheduleGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「利用数」行の左端固定セルに <code>計 N</code>（日別カウントの月間総和＝延べ利用数）。キャンセル待ち行にも同様に <code>計 M</code>。列を増やさないので A3 印刷レイアウト無変更</td></tr>
+
+      <tr><td>④-a 利用表に自由入力3行</td><td class="files">components/shift/ScheduleGridFull.tsx, components/shift/ScheduleFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>日付ヘッダ直下に3行（行名称も月ごとに変更可）。<b>シフト表とは別データ</b>（migration 226 / schedule_day_notes・schedule_day_note_labels）。構造・RLS は 219/220 と完全同型。非制御 input + onBlur 保存（ShiftGridFull と同方式）</td></tr>
+
+      <tr><td>④-b 日付表示ロジックの統一</td><td class="files">components/shift/ScheduleFull.tsx:425, components/shift/ShiftFull.tsx:1288, components/shift/ScheduleGridFull.tsx:126</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>(i) モーダル題名 <code>M月d日（E）</code> に統一（現状 利用表=<code>9月8日（火）</code> / シフト表=<code>9/8（火）</code>）。(ii) <b>利用表だけ祝日を判定していなかった</b>（全グリッド中 ScheduleGridFull のみ isJpHoliday 未使用）。同じ利用表のモーダル初期時刻は isWeekendOrHoliday で土日祝扱いしており<b>画面内で矛盾</b>。営/休判定を isWeekendOrHoliday に統一し祝日は「休」＋赤字＋祝日名 title。例: 2026-09-21 敬老の日 / 09-22 休日 / 09-23 秋分の日 が「営」黒→「休」赤</td></tr>
+
+      <tr><td>印刷 CSS 追随</td><td class="files">components/shift/ScheduleFull.tsx（@media print）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>メモ3行の input を枠なしで印字（ShiftFull:915 と同型）。A3 横 1 枚に収まるか要確認</td></tr>
+
+      <tr><td>台帳更新</td><td class="files">docs/reference-map.md, docs/error-log.md, docs/features/schedule-fullwidth-notes-total.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>shift_day_notes の参照元に利用表を追加 / 祝日判定の不整合を error-log に記録</td></tr>
+
+      <tr><td>実測による検証</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>一時ハーネス(削除済)で localhost:6001 実測: スクロールバー<b>縦横とも12px</b> / 2026-09-21 敬老の日・09-22 休日・09-23 秋分の日が<b>「休」＋赤＋title に祝日名</b>・09-24 は「営」 / 日曜赤・土曜青が<b>初めて</b>適用 / メモ3行の入力→Enter 確定→state 反映 / 月合計「計 100」表示。<code>isFullBleedRoute</code> は 15 ケースの単体確認 OK、<code>max-w-none</code> が Tailwind で生成され <code>max-width:none</code> になることも確認。tsc 0 エラー / eslint は変更前と同数（新規指摘なし）</td></tr>
+      <tr><td>調査中に発見した既存バグ2件</td><td class="files">app/globals.css, components/shift/ScheduleGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>① Chrome は <code>scrollbar-width</code>/<code>scrollbar-color</code> 併記だと <code>::-webkit-scrollbar</code> を<b>全無視</b>する（初回実装が不発だった真因）② 利用表ヘッダの曜日色が<b>一度も効いていなかった</b>（<code>color: cond ? v : undefined</code> がスプレッドの色をキーごと上書き）。どちらも docs/error-log.md に記録</td></tr>
+      <tr><td>⑤ マス寸法をシフト表に一致（先方追加指示）</td><td class="files">components/shift/ScheduleGridFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>日付列 80→<b>56px</b> / テーブル最小幅 日数×56+180 / セル padding px-0.5 py-1 / 時刻 0.72→<b>0.62rem</b> / ラベル text-xs→0.62rem / 氏名セルを「氏名+学年バッジ / 出席数」の<b>2行</b>に再構成（3行のままだと約20px 高い）。両グリッドを並べて実測: 日付列 56.7px・氏名列 160px・<b>データ行 57.3px</b>・メモ行 27.8px が<b>完全一致</b>。日付ヘッダも下記⑥で同型化し <b>59px で一致</b></td></tr>
+      <tr><td>migration 226 適用</td><td class="files">supabase/migrations/226_schedule_day_notes.sql, scripts/apply-migration-226.mjs, docs/migration-applied.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>本番適用済（pooler 経由）。列/UNIQUE/CHECK/トリガ/RLS4本を確認し、rollback 付きで row_no=1,2,3 の INSERT 成功・row_no=4 拒否・<b>同じ(施設,日付,行番号)で shift_day_notes と別の値を保持＝独立</b>・labels の upsert→update→delete・month 不正書式の拒否 を実証。<b>追加のみで既存テーブル無変更</b>のため過去データ影響なし</td></tr>
+      <tr><td>⑥ 日付ヘッダをシフト表と同型化（先方追加指示「シフトが正」）</td><td class="files">components/shift/ScheduleGridFull.tsx, components/shift/ScheduleFull.tsx（印刷CSS）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>「営/休 → 9/2 → (水)」を<b>「水 → 2 → 10人」</b>へ（シフト表と同一構成）。文字色も <code>getDowColor</code> をシフト表と同一実装にし、日曜・祝日=赤 / 土曜=青 / 平日=var(--ink-2)。営/休 の情報は<b>曜日の色と title（例「敬老の日 / 学校休み」）で保持</b>。実測: ヘッダ高 <b>59px で完全一致</b>・色の計算値も一致・9/21〜23 が両表とも赤＋祝日名。<br><b>印刷 CSS の地雷</b>: 旧 <code>div:last-child</code> 指定のままだと<b>利用者数が0人の日に日付そのものが消える</b>ため <code>:nth-child(1)/(3)</code> に変更</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① ブラウザ 75% / 100% / 125% ズームで利用表の左右余白が消えるか ② 社員管理・設定など通常ページが中央寄せのままか ③ 縦横スクロールバーが両方12pxで掴めるか ④ 月合計が isAttended 基準（キャンセル待ち除外）と一致するか ⑤ 利用表のメモがシフト表に<b>出ない</b>こと（別データ）・逆も ⑥ 行名称の変更が月ごと/画面ごとに独立か ⑤-2 利用表とシフト表を切り替えたとき列幅・行高・日付ヘッダが揃って見えるか ⑥-2 利用表を A3 印刷したとき日付の数字が全列に出るか（0人の日を含む） ⑦ 2026-09-21〜23 が「休」赤になるか・9/22 の振替も拾うか ⑧ モーダル題名が利用表とシフト表で同一書式か ⑨ A3 横印刷でメモ3行と合計が出るか・1枚に収まるか ⑩ shift_manager でもメモの保存・合計表示ができるか（RLS）</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 業務日報 自由入力 (2026-09-08) -->
+<div class="phase">
+  <h2>業務日報「活動内容／連絡事項」の日別自由入力 + 利用表メモ取り込み + 印刷崩れ修正（2026-09-08） <span class="phase-pct">コード実装完了 / migration 227 適用済 / ローカル実測済</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">先方要望「業務日報って自由入力できる？」→ A(日別入力)+B(利用表メモ取り込み) を採用。仕様書 docs/features/daily-report-free-input.md。<b>変更前は facilities.daily_report_template（事業所共通の固定文・admin のみ編集可）しか無く、その日の活動を書く場所が無かった</b></td></tr>
+
+      <tr><td>A: 日別自由入力（migration 227）</td><td class="files">supabase/migrations/227_daily_report_notes.sql, scripts/apply-migration-227.mjs, components/shift/DailyReportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>新テーブル <code>daily_report_notes</code>（施設×日付で1件）+ RLS 2本。業務日報ページの枠内 textarea で直接入力し blur 保存（利用表・シフト表のメモ行と同方式）。空入力は DELETE。枠の残り高さいっぱいに広がる。<b>保存失敗は画面上部に赤帯でインライン表示</b>（この画面はトースト基盤が無く、黙って失敗すると未保存のまま印刷される）</td></tr>
+
+      <tr><td>B: 利用表メモ3行の取り込み</td><td class="files">components/shift/DailyReportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>期間内の <code>schedule_day_notes</code>(226) を行ラベル付きで参照表示（編集は利用表側）。<b>ラベルは「施設×月×行番号」なので期間が月をまたぐ場合は対象月をすべて引く</b>。左罫線で「よそから来た情報」と区別</td></tr>
+
+      <tr><td>枠を3段構成に再構成</td><td class="files">components/shift/DailyReportFull.tsx（ActivityBox）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>定型文(121) → 利用表メモ(226) → この日の自由入力(227)。印刷は textarea を出さず <code>.activity-print-note</code>(print-only div) で印字（textarea は入力欄の高さを超えた行が切れるため）。Excel 出力も3段を連結して1セルに</td></tr>
+
+      <tr><td>印刷レイアウト崩れの修正（先方報告）</td><td class="files">app/(admin)/layout.tsx, app/(manager)/layout.tsx, components/shift/DailyReportFull.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>真因＝<b>親レイアウトの枠(p-6 lg:p-8)の左右パディングが紙にも残っていた</b>。<code>.report-page</code> は 194mm 固定（A4 210mm − @page margin 8mm×2）なので padding が加わると印刷可能幅を超え、Chrome がページ全体を縮小していた。枠に <code>app-content-frame</code> クラスを付け、業務日報の @media print でのみ打ち消す（他画面は画面側の -m-6 で相殺済みなので触らない）</td></tr>
+
+      <tr><td>実測による検証</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>Playwright の print メディアエミュレーションで実測: <b>screen=必要幅210.9mm（194mm を超過）→ print=194mm ぴったり</b>。textarea が print で display:none、印刷用 div が block で全文表示されることも確認。3段の枠レイアウトは一時ハーネス（削除済・実CSSを機械抽出して使用）で目視確認。tsc 0 エラー / eslint 新規指摘なし</td></tr>
+
+      <tr><td>台帳更新</td><td class="files">docs/migration-applied.md, docs/reference-map.md, docs/error-log.md, docs/features/daily-report-free-input.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>error-log に2件記録（印刷の親padding / <b>set_updated_at 検証の落とし穴＝now() はトランザクション開始時刻なので同一Tx内では前進しない</b>）</td></tr>
+
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 業務日報で日付ごとに違う内容を入力して保存されるか ② 再読込後も残るか ③ 空にすると行が消えるか ④ 利用表に書いたメモが日報に出るか・ラベルも一致するか ⑤ 期間が月をまたぐときラベルが月ごとに正しいか ⑥ 印刷プレビューで縮小されず A4 いっぱいに出るか ⑦ 長文を入れたとき印刷で切れずに出るか ⑧ Excel(Zip) にも3段が入るか ⑨ shift_manager でも入力・保存できるか（RLS） ⑩ 他画面（シフト表・利用表）の印刷が崩れていないか</td></tr>
+    </tbody>
+  </table>
+</div>
+
 <!-- 事前確認 -->
 <div class="phase">
   <h2>事前確認事項（Phase 0着手前にユーザーに確認） <span class="phase-pct">-</span></h2>
