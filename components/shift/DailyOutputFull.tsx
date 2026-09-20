@@ -39,6 +39,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { fetchTransportAssignments } from '@/lib/api/transportAssignments';
 
 /**
  * 日次出力ページ（deaf-ic 版） — shift-puzzle Phase 31 のホワイトボード風レイアウトを忠実移植。
@@ -191,7 +192,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
           return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
         });
 
-      const [childRes, entryRes, shiftRes, transportRes, settingsRes] = await Promise.all([
+      const [childRes, entryRes, shiftRes, transportRows, settingsRes] = await Promise.all([
         supabase.from('children').select('*').eq('facility_id', facilityId),
         supabase
           .from('schedule_entries')
@@ -203,10 +204,9 @@ export default function DailyOutputFull({ role: _role }: Props) {
           .select('*')
           .eq('facility_id', facilityId)
           .eq('date', date),
-        supabase
-          .from('transport_assignments')
-          .select('*')
-          .eq('facility_id', facilityId),
+        /* 当日ぶんだけ絞り + ページング取得。全期間を引くと PostgREST の
+           max-rows(1000) に当たり、印刷物から送迎担当が黙って欠ける（lib/api/transportAssignments.ts 参照） */
+        fetchTransportAssignments(supabase, facilityId, date, date),
         supabase
           .from('facility_shift_settings')
           .select('pickup_area_labels, dropoff_area_labels')
@@ -242,9 +242,7 @@ export default function DailyOutputFull({ role: _role }: Props) {
       setShifts((shiftRes.data ?? []) as ShiftAssignmentRow[]);
       const entryIdSet = new Set(entryRows.map((e) => e.id));
       setTransportAssignments(
-        ((transportRes.data ?? []) as TransportAssignmentRow[]).filter((t) =>
-          entryIdSet.has(t.schedule_entry_id),
-        ),
+        transportRows.filter((t) => entryIdSet.has(t.schedule_entry_id)),
       );
 
       const settings = settingsRes.data ?? null;

@@ -47,7 +47,26 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-07-03（先方要望 シフト表3機能 実装完了・ローカル確認済） / 全体完了率: 約 98%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-09-20（送迎表「保存されない」の真因修正・実DB検証済） / 全体完了率: 約 98%</p>
+
+<!-- 2026-09-20 送迎表「保存されない」真因修正（PostgREST 1000行上限） -->
+<div class="phase">
+  <h2>送迎表「何度保存しても保存されない」の真因修正（2026-09-20） <span class="phase-pct">実装・実DB検証 完了 / 本番反映はユーザー判断</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">先方報告「/admin/shifts/transport?date=2026-10-07 で何回も保存しても保存されない」。真因は保存側ではなく<b>取得側</b>：送迎割当を <code>.eq('facility_id')</code> だけで<b>全期間・無制限</b>に引いており、🧩パズルが 1115 行に達して <b>PostgREST の暗黙 max-rows(1000)</b> で 115 行が無言で欠落。Postgres は UPDATE のたび行を物理末尾へ書き直すため<b>保存した行ほど 1000 番の外に出る</b>（10-07 の 9 行中 4 行が物理順 1069〜1072）。DB には 9 件すべて保存済＝データ消失なし。0.17（2026-06-01 MyFacilityShiftView）と同一原因の再発。詳細 docs/error-log.md 同日エントリ。</td></tr>
+      <tr><td>真因の実証（対症療法の排除）</td><td class="files">scripts/probe-transport-1000-cap.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>施設別行数（パズル1115 / パステル563 / パレット188）・REST の content-range で <b>count=1115 に対し返却1000</b>・ctid 物理順で 10-07 の 4 行が 1000 番外 を実証。保存 upsert 自体は正常（9件が担当入りで DB に存在）</td></tr>
+      <tr><td>取得経路を1本に集約（再発防止の本体）</td><td class="files">lib/api/transportAssignments.ts（新規）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>fetchTransportAssignments(supabase, facilityId, from, to)</code>。<b>日付範囲を必須引数</b>にして全期間を引けなくする / <code>schedule_entries!inner(date)</code> 埋め込み join で DB 側フィルタ（URL に UUID を数百個並べない）/ <code>fetchAllRows</code> でページング / <code>order('id')</code> でページ間の並び固定</td></tr>
+      <tr><td>同一原因の3箇所を全て置換</td><td class="files">components/shift/TransportFull.tsx（送迎表・当月）, DailyOutputFull.tsx（日次出力・単日）, WeeklyTransportFull.tsx（週間送迎表・当月）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>日次出力・週間送迎表は<b>印刷物から送迎担当が黙って欠ける</b>状態だった（未報告だが同じ欠陥）。1箇所だけ直すと再発を作り込むため3箇所同時に修正</td></tr>
+      <tr><td>実 DB 検証（本番データ）</td><td class="files">scripts/verify-transport-fetch.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>本番の .ts をそのまま import して実行。修正前 10-07 = <b>5/9 件</b> → 修正後 <b>9/9 件（全件担当入り）</b>・当月230行。ページング境界は pageSize=7 / 230(総数一致) / 1000 いずれも 230行・ユニーク230件で重複も取りこぼしも無し</td></tr>
+      <tr><td>RLS 越しの確認</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>admin / manager / shift_manager の実在ユーザーの JWT を偽装し、埋め込み join 越しでも 10-07 が <b>3ロールとも 9 件</b>取得できることを確認（埋め込み join が schedule_entries の RLS で削られないことの検証）</td></tr>
+      <tr><td>型チェック / lint / dev 起動</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><b>tsc 0エラー</b> / eslint は変更前後で指摘が同一（新規増なし。残る3件は既存・スコープ外）/ <code>npm run dev</code> で送迎表・日次出力・週間送迎表の3ページが 200</td></tr>
+      <tr><td>台帳・ログ更新</td><td class="files">docs/reference-map.md（0.21）, docs/error-log.md</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>reference-map 0.21 に「送迎割当は必ず fetchTransportAssignments 経由 / 成長テーブルの無制限取得は禁止」を追記。error-log に真因・再発防止・検証を記録</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 10-07 の送迎表で保存 → リロードしても 9 件全部の担当が残るか（パズル） ② パステル・パレット（1000行未満＝従来も正常だった施設）で表示・保存が変更前と完全一致か（後方互換） ③ 日次出力・週間送迎表の印刷物にパズルの送迎担当が全員出るか ④ 月をまたいだ移動（9月↔10月↔11月）で各月の送迎が正しく出るか（日付範囲の境界）</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-07-18 半休を送迎表・ホワイトボードに反映 -->
 <div class="phase">

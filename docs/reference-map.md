@@ -67,6 +67,30 @@
 
 ---
 
+## 0.21 送迎割当の取得を日付範囲＋ページングに一本化（PostgREST 1000行上限の再発, 2026-09-20）
+
+### 背景（先方報告「送迎表で何回保存しても保存されない」/ 10-07・🧩パズル）
+- 真因: 送迎割当を `.eq('facility_id', …)` だけで**全期間・無制限**に取得していた。パズルの `transport_assignments` が 1115 行に達し、PostgREST の暗黙 max-rows(1000) で **115 行がエラー無しで欠落**。Postgres は UPDATE のたびに行を物理末尾へ書き直すため、**保存した行ほど 1000 番の外に出る** → 保存は成功しているのに再読込で戻らない
+- 0.17 と同一原因。当時の再発防止が「複数施設を跨ぐクエリ」限定だったため、単一施設が単独で 1000 行を超えた今回を防げなかった
+- 詳細は `docs/error-log.md` 同日エントリ
+
+### 変更
+- **`lib/api/transportAssignments.ts` 新設**: `fetchTransportAssignments(supabase, facilityId, from, to)` — 送迎割当取得の唯一の経路。`from`/`to` は**必須引数**（全期間を引けなくする）＋ `schedule_entries!inner(date)` 埋め込み inner join で DB 側フィルタ ＋ `fetchAllRows` でページング ＋ `order('id')` でページ間の並び固定
+- `components/shift/TransportFull.tsx`（送迎表・当月）/ `components/shift/DailyOutputFull.tsx`（日次出力・単日）/ `components/shift/WeeklyTransportFull.tsx`（週間送迎表・当月）: 直接 `.from('transport_assignments').select('*')` していた3箇所を上記ヘルパー経由に置換
+
+### 参照（テーブル・型・関数）
+- テーブル: `transport_assignments`（`facility_id` / `schedule_entry_id` / `pickup_employee_ids` / `dropoff_employee_ids` / `is_confirmed` / `is_unassigned` / `is_locked` / `publish_status`）、`schedule_entries`（`date` — 埋め込み join の絞り込みキー）
+- 型: `TransportAssignmentRow`（`lib/types.ts`）
+- 関数: `fetchAllRows`（`lib/multi-facility.ts`）/ `fetchTransportAssignments`（`lib/api/transportAssignments.ts`）
+- 検証: `scripts/probe-transport-1000-cap.mjs`（打ち切りの実証）/ `scripts/verify-transport-fetch.ts`（修正後ヘルパーの実行 + ページング境界）
+- ロール: admin / manager / shift_manager の3ロールで埋め込み join が RLS を通過することを実 DB で確認済
+
+### 今後の注意
+- 送迎割当を読む新規画面は `.from('transport_assignments').select()` を直接書かず、必ず `fetchTransportAssignments` を使う
+- 同型の「全期間・無制限」取得は他の成長テーブル（`schedule_entries` / `shift_assignments`）でも禁止。現状は全て月/日で絞れている（施設×月の最大は schedule_entries 265 行 / shift_assignments 527 行）
+
+---
+
 ## 0.20 スクリプトの DB 接続を `scripts/_db.mjs` に一本化 + TLS 証明書検証を有効化（2026-07-17）
 
 制約の正本: [docs/constraints.md](constraints.md) §2 ／ 経緯: [docs/error-log.md](error-log.md)（TLS / worktree 由来 env パス / CRLF codemod の3件）

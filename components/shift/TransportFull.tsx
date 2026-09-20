@@ -14,6 +14,7 @@ import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpe
 import { isAttended, isWaitlist } from '@/lib/logic/attendance';
 import { isWorkingAssignmentType } from '@/lib/logic/shiftAssignment';
 import { replaceShiftDay, type ShiftSegmentInput } from '@/lib/api/shiftAssignments';
+import { fetchTransportAssignments } from '@/lib/api/transportAssignments';
 import { fetchFacilityMembers, type FacilityMemberRow } from '@/lib/multi-facility';
 import {
   DEFAULT_TRANSPORT_MIN_END_TIME,
@@ -246,7 +247,7 @@ export default function TransportFull({ role }: Props) {
         childRes,
         entryRes,
         shiftRes,
-        transportRes,
+        transportRows,
         settingsRes,
         eligRes,
       ] = await Promise.all([
@@ -263,10 +264,9 @@ export default function TransportFull({ role }: Props) {
           .eq('facility_id', facilityId)
           .gte('date', from)
           .lte('date', to),
-        supabase
-          .from('transport_assignments')
-          .select('*')
-          .eq('facility_id', facilityId),
+        /* 日付範囲で絞り + ページング取得。全期間を引くと PostgREST の
+           max-rows(1000) に当たって保存した行が黙って欠ける（lib/api/transportAssignments.ts 参照） */
+        fetchTransportAssignments(supabase, facilityId, from, to),
         supabase
           .from('facility_shift_settings')
           .select('*')
@@ -320,9 +320,7 @@ export default function TransportFull({ role }: Props) {
       /* transport_assignments を当月分の schedule_entry_id で絞る */
       const entryIdSet = new Set(((entryRes.data ?? []) as ScheduleEntryRow[]).map((e) => e.id));
       setTransportAssignments(
-        ((transportRes.data ?? []) as TransportAssignmentRow[]).filter((t) =>
-          entryIdSet.has(t.schedule_entry_id)
-        )
+        transportRows.filter((t) => entryIdSet.has(t.schedule_entry_id))
       );
 
       const settings = settingsRes.data ?? null;

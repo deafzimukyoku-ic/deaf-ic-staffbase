@@ -11,6 +11,7 @@ import { staffDisplayName } from '@/lib/shift-utils';
 import { resolveEntryTransportSpec } from '@/lib/shift-logic/resolveTransportSpec';
 import { isAttended } from '@/lib/logic/attendance';
 import { fetchFacilityMembers, type FacilityMemberRow } from '@/lib/multi-facility';
+import { fetchTransportAssignments } from '@/lib/api/transportAssignments';
 import type {
   StaffRow,
   ChildRow,
@@ -138,7 +139,7 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
           return (a.last_name ?? '').localeCompare(b.last_name ?? '', 'ja');
         });
 
-      const [childRes, entryRes, transportRes, settingsRes] = await Promise.all([
+      const [childRes, entryRes, transportRows, settingsRes] = await Promise.all([
         supabase.from('children').select('*').eq('facility_id', facilityId),
         supabase
           .from('schedule_entries')
@@ -146,10 +147,9 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
           .eq('facility_id', facilityId)
           .gte('date', from)
           .lte('date', to),
-        supabase
-          .from('transport_assignments')
-          .select('*')
-          .eq('facility_id', facilityId),
+        /* 当月ぶんだけ絞り + ページング取得。全期間を引くと PostgREST の
+           max-rows(1000) に当たり、週間表から送迎担当が黙って欠ける（lib/api/transportAssignments.ts 参照） */
+        fetchTransportAssignments(supabase, facilityId, from, to),
         supabase
           .from('facility_shift_settings')
           .select('pickup_area_labels, dropoff_area_labels')
@@ -187,9 +187,7 @@ export default function WeeklyTransportFull({ role: _role }: Props) {
       /* transport_assignments を当月分の schedule_entry_id で絞る */
       const entryIdSet = new Set(((entryRes.data ?? []) as ScheduleEntryRow[]).map((e) => e.id));
       setTransportAssignments(
-        ((transportRes.data ?? []) as TransportAssignmentRow[]).filter((t) =>
-          entryIdSet.has(t.schedule_entry_id),
-        ),
+        transportRows.filter((t) => entryIdSet.has(t.schedule_entry_id)),
       );
 
       const settings = settingsRes.data ?? null;
