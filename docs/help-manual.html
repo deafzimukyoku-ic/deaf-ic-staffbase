@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>deaf-ic 使い方マニュアル</title>
+<style>
+  :root {
+    --accent: #0f766e;
+    --accent-soft: #ccfbf1;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --bg: #f9fafb;
+    --surface: #ffffff;
+    --border: #e5e7eb;
+    --code-bg: #f3f4f6;
+    --role-admin: #dc2626;
+    --role-manager: #2563eb;
+    --role-shift: #ea580c;
+    --warn-bg: #fffbeb;
+    --warn-ink: #92400e;
+    --warn-border: #fcd34d;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Noto Sans JP", "Hiragino Sans", sans-serif;
+    margin: 0;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.7;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    .toc { position: static !important; height: auto !important; border-right: none !important; border-bottom: 1px solid var(--border); }
+  }
+
+  .toc {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 24px 16px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+  }
+  .toc h2 { font-size: 13px; color: var(--muted); margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toc ol { list-style: none; padding: 0; margin: 0; counter-reset: chap; }
+  .toc li { margin: 2px 0; }
+  .toc a {
+    display: block;
+    padding: 6px 10px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 13px;
+    border-radius: 6px;
+    line-height: 1.4;
+  }
+  .toc a:hover { background: var(--accent-soft); color: var(--accent); }
+
+  .main { padding: 32px 40px 80px; }
+  @media (max-width: 800px) { .main { padding: 24px 16px 60px; } }
+  .head {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .head h1 { margin: 0 0 8px; font-size: 26px; color: var(--accent); }
+  .head .sub { color: var(--muted); font-size: 13px; margin: 0; }
+  .intro {
+    background: #f0fdfa;
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 28px;
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  .intro p { margin: 0; }
+  .intro strong { color: var(--accent); }
+
+  section.chapter {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    padding: 24px 28px;
+    scroll-margin-top: 20px;
+  }
+  section.chapter h2 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .chap-num { color: var(--accent); font-weight: 700; }
+  .chap-title { color: var(--ink); }
+  .roles { display: flex; gap: 6px; margin: 0 0 16px; flex-wrap: wrap; }
+  .role-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: #fff;
+    font-weight: 600;
+  }
+  .role-admin { background: var(--role-admin); }
+  .role-manager { background: var(--role-manager); }
+  .role-shift { background: var(--role-shift); }
+
+  .chapter h3 {
+    margin: 22px 0 10px;
+    font-size: 15px;
+    color: var(--accent);
+    padding-bottom: 4px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .chapter h4 {
+    margin: 16px 0 8px;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .chapter p { margin: 8px 0; font-size: 14px; }
+  .chapter ul, .chapter ol { margin: 8px 0 12px; padding-left: 24px; font-size: 14px; }
+  .chapter li { margin: 4px 0; }
+  .chapter li ul, .chapter li ol { margin: 4px 0; }
+  .chapter code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12px;
+  }
+  .note {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .qa {
+    background: #fafafa;
+    border-left: 3px solid var(--muted);
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 4px;
+  }
+  .qa .q { font-weight: 700; color: var(--ink); margin: 0 0 4px; font-size: 14px; }
+  .qa .a { margin: 0; font-size: 13px; color: var(--ink); }
+  .qa .a ul { margin: 4px 0 0; padding-left: 20px; }
+
+  /* スクリーンショット表示。画像が無い間はプレースホルダーとして表示される。
+     <img> の onerror で .shot-missing クラスを付与 → CSS でプレースホルダー外観に切替。 */
+  figure.shot-wrap {
+    margin: 16px 0;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  figure.shot-wrap img.shot {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #f3f4f6;
+  }
+  figure.shot-wrap figcaption.shot-cap {
+    display: block;
+    padding: 8px 14px;
+    background: #fafbfc;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  figure.shot-wrap figcaption .filename {
+    font-family: "SF Mono", Consolas, monospace;
+    background: rgba(0,0,0,0.05);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--ink);
+    margin-right: 8px;
+  }
+  /* 画像が読めない時のプレースホルダー外観 */
+  figure.shot-wrap.shot-missing {
+    background: repeating-linear-gradient(45deg, #f9fafb 0, #f9fafb 10px, #f3f4f6 10px, #f3f4f6 20px);
+    border: 2px dashed #d1d5db;
+  }
+  figure.shot-wrap.shot-missing img.shot { display: none; }
+  figure.shot-wrap.shot-missing figcaption.shot-cap {
+    background: transparent;
+    border-top: none;
+    padding: 24px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  figure.shot-wrap.shot-missing figcaption.shot-cap::before {
+    content: '📷 スクショ未登録';
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: #9ca3af;
+    margin-bottom: 6px;
+  }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 24px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<aside class="toc">
+  <h2>目次</h2>
+  <ol>
+    <li><a href="#ch1">1. 全体の考え方</a></li>
+    <li><a href="#ch2">2. ログインと初期セットアップ</a></li>
+    <li><a href="#ch3">3. ダッシュボード</a></li>
+    <li><a href="#ch4">4. 社員管理</a></li>
+    <li><a href="#ch5">5. シフト作成と公開</a></li>
+    <li><a href="#ch6">6. 利用予定の取り込み（Excel優先）</a></li>
+    <li><a href="#ch7">7. 送迎表</a></li>
+    <li><a href="#ch8">8. 休み希望と承認</a></li>
+    <li><a href="#ch9">9. 利用料金表</a></li>
+    <li><a href="#ch10">10. 日次出力 / 業務日報</a></li>
+    <li><a href="#ch11">11. 書類とタグ</a></li>
+    <li><a href="#ch12">12. 研修</a></li>
+    <li><a href="#ch13">13. お知らせ</a></li>
+    <li><a href="#ch14">14. 遵守事項</a></li>
+    <li><a href="#ch15">15. 設定と事業所追加</a></li>
+    <li><a href="#ch16">16. トラブルシュート</a></li>
+  </ol>
+</aside>
+
+<main class="main">
+
+<div class="head">
+  <h1>deaf-ic 使い方マニュアル</h1>
+  <p class="sub">禹要漢 更新中 / 最終更新: 2026年05月15日14時02分</p>
+</div>
+
+<div class="intro">
+  <p><strong>名古屋ろう国際センター職員ステーション</strong>は認定NPO法人名古屋ろう国際センター向けの統合シフト・社員管理アプリです。ろう者スタッフが使う前提で設計されており、動画や画像を豊富にいれて視覚情報を増やしていくことが可能です。</p>
+</div>
+
+<!-- 1 -->
+<section class="chapter" id="ch1">
+  <h2><span class="chap-num">1.</span> <span class="chap-title">全体の考え方</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+  <p>ろう者スタッフが使うことを前提に、音声通知は一切ありません。新着や状態の変化は<strong>色・アイコン・テキスト</strong>で伝えます。</p>
+
+  <h3>画面の構成</h3>
+  <ul>
+    <li>左サイドバー … メニュー</li>
+    <li>上部ヘッダー … 挨拶 / 事業所セレクタ（シフトモードのみ）/ 通知ベル / ログアウト</li>
+    <li>右下フローティングボタン …「社員管理モード」と「シフト・送迎モード」の切替（管理者 / マネージャーのみ）</li>
+  </ul>
+
+  <h3>アプリの権限</h3>
+  <ul>
+    <li><strong>管理者（本部）</strong> … NPO本部の管理者。全事業所・全機能を操作可能</li>
+    <li><strong>マネージャー</strong> … 各施設の管理者や責任者。自事業所のデータのみ操作可能</li>
+    <li><strong>シフト統括</strong> … 事業所用、利用表・送迎表・利用料金などの管理アカウント。シフト・送迎・児童・希望休のみ</li>
+    <li><strong>社員</strong> … 個別アカウント。自分のシフト閲覧と希望休の提出のみ</li>
+  </ul>
+
+  <h3>2つのモード（管理者 / マネージャーのみ）</h3>
+  <p>画面右下のフローティングボタンで切り替えます。</p>
+  <ul>
+    <li>📋 <strong>社員管理モード</strong> … 職員・研修・お知らせ・書類などの「人」に関する作業</li>
+    <li>🚐 <strong>シフト・送迎モード</strong> … シフト作成・送迎割当・利用予定・料金表など「日々の運用」</li>
+  </ul>
+  <div class="note">シフト統括アカウントはシフト・送迎モード固定で、社員管理モードへの切替はできません。</div>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/01-overview.png" alt="全体レイアウト">
+    <figcaption class="shot-cap">
+      <span class="filename">images/01-overview.png</span>
+      全体レイアウト（左サイドバー + ヘッダー + 右下のモード切替ボタン）
+    </figcaption>
+  </figure>
+</section>
+
+<!-- 2 -->
+<section class="chapter" id="ch2">
+  <h2><span class="chap-num">2.</span> <span class="chap-title">ログインと初期セットアップ</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+
+  <h3>ログイン</h3>
+  <ol>
+    <li><code>/login</code> にアクセス</li>
+    <li>メールアドレスとパスワードを入力</li>
+    <li>ログイン後、アプリの権限に応じて自動でダッシュボードへ移動
+      <ul>
+        <li>管理者 → <code>/admin/dashboard</code></li>
+        <li>マネージャー → <code>/mgr/dashboard</code></li>
+        <li>シフト統括 → <code>/admin/shifts/dashboard</code></li>
+      </ul>
+    </li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/02-login.png" alt="ログイン画面">
+    <figcaption class="shot-cap">
+      <span class="filename">images/02-login.png</span>
+      ログイン画面（メール + パスワード + 「パスワードを忘れた方」リンク）
+    </figcaption>
+  </figure>
+
+  <h3>パスワードを忘れた場合</h3>
+  <ol>
+    <li>ログイン画面の「パスワードを忘れた方」をクリック</li>
+    <li>メールアドレスを入力 → 送信</li>
+    <li>届いたメールのリンクから新しいパスワードを設定</li>
+  </ol>
+  <div class="note">メールリンクは約1時間で失効します。</div>
+
+  <h3>退職者のログイン</h3>
+  <p>退職処理（<code>status=retired</code>）された職員は、既存セッションがあっても自動で signOut され、
+  「退職処理済みのアカウントです」と表示されてログインできません。</p>
+
+  <h3>招待リンクが切れた場合</h3>
+  <p>招待メールのリンクは約1時間で失効します。expired 表示が出たら、
+  管理者に「招待を再送して」と依頼してください。</p>
+</section>
+
+<!-- 3 -->
+<section class="chapter" id="ch3">
+  <h2><span class="chap-num">3.</span> <span class="chap-title">ダッシュボード</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+  <p>ダッシュボードはモード別に内容が変わります。</p>
+
+  <h3>社員管理モード（<code>/admin/dashboard</code>, <code>/mgr/dashboard</code>）</h3>
+  <ul>
+    <li>今日のお知らせ / 未読の通知</li>
+    <li>概要カード5種（遵守事項 / 研修 / お知らせ / 業務マニュアル / 書類）</li>
+    <li>達成率カード5種</li>
+    <li>休み希望の承認待ち件数</li>
+    <li>在籍者数 / 退職者数</li>
+  </ul>
+
+  <h3>概要カードと達成率の見方（2026-05-15 仕様変更）</h3>
+  <ul>
+    <li>概要カードは <strong>「{公開件数} / {全件} 件」</strong> 形式で表示
+      <ul><li>例: 「研修 8/12 件」… 公開済み 8 件、下書き含めると全 12 件</li></ul>
+    </li>
+    <li>達成率の分母は <strong>公開済み (<code>is_published=true</code>) のもののみ</strong> が対象</li>
+    <li>下書きで放置している研修やお知らせは達成率に影響しない</li>
+  </ul>
+  <div class="note">
+    「書類」は仕様上 <code>is_published</code> 列を持たないため、概要カードは単一件数表示（例: 「書類 5 件」）。書類だけ別フォーマット。
+  </div>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/03a-dashboard-staff.png" alt="社員管理モードのダッシュボード">
+    <figcaption class="shot-cap">
+      <span class="filename">images/03a-dashboard-staff.png</span>
+      社員管理モードのダッシュボード — 達成率カード5種 + 概要カード5種（「{公開件数} / {全件} 件」表示）+ 社員進捗一覧
+    </figcaption>
+  </figure>
+
+  <h3>シフト・送迎モード（<code>/admin/shifts/dashboard</code>）</h3>
+  <ul>
+    <li>今日の利用予定（児童数 / 送迎件数）</li>
+    <li>今月のシフト公開状態（下書き / 仮シフト / 公開中）</li>
+    <li>直近の休み希望 / シフト変更申請</li>
+    <li>主要機能へのショートカットカード（利用表・シフト表・送迎表・日次出力・業務日報・利用料金表・休み希望一覧・事業所設定・職員管理・児童管理・イベント設定）</li>
+  </ul>
+  <p>カードをクリックすると該当ページへ遷移します。</p>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/03b-dashboard-shift.png" alt="シフト・送迎モードのダッシュボード">
+    <figcaption class="shot-cap">
+      <span class="filename">images/03b-dashboard-shift.png</span>
+      シフト・送迎モードのダッシュボード — 各機能へのショートカットカード一覧
+    </figcaption>
+  </figure>
+</section>
+
+<!-- 4 -->
+<section class="chapter" id="ch4">
+  <h2><span class="chap-num">4.</span> <span class="chap-title">社員管理</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+  </div>
+  <p>社員管理モード →「社員管理」（<code>/admin/employees</code>, <code>/mgr/employees</code>）</p>
+
+  <h3>社員を追加（招待）</h3>
+  <ol>
+    <li>右上の「社員を追加」ボタンをクリック</li>
+    <li>招待情報を入力:
+      <ul>
+        <li>苗字 / 名前</li>
+        <li>メールアドレス</li>
+        <li>役職（positions テーブルから選択）</li>
+        <li>アプリ権限（管理者 / マネージャー / 社員）</li>
+        <li>マネージャーの場合は「兼任先事業所」を選択</li>
+      </ul>
+    </li>
+    <li>「招待を送信」をクリック</li>
+    <li>入力したメールアドレスに招待リンクが届く（1時間有効）</li>
+    <li>本人がリンクを開いてパスワード設定 → ログイン可能</li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/04-employee-invite.png" alt="社員招待画面">
+    <figcaption class="shot-cap">
+      <span class="filename">images/04-employee-invite.png</span>
+      社員追加（招待）画面 — 氏名・メール・役職・アプリ権限・兼任先選択
+    </figcaption>
+  </figure>
+
+  <h3>社員一覧のフィルター</h3>
+  <ul>
+    <li>在籍 / 退職 切替</li>
+    <li>事業所別 / 役職別 / 名前検索</li>
+  </ul>
+
+  <h3>社員詳細（行をクリック）</h3>
+  <ul>
+    <li>基本情報 / 連絡先 / 緊急連絡先</li>
+    <li>雇用情報（雇用形態・契約期間・有給残）</li>
+    <li>資格・スキル</li>
+    <li>研修受講履歴</li>
+    <li>AI診断結果（管理者 / マネージャーのみ閲覧可。本人は見られない）</li>
+  </ul>
+
+  <h3>在職に戻す / 退職にする</h3>
+  <ul>
+    <li><strong>退職:</strong> 詳細ページの「退職処理」ボタン → 確認ダイアログで実行。同時に auth.users が BAN される</li>
+    <li><strong>在職に戻す:</strong> 退職済み社員の詳細から「在職に戻す」ボタン → BAN 解除</li>
+  </ul>
+  <div class="note">自分自身は退職処理できません。</div>
+
+  <h3>カスタムフィールド</h3>
+  <p>事業所ごとに独自項目を追加できます（管理者のみ）。
+  「設定 → カスタムフィールド」から定義 → 全社員の詳細画面に項目が追加されます。</p>
+</section>
+
+<!-- 5 -->
+<section class="chapter" id="ch5">
+  <h2><span class="chap-num">5.</span> <span class="chap-title">シフト作成と公開</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+  <p>シフト・送迎モード →「シフト表」（<code>/admin/shifts</code>）</p>
+  <p>シフト公開は <strong>下書き → 仮シフト（職員確認中）→ 公開中</strong> の3段階です。</p>
+
+  <h3>① シフトを生成する（下書き）</h3>
+  <ol>
+    <li>上部の月セレクタで対象月を選択</li>
+    <li>上部に「下書き」バッジが表示される状態を確認</li>
+    <li>「自動生成」ボタンをクリック → 職員設定（および存在すれば利用予定）から自動でシフトを組む
+      <ul>
+        <li><strong>利用予定が未登録でもシフト生成は可能</strong>（職員が1名以上いれば押せる、2026-05-15 仕様変更）</li>
+        <li>利用予定が未登録の場合は最低出勤人数だけを目安に組まれる</li>
+      </ul>
+    </li>
+    <li>生成後、必要に応じてセルをクリックして手動で職員を差替・追加</li>
+  </ol>
+
+  <h3>② 仮シフトにする</h3>
+  <ol>
+    <li>全行揃ったら右上の<strong>「仮シフト確定 → 職員確認」</strong>ボタンをクリック</li>
+    <li>ステータスが「下書き ● + 未完成 ⏳」から「仮シフト（職員確認中）」に変わる</li>
+    <li><strong>この時点で社員側にも見える状態になります</strong>（/my/shifts に「仮シフト（確認中）」黄バッジで表示）。社員は内容を確認し、問題あれば「シフト変更申請」を提出可能</li>
+  </ol>
+
+  <h3>③ 公開する</h3>
+  <ol>
+    <li>「公開する」ボタンをクリック</li>
+    <li>確認モーダルで「公開」を押すとステータスが「公開中」に</li>
+    <li>公開後、社員側 <code>/my/shifts</code> のバッジが「仮シフト（確認中）」黄から「公開中」緑に切り替わり、警告メッセージが消える（内容自体は仮シフト段階から見えている）</li>
+    <li>送迎割当も自動で同じ状態に連動</li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/05a-shift-status.png" alt="シフト表 公開フロー">
+    <figcaption class="shot-cap">
+      <span class="filename">images/05a-shift-status.png</span>
+      シフト表上部のステータスバッジ（下書き ● / 未完成 ⏳ / 仮シフト / 公開中）と「仮シフト確定 → 職員確認」「公開する」「公開取消」ボタン
+    </figcaption>
+  </figure>
+
+  <h3>公開取消（再編集したい時）</h3>
+  <ol>
+    <li>「公開取消」ボタンをクリック</li>
+    <li>ステータスが「仮シフト」に戻り、編集可能になる</li>
+    <li>再度「公開する」で再公開</li>
+  </ol>
+
+  <div class="note"><strong>公開済みシフトを再生成しようとした時:</strong>
+  「公開済みのシフトは再生成できません。先に『公開取消』してから再生成してください。」と表示されます。
+  誤って公開済みデータを上書きしないための保護です。</div>
+
+  <h3>シフト生成ロジックの要点</h3>
+  <ul>
+    <li>最低出勤人数: <code>max(ceil(利用人数 / 2), 3)</code></li>
+    <li>有資格者最低: 事業所設定値（デフォルト 2名）</li>
+    <li>休み希望（希望休）は自動で除外される</li>
+    <li>条件未達のセルは赤ハイライト</li>
+  </ul>
+
+  <h3>公休 / 希望休 の区別（migration 157、2026-05-15〜）</h3>
+  <p>シフト作成画面のセル編集モーダルでは「休み」が <strong>2 種類</strong> 選べます。</p>
+  <table style="width:100%; border-collapse:collapse; margin:8px 0; font-size:13px;">
+    <thead>
+      <tr style="background:#fafbfc;">
+        <th style="text-align:left; padding:6px 10px; border-bottom:1px solid var(--border);">種類</th>
+        <th style="text-align:left; padding:6px 10px; border-bottom:1px solid var(--border);">色</th>
+        <th style="text-align:left; padding:6px 10px; border-bottom:1px solid var(--border);">由来</th>
+        <th style="text-align:left; padding:6px 10px; border-bottom:1px solid var(--border);">出せる人</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid var(--border);"><strong>公休</strong></td>
+        <td style="padding:6px 10px; border-bottom:1px solid var(--border); color:#2563eb;">■ 青</td>
+        <td style="padding:6px 10px; border-bottom:1px solid var(--border);">管理者が会社都合などで決めた休み</td>
+        <td style="padding:6px 10px; border-bottom:1px solid var(--border);">管理者 / マネージャー / シフト統括</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px;"><strong>希望休</strong></td>
+        <td style="padding:6px 10px; color:#d4af37;">■ 金</td>
+        <td style="padding:6px 10px;">社員が休み希望として出した休み（<code>shift_requests</code> 由来）</td>
+        <td style="padding:6px 10px;">社員本人（管理者経由で確定）</td>
+      </tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>社員からは「公休」を出すことはできません（管理者専用）</li>
+    <li>自動生成では社員の希望休が反映される（公休は管理者が手動でマーク）</li>
+    <li>シフト表上の統計には「公休 N」「希望休 N」が個別に表示される</li>
+  </ul>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/05b-shift-cell-modal.png" alt="シフトセル編集モーダル">
+    <figcaption class="shot-cap">
+      <span class="filename">images/05b-shift-cell-modal.png</span>
+      シフトセル編集モーダル — 「公休（青）」「希望休（金）」のボタンが並ぶ画面
+    </figcaption>
+  </figure>
+</section>
+
+<!-- 6 -->
+<section class="chapter" id="ch6">
+  <h2><span class="chap-num">6.</span> <span class="chap-title">利用予定の取り込み（Excel優先）</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+  <p>シフト・送迎モード →「利用表」（<code>/admin/shifts/schedule</code>）</p>
+  <p>月次の利用予定を取り込む方法は <strong>Excel貼付（推奨）</strong> と PDF取込 の 2 種類です。Excel貼付の方が速くて確実なので、こちらを基本に運用してください。</p>
+
+  <h3>① Excelから貼り付け（推奨）</h3>
+  <ol>
+    <li>デイロボから出力した利用予定の Excel ファイルを開く</li>
+    <li><strong>Excel の左端にある行番号（1, 2, 3...）をクリック＆ドラッグして、ヘッダー行と児童名列を含む範囲を「行ごと」選択</strong>
+      <ul>
+        <li>セルだけ選ぶと範囲がズレることがあるため、必ず行番号で「行全体」を選択</li>
+      </ul>
+    </li>
+    <li><code>Ctrl + C</code> でコピー</li>
+    <li>利用表ページ右上の<strong>📋（Excel貼付）ボタン</strong>をクリック →「Excelから貼り付け」モーダルが開く</li>
+    <li>「一括モード（Excel経由）」タブが選択されていることを確認</li>
+    <li>テキストエリアに <code>Ctrl + V</code> で貼り付け → 自動で解析</li>
+    <li>確認画面で内容をチェックして「保存」 → DB に反映</li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/06-excel-import.png" alt="Excelから貼り付けモーダル">
+    <figcaption class="shot-cap">
+      <span class="filename">images/06-excel-import.png</span>
+      「Excelから貼り付け」モーダル（一括モード・1児童モードのタブ + 対応フォーマット説明）
+    </figcaption>
+  </figure>
+
+  <h4>対応フォーマット</h4>
+  <ul>
+    <li><strong>横型</strong> … 1行目が日付、各セルに「迎 13:20 / 送 16:00」</li>
+    <li><strong>縦型</strong> … 児童名・日付・迎え・送り の列</li>
+    <li>セル内改行がある Excel データもそのまま対応</li>
+  </ul>
+
+  <div class="note">
+    <strong>⚠ デイロボ Web 画面から直接コピーするとタブが失われます。</strong>
+    その場合は「1児童モード（デイロボ直接貼付）」タブを使って、1児童ずつ貼り付けてください。
+  </div>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/06b-excel-raw.png" alt="Excelの行番号選択">
+    <figcaption class="shot-cap">
+      <span class="filename">images/06b-excel-raw.png</span>
+      Excelファイルの例 — 左端の行番号（1, 2, 3...）でドラッグして行ごと選択する様子
+    </figcaption>
+  </figure>
+
+  <h3>② PDF取込（補助）</h3>
+  <p>Excel が手元に無い場合の代替手段です。基本は Excel 貼付を使ってください。</p>
+  <ol>
+    <li>右上の「PDF」ボタンをクリック</li>
+    <li>PDF を選択（最大 20MB）</li>
+    <li>Claude API（<code>claude-sonnet-4-20250514</code>）が自動解析（数秒〜数十秒）</li>
+    <li>確認画面で抽出結果を確認
+      <ul>
+        <li>児童名 / 日付 / 送り時刻 / 迎え時刻 / エリア</li>
+        <li>「追・休」「定・休」などの特殊ステータスはエリア欄に表示される</li>
+      </ul>
+    </li>
+    <li>内容を確認して「保存」をクリック → DB に反映</li>
+  </ol>
+  <div class="note">
+    PDF 解析は AI 処理のため、特殊フォーマットやレイアウト崩れがあると精度が落ちます。確認画面で必ず内容をチェックしてください。
+  </div>
+
+  <h3>取込後の編集</h3>
+  <ul>
+    <li>利用表のセルを直接クリックして時刻・エリアを修正</li>
+    <li>児童名が辞書に無い場合は児童マスタへの新規登録ダイアログが出る</li>
+  </ul>
+
+  <h3>ANTHROPIC_API_KEY 未設定の場合</h3>
+  <p>PDF取込は使えなくなりますが、Excel貼付は通常通り利用可能です。手入力モードも併用してください。</p>
+
+  <div class="note"><strong>取込全般の注意</strong>
+    <ul>
+      <li>1回の取込で1ヶ月分を想定</li>
+      <li>既存データは月単位で上書き（同日同児童は新しい値で置換）</li>
+      <li>出席判定は「送り時刻 or 迎え時刻あり、かつステータスがキャンセル待ちでない」</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="chapter" id="ch7">
+  <h2><span class="chap-num">7.</span> <span class="chap-title">送迎表</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+  <p>シフト・送迎モード →「送迎表」（<code>/admin/shifts/transport</code>）</p>
+
+  <h3>送迎表の基本</h3>
+  <ul>
+    <li>当日の送り（朝〜昼）と迎え（夕方）を時間軸で表示</li>
+    <li>1便あたり最大 2名の職員を割当</li>
+    <li>事業所設定で <code>transport_enabled=false</code> の事業所はメニューから消える</li>
+  </ul>
+
+  <h3>自動生成</h3>
+  <ol>
+    <li>シフトを「仮シフト」または「公開中」にしておく</li>
+    <li>「送迎自動生成」ボタンをクリック</li>
+    <li>ロジック:
+      <ul>
+        <li>① 出勤者</li>
+        <li>② 勤務時間内</li>
+        <li>③ エリア一致</li>
+        <li>④ 前後 30分以内なら同便に統合</li>
+        <li>⑤ トリップ数を職員間で均等化</li>
+      </ul>
+    </li>
+    <li>条件未達のセルは「未割当」赤ハイライト（空欄確定は禁止）</li>
+  </ol>
+
+  <h3>手動で調整</h3>
+  <ul>
+    <li>職員セルをクリックして差替</li>
+    <li>ドラッグで便を移動</li>
+  </ul>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/07-transport.png" alt="送迎表">
+    <figcaption class="shot-cap">
+      <span class="filename">images/07-transport.png</span>
+      送迎表（時間軸 + 1便あたり2名割当の例。未割当の赤ハイライトも見えると望ましい）
+    </figcaption>
+  </figure>
+
+  <h3>キャンセル待ち児童</h3>
+  <p><code>attendance_status='waitlist'</code> の児童はメイン送迎表からは除外され、
+  画面下部の「キャンセル待ち」セクションに表示されます。</p>
+
+  <h3>週次送迎の出力</h3>
+  <p>送迎表ページ上部の「週次送迎を出力」ボタン → PDF ダウンロード。
+  サイドバーから直接は遷移できません（出力ボタンに統合済み）。</p>
+</section>
+
+<!-- 8 -->
+<section class="chapter" id="ch8">
+  <h2><span class="chap-num">8.</span> <span class="chap-title">休み希望と承認</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+  <p>シフト・送迎モード →「休み希望」（<code>/admin/requests</code>, <code>/mgr/requests</code>）</p>
+
+  <h3>用語整理（migration 157 以降）</h3>
+  <ul>
+    <li><strong>希望休</strong> … 社員が「この日休みたい」と希望として出した休み（このページで扱う）</li>
+    <li><strong>公休</strong> … 管理者がシフト作成画面で直接マークした休み。社員からは申請できない</li>
+    <li>旧バージョンの「公休」表記は全て「希望休」に置き換わりました</li>
+  </ul>
+
+  <h3>社員が希望休を出すフロー</h3>
+  <ol>
+    <li>社員画面の <code>/my/requests</code></li>
+    <li>「希望休を提出」ボタン</li>
+    <li>日付 + 種別を選択:
+      <ul>
+        <li>希望休（終日）</li>
+        <li>有給休暇（<code>paid_leave</code>）</li>
+        <li>終日勤務可（<code>full_day_available</code>）</li>
+        <li>午前休（<code>am_off</code>）</li>
+        <li>午後休（<code>pm_off</code>）</li>
+      </ul>
+    </li>
+    <li>必要に応じて理由を記入 → 送信</li>
+    <li><code>status='pending'</code> で保存</li>
+  </ol>
+
+  <h3>マネージャー / 管理者が承認するフロー</h3>
+  <ol>
+    <li><code>/admin/requests</code> または <code>/mgr/requests</code> を開く</li>
+    <li>「承認待ち」リストから対象の申請をクリック</li>
+    <li>内容を確認して「承認」または「却下」</li>
+    <li>承認すると、その日の自動シフト生成でその職員が「希望休（金色セル）」として確定する</li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/08a-requests-list.png" alt="休み希望 一覧画面">
+    <figcaption class="shot-cap">
+      <span class="filename">images/08a-requests-list.png</span>
+      休み希望一覧 — 社員ごとに「希望休 / 有給 / 出勤可 / AM休 / PM休」の集計件数 + 提出済バッジ
+    </figcaption>
+  </figure>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/08b-requests-detail.png" alt="休み希望 詳細カレンダー">
+    <figcaption class="shot-cap">
+      <span class="filename">images/08b-requests-detail.png</span>
+      社員名をクリックすると開く月次カレンダー — 希望休（紫）/ 有給（緑）/ 補足メモ
+    </figcaption>
+  </figure>
+
+  <h3>シフト変更申請（公開後の差替依頼）</h3>
+  <ul>
+    <li>公開後の自分のシフトを変更したい時、社員が変更申請を出す</li>
+    <li>「🔔 シフト変更申請 N件 承認待ち」が承認キューに表示</li>
+    <li>出勤中の 管理者のみ承認可能（マネージャーは閲覧のみ）</li>
+    <li>申請選択肢から「公休」は除外（公休は管理者専用のため）</li>
+  </ul>
+
+  <div class="note">
+    <strong>注意:</strong>
+    <ul>
+      <li>社員は自分の申請のみ書き込み可（RLS）</li>
+      <li>マネージャーは自事業所内の申請のみ承認可</li>
+      <li>承認後にシフト作成画面で「希望休（金色）」として表示。公休（青色）とは別扱い</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="chapter" id="ch9">
+  <h2><span class="chap-num">9.</span> <span class="chap-title">利用料金表</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+  </div>
+  <p>シフト・送迎モード →「利用料金表」（<code>/admin/shifts/output/billing</code>）</p>
+  <p>月次の利用負担額（自己負担金）を集計します。</p>
+
+  <h3>出席日数の判定</h3>
+  <ul>
+    <li>「送り時刻 or 迎え時刻あり、かつ status != 'waitlist'」が出席</li>
+    <li>お休み / 欠席 / キャンセル待ちは出席に含めない</li>
+    <li>時刻 NULL の planned / present は出席にカウントされない（ゴーストデータ対策）</li>
+  </ul>
+
+  <h3>自動計算される項目</h3>
+  <ul>
+    <li>出席日数（上記ロジック）</li>
+    <li>おやつ消耗品代: <code>50円 × 出席日数</code>（固定）</li>
+    <li>公文代: <code>children.kumon_monthly_fee × 1</code>（児童ごとの月額。null なら計上しない）</li>
+  </ul>
+
+  <h3>手動入力する項目</h3>
+  <ul>
+    <li>利用負担額: 月次で手動入力（上限 4,600 / 37,200 / 自由入力 / 無料 を選択）</li>
+    <li>名古屋市は preschool も無償化対象（<code>NAGOYA_FREE_PRESCHOOL_MUNICIPALITY</code>）</li>
+    <li>全国無償化: nursery_3 / nursery_4 / nursery_5 学年は自動で無料</li>
+  </ul>
+
+  <div class="note">
+    <strong>注意:</strong> 利用負担額の精緻計算（出席日数 × 単価でクリップ）はデイロボに任せる。
+    月次料金表ページでは手動入力 + 自動集計の組み合わせ。児童属性として「1日単価」は持たない。
+  </div>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/09-billing.png" alt="利用料金表">
+    <figcaption class="shot-cap">
+      <span class="filename">images/09-billing.png</span>
+      利用料金表（児童 × 月の集計表 — 出席日数・おやつ代・公文代・利用負担額の列）
+    </figcaption>
+  </figure>
+</section>
+
+<!-- 10 -->
+<section class="chapter" id="ch10">
+  <h2><span class="chap-num">10.</span> <span class="chap-title">日次出力 / 業務日報</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+
+  <h3>日次出力（<code>/admin/shifts/output/daily</code>）</h3>
+  <p>当日の利用者一覧と出席状況を PDF / Excel で出力。</p>
+  <ul>
+    <li>児童名 / 送迎時刻 / 出席状況</li>
+    <li>出席判定は「時刻あり、かつ waitlist でない」</li>
+  </ul>
+
+  <h3>業務日報（<code>/admin/shifts/output/daily-report</code>）</h3>
+  <p>当日の業務記録テンプレート。</p>
+  <ul>
+    <li>出席児童 / 活動内容（自由入力）/ 特記事項 / 担当職員サイン欄</li>
+  </ul>
+
+  <h3>同席日数（<code>/admin/shifts/output/staff-child-overlap</code>）</h3>
+  <p>特定職員と児童が一緒に過ごした日数を集計。個別支援計画の根拠資料として利用可能。</p>
+
+  <h3>印刷</h3>
+  <p>各出力ページの「印刷」ボタンから直接プリント可能。レイアウトは A4 縦/横を自動判定します。</p>
+</section>
+
+<!-- 11 -->
+<section class="chapter" id="ch11">
+  <h2><span class="chap-num">11.</span> <span class="chap-title">書類とタグ</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+  </div>
+  <p>社員管理モード →「書類管理」（管理者のみ <code>/admin/documents</code>）</p>
+
+  <h3>書類テンプレートの作成</h3>
+  <ol>
+    <li>PDF をアップロード（最大 20MB、PPTX は不可）</li>
+    <li>PDF 上にタグを配置:
+      <ul>
+        <li>タグキー（英数字）+ ソースタイプ（社員データ / 法人情報 / フォーム入力 / 固定値 / カスタムフィールド）</li>
+        <li>配置はドラッグで移動、サイズはハンドルで調整</li>
+      </ul>
+    </li>
+    <li>同一テンプレートに同じタグキーは1つまで（UNIQUE）</li>
+    <li>フォント: IPAex 明朝 固定（MS 明朝相当）</li>
+    <li>装飾（太字 / 斜体 / 下線 / 色 / 回転）は不可</li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/11-document-tag-editor.png" alt="書類テンプレート タグ配置">
+    <figcaption class="shot-cap">
+      <span class="filename">images/11-document-tag-editor.png</span>
+      書類テンプレート編集画面（PDF 上にタグを配置している様子 + タグキー一覧）
+    </figcaption>
+  </figure>
+
+  <h3>タグの種類</h3>
+  <ul>
+    <li><strong>社員データ:</strong> 氏名 / 入社日 など、社員情報から自動差込</li>
+    <li><strong>法人情報:</strong> 法人名 / 代表者名 など</li>
+    <li><strong>フォーム入力:</strong> 書類作成時にフォームで入力する項目</li>
+    <li><strong>固定値:</strong> 設定した文字列をそのまま差込</li>
+    <li><strong>カスタムフィールド:</strong> 自由項目（事業所別に追加）の値</li>
+  </ul>
+
+  <h3>書類を生成する</h3>
+  <ol>
+    <li>テンプレート一覧から対象を選択</li>
+    <li>対象社員を指定</li>
+    <li>form_data タグがあればフォーム入力</li>
+    <li>「生成」 → PDF ダウンロード</li>
+  </ol>
+
+  <h3>必須/任意の判定</h3>
+  <p>タグの required + source_field から <code>lib/field-applicability.ts</code> が自動判定。
+  旧 VISIBILITY_CONDITIONS は migration 119 で廃止済み。</p>
+
+  <div class="note">上限: 1テナントあたり最大 10 件（<code>MAX_DOCUMENTS_PER_TENANT</code>）</div>
+</section>
+
+<!-- 12 -->
+<section class="chapter" id="ch12">
+  <h2><span class="chap-num">12.</span> <span class="chap-title">研修</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+  </div>
+  <p>社員管理モード →「研修」（<code>/admin/trainings</code>, <code>/mgr/trainings</code>）</p>
+
+  <h3>研修を作成</h3>
+  <ol>
+    <li>「研修を追加」ボタン</li>
+    <li>タイトル / 説明 / 受講対象（全員 / 事業所別 / 役職別）</li>
+    <li>動画 URL or PDF 資料を添付</li>
+    <li>受講確認方法を選択:
+      <ul>
+        <li>視聴完了報告のみ</li>
+        <li>視聴 + 感想文（最低150文字）</li>
+        <li>視聴 + 確認テスト</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>受講状況の確認</h3>
+  <p>研修詳細ページで全対象者の進捗を一覧表示:</p>
+  <ul>
+    <li>pending（未受講）</li>
+    <li>passed（合格）</li>
+    <li>failed（不合格）</li>
+    <li>resubmit（再提出待ち）</li>
+  </ul>
+
+  <h3>感想文 / テストの採点</h3>
+  <ul>
+    <li>マネージャー / 管理者が内容を確認 → 合格 / 不合格 / 再提出要求</li>
+    <li>再提出を要求した場合、社員側に通知（視覚通知のみ、音なし）</li>
+  </ul>
+
+  <div class="note">
+    感想文の最低文字数は <code>TRAINING_SUMMARY_MIN_CHARS=150</code>。
+    AI診断結果との連動は無し（研修は独立）。
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="chapter" id="ch13">
+  <h2><span class="chap-num">13.</span> <span class="chap-title">お知らせ</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+  </div>
+  <p>社員管理モード →「お知らせ」（<code>/admin/announcements</code>, <code>/mgr/announcements</code>）</p>
+
+  <h3>お知らせを投稿</h3>
+  <ol>
+    <li>「お知らせを作成」ボタン</li>
+    <li>タイトル / 本文(リッチテキスト・ブロックエディタ)</li>
+    <li>公開対象（全員 / 事業所別 / 役職別）</li>
+    <li>「下書き保存」または「公開」</li>
+    <li>公開すると対象の社員の通知ベルに新着バッジが付く</li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/13-announcement-edit.png" alt="お知らせ作成">
+    <figcaption class="shot-cap">
+      <span class="filename">images/13-announcement-edit.png</span>
+      お知らせ作成ダイアログ（タイトル + ブロックエディタ + 公開対象セレクタ）
+    </figcaption>
+  </figure>
+
+  <h3>既読管理</h3>
+  <ul>
+    <li>社員がお知らせを開くと自動で既読フラグ</li>
+    <li>マネージャー / 管理者 は「未読者一覧」で誰がまだ読んでいないか確認可能</li>
+  </ul>
+
+  <h3>カテゴリ</h3>
+  <ul>
+    <li>「設定 → カテゴリ管理」でカテゴリを追加可能</li>
+    <li>カテゴリ追加後は即座に反映される（手動リロード不要）</li>
+  </ul>
+
+  <h3>個別連絡（<code>/admin/messages</code>）</h3>
+  <p>お知らせは「全員/グループ」、個別連絡は「1対1」用。
+  個別連絡は migration 142 で追加された機能。</p>
+</section>
+
+<!-- 14 -->
+<section class="chapter" id="ch14">
+  <h2><span class="chap-num">14.</span> <span class="chap-title">遵守事項</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+  </div>
+  <p>社員管理モード →「遵守事項」（<code>/admin/compliance</code>, <code>/mgr/compliance</code>）</p>
+  <p>法人として職員に守ってもらうルール（個人情報保護・SNS規約 等）を一覧管理。</p>
+
+  <h3>遵守事項を作成</h3>
+  <ol>
+    <li>「遵守事項を追加」ボタン</li>
+    <li>タイトル / 本文 / 同意必須かどうか</li>
+    <li>公開対象を選択 → 公開</li>
+  </ol>
+
+  <h3>同意状況の確認</h3>
+  <ul>
+    <li>社員側で「同意します」ボタンを押すと同意フラグが立つ</li>
+    <li>一覧で未同意者を確認可能</li>
+    <li>同意必須にしたまま未同意の職員は通知バッジで催促表示</li>
+  </ul>
+</section>
+
+<!-- 15 -->
+<section class="chapter" id="ch15">
+  <h2><span class="chap-num">15.</span> <span class="chap-title">設定と事業所追加</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+  </div>
+  <p>社員管理モード →「設定」（<code>/admin/settings</code>）</p>
+
+  <h3>設定タブ</h3>
+  <ul>
+    <li>法人情報（管理者のみ編集可）</li>
+    <li>カスタムフィールド管理（管理者のみ）</li>
+    <li>役職（positions）管理</li>
+    <li>カテゴリ管理</li>
+    <li>振込銀行情報（最大 3 件、<code>MAX_PAYROLL_BANKS_PER_TENANT</code>）</li>
+  </ul>
+
+  <h3>事業所を追加（管理者のみ、<code>/admin/facilities</code>）</h3>
+  <ol>
+    <li>「事業所を追加」ボタン</li>
+    <li>事業所名 / 住所 / 表示順</li>
+    <li>機能フラグ:
+      <ul>
+        <li><code>shift_enabled</code>: シフト機能を使う（false ならシフトモードの事業所セレクタから除外）</li>
+        <li><code>transport_enabled</code>: 送迎機能を使う（false ならメニューから送迎表が消える）</li>
+        <li><code>shift_only_mode</code>: 「シフト/休み希望/職員管理/ダッシュボード」だけに絞る（migration 125）</li>
+      </ul>
+    </li>
+    <li>保存後すぐにシフトモードのセレクタに反映</li>
+  </ol>
+
+  <figure class="shot-wrap">
+    <img class="shot" src="images/15-facility-add.png" alt="事業所追加ダイアログ">
+    <figcaption class="shot-cap">
+      <span class="filename">images/15-facility-add.png</span>
+      事業所追加画面（事業所名 + 住所 + 3つの機能フラグ: shift_enabled / transport_enabled / shift_only_mode）
+    </figcaption>
+  </figure>
+
+  <h3>事業所設定（シフトモード側、<code>/admin/shifts/facility-settings</code>）</h3>
+  <ul>
+    <li>営業時間 / 定休日</li>
+    <li>エリア定義（送迎の地域分け）</li>
+    <li>有資格者最低人数</li>
+    <li>児童の最低職員比</li>
+  </ul>
+
+  <h3>アプリ権限管理（<code>/admin/access-matrix</code>、管理者のみ）</h3>
+  <ul>
+    <li>全社員のアプリ権限（管理者 / マネージャー / 社員 / シフト統括）一覧</li>
+    <li>ダイアログでロール変更可能</li>
+    <li>マネージャーの兼任先事業所を追加・削除</li>
+  </ul>
+</section>
+
+<!-- 16 -->
+<section class="chapter" id="ch16">
+  <h2><span class="chap-num">16.</span> <span class="chap-title">トラブルシュート</span></h2>
+  <div class="roles">
+    <span class="role-badge role-admin">管理者</span>
+    <span class="role-badge role-manager">マネージャー</span>
+    <span class="role-badge role-shift">シフト統括</span>
+  </div>
+  <p>よくある質問</p>
+
+  <div class="qa">
+    <p class="q">Q. ログインできない</p>
+    <div class="a">
+      <ul>
+        <li>退職処理されていないか 管理者に確認（「退職処理済みのアカウントです」表示）</li>
+        <li>パスワードリセットを試す（メールは1時間有効）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="q">Q. シフトを「公開」したのに 社員に表示されない</p>
+    <div class="a">
+      <ul>
+        <li><code>publish_status</code> が本当に 'published' になっているか確認（バッジが「公開中」かチェック）</li>
+        <li>社員自身の facility_id とシフトの facility_id が一致しているか</li>
+        <li>社員のブラウザでリロードしてもらう</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="q">Q. PDF取込で「APIキー未設定」エラー</p>
+    <div class="a">
+      <ul>
+        <li>環境変数 <code>ANTHROPIC_API_KEY</code> が未設定</li>
+        <li>管理者に連絡して <code>.env.local</code> / Vercel 環境変数を確認してもらう</li>
+        <li>暫定対応として手入力 or Excel貼付を使用</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="q">Q. 送迎表が「未割当」（赤）のまま</p>
+    <div class="a">
+      <ul>
+        <li>該当時刻に出勤予定の有資格者が不足</li>
+        <li>該当エリアの担当が不在</li>
+        <li>手動で職員を割当 or シフトを調整</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="q">Q. 利用料金表の出席日数がおかしい</p>
+    <div class="a">
+      <ul>
+        <li>利用表で「時刻あり、status != waitlist」が出席判定（<code>lib/logic/attendance.ts</code>）</li>
+        <li>お休み / 欠席 / キャンセル待ちはカウントされない</li>
+        <li>時刻 NULL の planned / present もカウントされない（ゴーストデータ対策）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="q">Q. 社員の画面で「自分のシフト」が出ない</p>
+    <div class="a">
+      <ul>
+        <li>該当月のシフトが「公開中」になっているか確認</li>
+        <li>自分宛の割当があるか確認</li>
+        <li>ブラウザキャッシュをクリアして再ログイン</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="q">Q. 招待メールが届かない</p>
+    <div class="a">
+      <ul>
+        <li>迷惑メールフォルダを確認</li>
+        <li>1時間以上経過 → 失効。管理者に再送依頼</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="q">Q. ロール変更が反映されない</p>
+    <div class="a">
+      <ul>
+        <li><code>/admin/access-matrix</code> で変更後、対象の社員に再ログインしてもらう</li>
+        <li>middleware のロール判定はセッション単位</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>連絡先</h3>
+  <ul>
+    <li>操作方法でこのマニュアルでも分からない場合は、システム管理者にお問い合わせください</li>
+    <li>バグや改善要望はシステム管理者経由で開発元へ</li>
+  </ul>
+</section>
+
+<footer>
+  deaf-ic 使い方マニュアル草稿 — スクショは <code>images/</code> フォルダにファイル名通りにアップロードしてください
+</footer>
+
+</main>
+</div>
+
+<script>
+  /* スクショ画像が無い場合、figure を .shot-missing 状態に切替えて
+     CSS でプレースホルダー外観（点線枠 + ファイル名表示）に変える */
+  document.querySelectorAll('figure.shot-wrap img.shot').forEach(function (img) {
+    var markMissing = function () {
+      var fig = img.closest('figure');
+      if (fig) fig.classList.add('shot-missing');
+    };
+    img.addEventListener('error', markMissing);
+    /* ブラウザによっては既に load 試行が終わっている可能性があるため再評価 */
+    if (img.complete && img.naturalWidth === 0) markMissing();
+  });
+</script>
+
+</body>
+</html>

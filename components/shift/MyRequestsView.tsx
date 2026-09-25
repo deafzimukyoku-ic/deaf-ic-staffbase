@@ -338,9 +338,9 @@ export default function MyRequestsView({ employeeId, tenantId, facilityId }: Pro
                   )}
                 </button>
 
-                {/* インラインピッカー */}
+                {/* インラインピッカー: 木〜土のセルは right-0 にして画面右端の見切れ防止（モバイル対応） */}
                 {isEditing && !readOnly && (
-                  <div className="absolute z-30 top-full left-0 mt-1 w-56 p-2 rounded-md shadow-lg bg-white border border-diletto-gray/15">
+                  <div className={`absolute z-30 top-full mt-1 w-56 p-2 rounded-md shadow-lg bg-white border border-diletto-gray/15 ${dow >= 4 ? 'right-0' : 'left-0'}`}>
                     <div className="text-[11px] font-bold mb-1.5 text-diletto-gray">
                       {format(new Date(c.date), 'M月d日(E)', { locale: ja })}
                     </div>

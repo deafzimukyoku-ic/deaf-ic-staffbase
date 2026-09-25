@@ -30,6 +30,7 @@ interface MeRow {
     last_name: string;
     first_name: string;
     facility_id: string | null;
+    role: string;
 }
 
 export default function ManagerAnnouncementsPage() {
@@ -77,7 +78,7 @@ export default function ManagerAnnouncementsPage() {
 
             const { data: meData } = await supabase
                 .from('employees')
-                .select('id, tenant_id, last_name, first_name, facility_id')
+                .select('id, tenant_id, last_name, first_name, facility_id, role')
                 .eq('auth_user_id', user.id)
                 .single();
             if (!meData) return;
@@ -252,6 +253,8 @@ export default function ManagerAnnouncementsPage() {
                             items={announcements.map((a) => ({ id: a.id, is_published: a.is_published ?? true }))}
                             scopeLabel="全体"
                             onChanged={() => me && reloadAnnouncements(me.tenant_id)}
+                            restrictedFor="manager"
+                            currentUserRole={me?.role}
                         />
                         <CategoryManagerModal type="announcement" onChanged={reloadCategories} />
                     </div>

@@ -30,6 +30,7 @@ interface MeRow {
   last_name: string;
   first_name: string;
   facility_id: string | null;
+  role: string;
 }
 
 export default function ManagerTrainingsPage() {
@@ -77,7 +78,7 @@ export default function ManagerTrainingsPage() {
 
       const { data: meData } = await supabase
         .from('employees')
-        .select('id, tenant_id, last_name, first_name, facility_id')
+        .select('id, tenant_id, last_name, first_name, facility_id, role')
         .eq('auth_user_id', user.id)
         .single();
       if (!meData) return;
@@ -238,6 +239,8 @@ export default function ManagerTrainingsPage() {
               items={trainings.map((t) => ({ id: t.id, is_published: t.is_published ?? true }))}
               scopeLabel="全体"
               onChanged={() => me && reloadTrainings(me.tenant_id)}
+              restrictedFor="manager"
+              currentUserRole={me?.role}
             />
             <CategoryManagerModal type="training" onChanged={reloadCategories} />
           </div>

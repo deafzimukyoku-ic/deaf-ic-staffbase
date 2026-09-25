@@ -47,7 +47,27 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-04-30（Phase D 在職/退職切替 + 退職者ログイン遮断 完了） / 全体完了率: 約 96%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-05-15（Phase H チャットボット 中止 → スクショ付きマニュアル外部公開へ方針転換） / 全体完了率: 約 96%</p>
+
+<!-- Phase H: 中止（スクショ付きマニュアル外部公開へ方針転換） -->
+<div class="phase" style="border: 1px dashed #d1d5db; background: #fafafa;">
+  <h2 style="color:#6b7280;">Phase H — 使い方チャットボット（<strong>中止</strong>）<span class="phase-pct">—</span></h2>
+  <table>
+    <thead><tr><th>判断</th><th>理由</th><th>代替</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>2026-05-15 中止決定</td>
+        <td>LLM ハルシネーション・ランニングコスト・開発工数の3点で、スクショ付き静的マニュアルの方がろう者スタッフ向けに視認性・確実性で勝ると判断</td>
+        <td>外部公開リポ <code>deaf-ic-staff-manual</code>（GitHub Pages）に移行。deaf-ic 本体アプリには非統合（独立ドキュメント運用）</td>
+      </tr>
+      <tr>
+        <td>削除されたファイル</td>
+        <td>—</td>
+        <td><code>lib/help/manual.ts</code>（削除済）/ migration 158 計画は破棄</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- Phase D: 在職/退職切替 + 退職者ログイン遮断 -->
 <div class="phase">
