@@ -47,3 +47,6 @@ dev.log
 
 # 調査スクリプトの出力 (employee 個人情報を含む CSV)
 /docs/pdf-mobile-bug/
+
+# graphify（コードの地図）: graphify-out/ は各 PC で作り直す（graphify update .）ので、コミットしない
+graphify-out/
