@@ -7,7 +7,8 @@ import { createClient } from '@/lib/supabase/client';
 import { ProgressDashboard } from '@/components/admin/ProgressDashboard';
 import { NotificationsAlertModal } from '@/components/notifications/NotificationsAlertModal';
 import { isEmployeeInAudience, loadTemplateAudience } from '@/lib/template-audience';
-import { isItemInAudience } from '@/lib/multi-facility';
+import { isItemInAudience, fetchAllRows } from '@/lib/multi-facility';
+import { toast } from 'sonner';
 import type { Employee, DocumentTemplate, TargetType } from '@/lib/types';
 
 export default function AdminDashboardPage() {
@@ -22,6 +23,26 @@ export default function AdminDashboardPage() {
 
       const { data: me } = await supabase.from('employees').select('tenant_id').eq('auth_user_id', user.id).single();
       if (!me) return;
+
+      /* 提出・確認・既読の記録は全期間で増え続けるテーブル。単発取得だと PostgREST max-rows(1000) で
+         黙って切れる（2026-10-13 時点で compliance_acknowledgments が 1916 行）ため、ページングで全件取る。
+         orderCols は各テーブルの一意キー（ページ間の並びを固定して取りこぼし・重複を防ぐ）。
+         失敗しても他の集計は出したいので、その項目だけ空にしてトーストで知らせる。 */
+      async function allRows(label: string, table: string, cols: string, orderCols: string[], filter?: [string, string]) {
+        try {
+          const data = await fetchAllRows<Record<string, string>>(() => {
+            let q = supabase.from(table).select(cols);
+            if (filter) q = q.eq(filter[0], filter[1]);
+            for (const c of orderCols) q = q.order(c, { ascending: true });
+            return q;
+          });
+          return { data };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? '';
+          toast.error(`${label}の取得に失敗しました`, { description: msg });
+          return { data: null };
+        }
+      }
 
       const tid = me.tenant_id;
 
@@ -47,11 +68,11 @@ export default function AdminDashboardPage() {
            171 以降 shift_manager は進捗一覧から除外 */
         supabase.from('employees').select('id, employee_number, last_name, first_name, last_name_kana, first_name_kana, status, facility_id, position_id, has_car_commute, is_shuttle_driver').eq('tenant_id', tid).neq('role', 'shift_manager'),
         supabase.from('facilities').select('id, name').eq('tenant_id', tid).order('display_order', { ascending: true }).order('created_at', { ascending: true }),
-        supabase.from('document_submissions').select('employee_id, submitted_at').eq('status', 'submitted'),
-        supabase.from('compliance_acknowledgments').select('employee_id, acknowledged_at'),
-        supabase.from('training_submissions').select('employee_id, submitted_at').eq('result', 'passed'),
-        supabase.from('announcement_reads').select('employee_id, read_at'),
-        supabase.from('manual_reads').select('employee_id, read_at'),
+        allRows('書類提出の記録', 'document_submissions', 'employee_id, submitted_at', ['id'], ['status', 'submitted']),
+        allRows('遵守事項の確認記録', 'compliance_acknowledgments', 'employee_id, acknowledged_at', ['id']),
+        allRows('研修の合格記録', 'training_submissions', 'employee_id, submitted_at', ['id'], ['result', 'passed']),
+        allRows('お知らせの既読記録', 'announcement_reads', 'employee_id, read_at', ['announcement_id', 'employee_id']),
+        allRows('マニュアルの既読記録', 'manual_reads', 'employee_id, read_at', ['manual_id', 'employee_id']),
         /* 兼任 (migration 130/131): 各社員の追加所属 facility を一括取得 */
         supabase.from('employee_facilities').select('employee_id, facility_id'),
       ]);

@@ -214,7 +214,9 @@ function ReportBody({
   const { views, categories } = data;
 
   /* カテゴリフィルタ適用後の items。
-     'all' 表示時はカテゴリ順 → カテゴリ内 sort_order 順で並べ替えて、
+     列は「新しい投稿が左」= API の並び（sort_order → created_at の昇順）を逆にする。
+     古い順だと新しい投稿の既読を見るたびに表の右端までスクロールが要ったため（2026-10-13 先方要望）。
+     'all' 表示時はカテゴリ順を保ったまま、カテゴリ内だけ新しい順にして
      同カテゴリの列が隣接するようにする（後でグループ見出しを乗せる）。 */
   const items = useMemo(() => {
     let filtered: ItemRow[];
@@ -222,7 +224,7 @@ function ReportBody({
     else if (categoryFilter === 'uncategorized') filtered = data.items.filter((it) => !it.category_id);
     else filtered = data.items.filter((it) => it.category_id === categoryFilter);
 
-    if (categoryFilter !== 'all') return filtered;
+    if (categoryFilter !== 'all') return [...filtered].reverse();
 
     /* カテゴリの並び順を index ベースの map に。未設定 (null) は末尾。 */
     const catOrder = new Map(categories.map((c, i) => [c.id, i]));
@@ -231,7 +233,7 @@ function ReportBody({
         const ca = a.it.category_id ? (catOrder.get(a.it.category_id) ?? 9999) : 99999;
         const cb = b.it.category_id ? (catOrder.get(b.it.category_id) ?? 9999) : 99999;
         if (ca !== cb) return ca - cb;
-        return a.idx - b.idx; /* 同カテゴリ内は API の並び（sort_order → created_at）を温存 */
+        return b.idx - a.idx; /* 同カテゴリ内は API の並び（sort_order → created_at）の逆＝新しい順 */
       })
       .map(({ it }) => it);
   }, [data.items, categoryFilter, categories]);

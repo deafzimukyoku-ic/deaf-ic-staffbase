@@ -67,6 +67,26 @@
 
 ---
 
+## 0.22 集計・レポートの 1000 行上限を全画面点検して修正 + 閲覧レポートの列を新しい順に（2026-10-13）
+
+### 背景
+- 0.21 の後、全画面を点検。法人全体で増え続けるログ系テーブルが 1000 行を超え、閲覧レポートの既読率が約半分に出ていた（詳細は `docs/error-log.md` 同日エントリ）
+- **ルール追加**: 1000 行を超えうるのは「施設×期間の成長テーブル」だけではない。**法人全体のログ系（`*_view_logs` / `compliance_acknowledgments` / `*_reads` / `*_submissions`）も対象**。全件が要るなら `fetchAllRows` + 一意キーで `order`、状態判定（完了/未完了）だけなら行を取らず `count: 'exact', head: true` で数える
+
+### 変更
+- `app/api/reports/route.ts`: 閲覧ログ（`{category}_view_logs`）と `training_submissions` を `fetchAllRows` 経由に
+- `app/(admin)/admin/dashboard/page.tsx`: `document_submissions` / `compliance_acknowledgments` / `training_submissions` / `announcement_reads` / `manual_reads` を `fetchAllRows` 経由に（ローカル関数 `allRows`）
+- `app/(admin)/admin/shifts/dashboard/page.tsx`: `schedule_entries` / `shift_assignments` / `transport_assignments` を件数（全件・`publish_status <> 'published'`）で判定。送迎は `schedule_entries!inner(date)` で月を絞る
+- `components/admin/ReportMatrix.tsx`: 列を API の並び（`sort_order` → `created_at` 昇順）の**逆＝新しい投稿が左**に。「すべて」表示ではカテゴリ順は保ち、カテゴリ内だけ新しい順
+
+### 参照（テーブル・列・関数）
+- テーブル: `compliance_view_logs` / `training_view_logs` / `announcement_view_logs` / `manual_view_logs`（`id` / `tenant_id` / `employee_id` / `item_id` / `viewed_at`）、`compliance_acknowledgments`（`id` / `employee_id` / `acknowledged_at`）、`announcement_reads`（PK `announcement_id, employee_id` / `read_at`）、`manual_reads`（PK `manual_id, employee_id` / `read_at`）、`document_submissions`（`id` / `status`）、`training_submissions`（`id` / `result` / `submitted_at`）、`shift_assignments` / `transport_assignments`（`tenant_id` / `publish_status`）、`schedule_entries`（`date`）
+- 関数: `fetchAllRows`（`lib/multi-facility.ts`）
+- 点検・検証: `scripts/probe-table-row-counts.mjs`（全テーブルの行数）/ `scripts/probe-1000-cap-audit.mjs`（各画面のクエリが本来返す行数）/ `scripts/verify-1000-cap-fixes.mjs`（修正後のクエリを本番で正解と照合）
+- ロール: いずれも admin 画面。RLS 上 admin は法人全体を読めるため件数は service role と同じ
+
+---
+
 ## 0.21 送迎割当の取得を日付範囲＋ページングに一本化（PostgREST 1000行上限の再発, 2026-09-20）
 
 ### 背景（先方報告「送迎表で何回保存しても保存されない」/ 10-07・🧩パズル）

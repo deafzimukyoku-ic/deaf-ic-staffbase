@@ -40,22 +40,32 @@ async function computeStatuses(tenantId: string, targetMonthStr: string, monthFr
     request: 'empty',
   };
 
-  /* 独立する 4 クエリを並列化（wave 1）。transport だけ entryIds に依存するので wave 2。
-     旧実装は 5 本を順次 await していたため SSR が遅かった（2026-06-01 並列化）。 */
-  const [entriesRes, sRowsRes, activeEmpsRes, reqRowsRes] = await Promise.all([
-    supabase.from('schedule_entries').select('id').eq('tenant_id', tenantId).gte('date', monthFrom).lte('date', monthTo),
-    supabase.from('shift_assignments').select('publish_status').eq('tenant_id', tenantId).gte('date', monthFrom).lte('date', monthTo),
+  /* 利用表・シフト・送迎は「行を全部取ってから JS で判定」せず、DB に件数だけ数えさせる。
+     法人全体×1か月の shift_assignments は 2026-10 時点で 1316 行あり、行取得だと PostgREST
+     max-rows(1000) で黙って切れ、下書きが残っていても「完了」と出ていた（2026-10-13）。
+     送迎は schedule_entries の日付で埋め込み inner join して絞る（旧実装は数百件の id を URL に詰めていた）。 */
+  const countOpts = { count: 'exact' as const, head: true };
+  const [entriesCnt, shiftAllCnt, shiftOpenCnt, transAllCnt, transOpenCnt, activeEmpsRes, reqRowsRes] = await Promise.all([
+    supabase.from('schedule_entries').select('id', countOpts).eq('tenant_id', tenantId).gte('date', monthFrom).lte('date', monthTo),
+    supabase.from('shift_assignments').select('id', countOpts).eq('tenant_id', tenantId).gte('date', monthFrom).lte('date', monthTo),
+    supabase.from('shift_assignments').select('id', countOpts).eq('tenant_id', tenantId).gte('date', monthFrom).lte('date', monthTo).neq('publish_status', 'published'),
+    supabase.from('transport_assignments').select('id, schedule_entries!inner(date)', countOpts).eq('tenant_id', tenantId).gte('schedule_entries.date', monthFrom).lte('schedule_entries.date', monthTo),
+    supabase.from('transport_assignments').select('id, schedule_entries!inner(date)', countOpts).eq('tenant_id', tenantId).gte('schedule_entries.date', monthFrom).lte('schedule_entries.date', monthTo).neq('publish_status', 'published'),
     supabase.from('employees').select('id').eq('tenant_id', tenantId).eq('status', 'active').neq('role', 'admin'),
     supabase.from('shift_requests').select('employee_id').eq('tenant_id', tenantId).eq('month', targetMonthStr),
   ]);
 
-  const entryIds = (entriesRes.data ?? []).map((e) => e.id);
-  result.schedule = entryIds.length > 0 ? 'complete' : 'empty';
+  /* 件数が取れないまま判定すると「未作成」と誤表示するため、失敗はそのまま投げてエラー画面に出す */
+  for (const r of [entriesCnt, shiftAllCnt, shiftOpenCnt, transAllCnt, transOpenCnt]) {
+    if (r.error) throw new Error(`シフト状況の集計に失敗しました: ${r.error.message}`);
+  }
 
-  const sList = (sRowsRes.data ?? []) as { publish_status: string }[];
-  if (sList.length === 0) result.shift = 'empty';
-  else if (sList.every((r) => r.publish_status === 'published')) result.shift = 'complete';
-  else result.shift = 'incomplete';
+  const statusOf = (all: number | null, open: number | null): Status =>
+    !all ? 'empty' : open === 0 ? 'complete' : 'incomplete';
+
+  result.schedule = (entriesCnt.count ?? 0) > 0 ? 'complete' : 'empty';
+  result.shift = statusOf(shiftAllCnt.count, shiftOpenCnt.count);
+  result.transport = statusOf(transAllCnt.count, transOpenCnt.count);
 
   const totalStaff = (activeEmpsRes.data ?? []).length;
   if (totalStaff > 0) {
@@ -63,18 +73,6 @@ async function computeStatuses(tenantId: string, targetMonthStr: string, monthFr
     result.request = submitted.size === 0 ? 'empty'
       : submitted.size >= totalStaff ? 'complete'
       : 'incomplete';
-  }
-
-  // transport は entryIds に依存するため wave 2（依存がある分だけ後続）
-  if (entryIds.length > 0) {
-    const { data: tRows } = await supabase
-      .from('transport_assignments')
-      .select('publish_status')
-      .in('schedule_entry_id', entryIds);
-    const tList = (tRows ?? []) as { publish_status: string }[];
-    if (tList.length === 0) result.transport = 'empty';
-    else if (tList.every((r) => r.publish_status === 'published')) result.transport = 'complete';
-    else result.transport = 'incomplete';
   }
 
   return result;

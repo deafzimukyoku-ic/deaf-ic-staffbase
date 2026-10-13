@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRows } from '@/lib/multi-facility';
 
 /**
  * 閲覧レポート API
@@ -141,13 +142,23 @@ export async function GET(req: NextRequest) {
      SQL 側で GROUP BY して count + max(viewed_at) を返した方が転送量削減。
      Supabase は raw SQL を直接叩けないので、view_logs を全件取って JS で集計する。
      append-only でもログ数 = 社員数 × アイテム数 × 平均閲覧回数 程度なので現実的。 */
-  let viewsQuery = supabase
-    .from(cfg.viewsTable)
-    .select('employee_id, item_id, viewed_at')
-    .eq('tenant_id', me.tenant_id);
-  if (sinceIso) viewsQuery = viewsQuery.gte('viewed_at', sinceIso);
-  const { data: rawViews, error: viewsErr } = await viewsQuery;
-  if (viewsErr) return NextResponse.json({ error: viewsErr.message }, { status: 500 });
+  /* ページング必須（2026-10-13）: 単発取得だと PostgREST max-rows(1000) で黙って切れ、
+     遵守事項 2020 行・お知らせ 1219 行のうち 1000 行しか集計されず「見たのに未読」が出ていた */
+  let rawViews: { employee_id: string; item_id: string; viewed_at: string }[];
+  try {
+    rawViews = await fetchAllRows<{ employee_id: string; item_id: string; viewed_at: string }>(() => {
+      let q = supabase
+        .from(cfg.viewsTable)
+        .select('employee_id, item_id, viewed_at')
+        .eq('tenant_id', me.tenant_id);
+      if (sinceIso) q = q.gte('viewed_at', sinceIso);
+      /* ページ間で並びがぶれると取りこぼし・重複が起きるため順序を固定する */
+      return q.order('id', { ascending: true });
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? '閲覧ログの取得に失敗しました';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 
   /* (employee_id, item_id) で集計: count, 最終閲覧日時, 直近10件の閲覧日時 (新しい順)
      recent_viewed_at は ② tooltip 表示用 (ホバー時に最新10件を YYYY/MM/DD HH:mm:ss で表示) */
@@ -196,13 +207,22 @@ export async function GET(req: NextRequest) {
     const employeeIds = (employeesData || []).map((e) => e.id);
     if (trainingIds.length > 0 && employeeIds.length > 0) {
       /* submitted_at DESC: 配列の先頭が最新。クライアント側で latest = [0]、history = 全体 として使う */
-      const { data: subData } = await supabase
-        .from('training_submissions')
-        .select('id, training_id, employee_id, result, summary_text, admin_comment, submitted_at, reviewed_at')
-        .in('training_id', trainingIds)
-        .in('employee_id', employeeIds)
-        .order('submitted_at', { ascending: false });
-      submissions = (subData as SubmissionRow[]) || [];
+      /* 提出履歴は全期間で増え続けるので、閲覧ログと同じくページングで 1000 行上限を回避する */
+      try {
+        submissions = await fetchAllRows<SubmissionRow>(() =>
+          supabase
+            .from('training_submissions')
+            .select('id, training_id, employee_id, result, summary_text, admin_comment, submitted_at, reviewed_at')
+            .in('training_id', trainingIds)
+            .in('employee_id', employeeIds)
+            .order('submitted_at', { ascending: false })
+            /* submitted_at が同時刻の行でページ境界がぶれないよう id で並びを確定させる */
+            .order('id', { ascending: true }),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? '研修提出の取得に失敗しました';
+        return NextResponse.json({ error: msg }, { status: 500 });
+      }
     }
   }
 
