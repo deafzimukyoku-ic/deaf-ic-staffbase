@@ -77,7 +77,7 @@
 - `app/api/reports/route.ts`: 閲覧ログ（`{category}_view_logs`）と `training_submissions` を `fetchAllRows` 経由に
 - `app/(admin)/admin/dashboard/page.tsx`: `document_submissions` / `compliance_acknowledgments` / `training_submissions` / `announcement_reads` / `manual_reads` を `fetchAllRows` 経由に（ローカル関数 `allRows`）
 - `app/(admin)/admin/shifts/dashboard/page.tsx`: `schedule_entries` / `shift_assignments` / `transport_assignments` を件数（全件・`publish_status <> 'published'`）で判定。送迎は `schedule_entries!inner(date)` で月を絞る
-- `components/admin/ReportMatrix.tsx`: 列の並びは変更なし（一度カテゴリ内を新しい順にしたが、章の順が崩れるためユーザー判断で戻した）
+- `components/admin/ReportMatrix.tsx`: 並びの切り替え（`SortMode` = `category` | `newest`）を追加。`newest` は `version_at` 降順（同時刻は API の並び）・カテゴリ帯なし・見出しにカテゴリ名と日付・`NEW_BADGE_DAYS`(30) 以内に「新着」。選択は localStorage `report-matrix-sort-mode` に保存（per-viewer の好みなので DB には持たない）。一度試した「カテゴリ内だけ逆順」は章の順が崩れるため取り消し済
 
 ### 参照（テーブル・列・関数）
 - テーブル: `compliance_view_logs` / `training_view_logs` / `announcement_view_logs` / `manual_view_logs`（`id` / `tenant_id` / `employee_id` / `item_id` / `viewed_at`）、`compliance_acknowledgments`（`id` / `employee_id` / `acknowledged_at`）、`announcement_reads`（PK `announcement_id, employee_id` / `read_at`）、`manual_reads`（PK `manual_id, employee_id` / `read_at`）、`document_submissions`（`id` / `status`）、`training_submissions`（`id` / `result` / `submitted_at`）、`shift_assignments` / `transport_assignments`（`tenant_id` / `publish_status`）、`schedule_entries`（`date`）

@@ -108,6 +108,19 @@ interface ReportData {
   submissions?: SubmissionRow[];
 }
 
+/* 列の並び。'category' = 管理画面と同じ順（カテゴリ帯つき）/ 'newest' = 版基準日時(version_at)の新しい順。
+   新着順を足した理由（2026-10-13 先方要望）: 遵守事項は 7 カテゴリ 52 件あり、カテゴリ順だと
+   新しい投稿の既読を見るたびに右端までスクロールが要った。作成日ではなく version_at なのは、
+   編集で全員が「旧版＝読み直し」になった投稿も、新規投稿と同じく既読を追いたいため */
+type SortMode = 'category' | 'newest';
+const SORT_MODE_STORAGE_KEY = 'report-matrix-sort-mode';
+/* 新着順で「新着」の目印を付ける期間 */
+const NEW_BADGE_DAYS = 30;
+
+function formatMonthDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit' });
+}
+
 const PERIOD_OPTIONS = [
   { value: 'all', label: '全期間' },
   { value: '30', label: '過去30日' },
@@ -119,7 +132,29 @@ export function ReportMatrix() {
   const [days, setDays] = useState<string>('all');
   /* カテゴリ別フィルタ。'all' = すべて / 'uncategorized' = 未設定 / それ以外 = category id */
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  /* 種別タブを切り替えても並びは保つ（カテゴリ絞り込みと違い、見方の好みなのでリセットしない） */
+  const [sortMode, setSortMode] = useState<SortMode>('category');
   const [data, setData] = useState<ReportData | null>(null);
+
+  /* 前回選んだ並びを復元。SSR と初回描画を一致させるため、マウント後に読む。
+     localStorage はプライベートモード等で例外を投げうるので try/catch（読めなければ既定のカテゴリ順） */
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(SORT_MODE_STORAGE_KEY);
+      if (saved === 'category' || saved === 'newest') setSortMode(saved);
+    } catch {
+      /* 保存できない環境では既定値のまま使う */
+    }
+  }, []);
+
+  function changeSortMode(next: SortMode) {
+    setSortMode(next);
+    try {
+      window.localStorage.setItem(SORT_MODE_STORAGE_KEY, next);
+    } catch {
+      /* 記憶できなくても今回の表示は切り替わるので無視してよい */
+    }
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -189,6 +224,8 @@ export function ReportMatrix() {
                 category={c}
                 categoryFilter={categoryFilter}
                 onCategoryFilterChange={setCategoryFilter}
+                sortMode={sortMode}
+                onSortModeChange={changeSortMode}
               />
             )}
           </TabsContent>
@@ -203,11 +240,15 @@ function ReportBody({
   category,
   categoryFilter,
   onCategoryFilterChange,
+  sortMode,
+  onSortModeChange,
 }: {
   data: ReportData;
   category: Category;
   categoryFilter: string;
   onCategoryFilterChange: (v: string) => void;
+  sortMode: SortMode;
+  onSortModeChange: (v: SortMode) => void;
 }) {
   /* 社員一覧は従業員番号順に並び替え(数値優先、未設定は末尾) */
   const employees = [...data.employees].sort(sortByEmployeeNumber);
@@ -222,6 +263,13 @@ function ReportBody({
     else if (categoryFilter === 'uncategorized') filtered = data.items.filter((it) => !it.category_id);
     else filtered = data.items.filter((it) => it.category_id === categoryFilter);
 
+    if (sortMode === 'newest') {
+      /* 同時刻なら API の並び（管理画面の順）を保つ。ISO 文字列なので文字列比較で時刻順になる */
+      return filtered.map((it, idx) => ({ it, idx }))
+        .sort((a, b) => b.it.version_at.localeCompare(a.it.version_at) || a.idx - b.idx)
+        .map(({ it }) => it);
+    }
+
     if (categoryFilter !== 'all') return filtered;
 
     /* カテゴリの並び順を index ベースの map に。未設定 (null) は末尾。 */
@@ -234,7 +282,15 @@ function ReportBody({
         return a.idx - b.idx; /* 同カテゴリ内は API の並び（sort_order → created_at）を温存 */
       })
       .map(({ it }) => it);
-  }, [data.items, categoryFilter, categories]);
+  }, [data.items, categoryFilter, categories, sortMode]);
+
+  /* 新着順の見出しに出すカテゴリ名 */
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((c) => [c.id, `${c.icon ? `${c.icon} ` : ''}${c.name}`])),
+    [categories],
+  );
+  /* 「新着」の目印の境目。描画のたびに Date.now() がずれないよう、マウント時に 1 回だけ決める */
+  const [newBadgeSinceIso] = useState(() => new Date(Date.now() - NEW_BADGE_DAYS * 86400_000).toISOString());
 
   /* 未設定アイテムが何件あるか（フィルタの「未設定」表示有無の判定用） */
   const uncategorizedCount = useMemo(
@@ -244,7 +300,8 @@ function ReportBody({
 
   /* 'all' 表示時のカテゴリグループ。連続する同カテゴリ列をまとめて colSpan を計算。 */
   const categoryGroups = useMemo(() => {
-    if (categoryFilter !== 'all') return null;
+    /* 新着順ではカテゴリが飛び飛びになるので帯は出さない（各列の見出しにカテゴリ名を出す） */
+    if (categoryFilter !== 'all' || sortMode === 'newest') return null;
     const catMap = new Map(categories.map((c) => [c.id, c]));
     const groups: { catId: string | null; catName: string; icon: string | null; color: string | null; count: number }[] = [];
     for (const it of items) {
@@ -264,7 +321,7 @@ function ReportBody({
       }
     }
     return groups;
-  }, [items, categories, categoryFilter]);
+  }, [items, categories, categoryFilter, sortMode]);
 
   /* (employee_id, item_id) → ViewAgg のルックアップ */
   const viewMap = useMemo(() => {
@@ -441,12 +498,12 @@ function ReportBody({
     <div className="space-y-4">
       {/* カテゴリフィルタ + CSV ダウンロード - モバイルでは縦並び */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
           <label className="text-xs text-brand-gray whitespace-nowrap shrink-0">カテゴリ</label>
           <select
             value={categoryFilter}
             onChange={(e) => onCategoryFilterChange(e.target.value)}
-            className="h-9 flex-1 min-w-0 rounded-md border border-brand-gray/20 bg-white px-3 text-sm"
+            className="h-9 flex-1 min-w-[10rem] rounded-md border border-brand-gray/20 bg-white px-3 text-sm"
           >
             <option value="all">すべて ({data.items.length})</option>
             {categories.map((cat) => {
@@ -461,6 +518,33 @@ function ReportBody({
               <option value="uncategorized">📁 未設定 ({uncategorizedCount})</option>
             )}
           </select>
+          <span className="text-xs text-brand-gray whitespace-nowrap shrink-0 ml-2" id="report-sort-label">並び</span>
+          {/* 色だけで選択中を伝えないよう、選択中は太字＋✓ も付ける（ろう者向け視覚要件） */}
+          <div
+            role="group"
+            aria-labelledby="report-sort-label"
+            className="inline-flex shrink-0 rounded-md border border-brand-gray/20 bg-white overflow-hidden"
+          >
+            {([
+              { value: 'category', label: 'カテゴリ順' },
+              { value: 'newest', label: '新着順' },
+            ] as const).map((opt) => {
+              const active = sortMode === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onSortModeChange(opt.value)}
+                  className={`h-9 px-3 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-inset ${
+                    active ? 'bg-brand-blue/10 text-brand-blue font-bold' : 'text-brand-gray hover:bg-brand-beige/40'
+                  }`}
+                >
+                  {active ? '✓ ' : ''}{opt.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <Button size="sm" variant="outline" className="whitespace-nowrap shrink-0 self-end sm:self-auto" onClick={exportCsv} disabled={items.length === 0 || employees.length === 0}>
           📥 CSV ダウンロード
@@ -559,8 +643,23 @@ function ReportBody({
                       boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.08), inset -1px 0 0 rgba(0,0,0,0.08)',
                     }}
                   >
-                    <span className="block max-w-[220px] truncate" title={it.title}>{it.title}</span>
-                    <span className="text-[10px] text-brand-gray-light font-normal">
+                    <span className="flex items-center gap-1 max-w-[220px]">
+                      <span className="truncate" title={it.title}>{it.title}</span>
+                      {sortMode === 'newest' && it.version_at >= newBadgeSinceIso && (
+                        <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-brand-blue/10 text-brand-blue">新着</span>
+                      )}
+                    </span>
+                    {sortMode === 'newest' && (
+                      <span className="flex items-center gap-1 mt-0.5 font-normal">
+                        <span className="max-w-[150px] truncate rounded bg-brand-beige/60 px-1.5 py-px text-[10px] text-brand-gray">
+                          {it.category_id ? (categoryNameById.get(it.category_id) ?? '未設定') : '未設定'}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-brand-gray-light">
+                          {category === 'training' ? '基準' : '更新'} {formatMonthDay(it.version_at)}
+                        </span>
+                      </span>
+                    )}
+                    <span className="block text-[10px] text-brand-gray-light font-normal">
                       {it.target_type === 'facility' ? '🏢 施設限定' : '全員'}
                     </span>
                   </th>
