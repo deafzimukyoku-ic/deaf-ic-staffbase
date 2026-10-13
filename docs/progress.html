@@ -47,11 +47,11 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-10-13（集計・レポートの1000行上限 全画面点検と修正・閲覧レポートを新しい順に） / 全体完了率: 約 98%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-10-13（集計・レポートの1000行上限 全画面点検と修正） / 全体完了率: 約 98%</p>
 
 <!-- 2026-10-13 集計・レポートの1000行上限 全画面点検 + 閲覧レポート列順 -->
 <div class="phase">
-  <h2>集計・レポートの1000行上限 全画面点検と修正 / 閲覧レポートを新しい順に（2026-10-13） <span class="phase-pct">実装・実DB検証 完了 / 画面確認と本番反映はユーザー判断</span></h2>
+  <h2>集計・レポートの1000行上限 全画面点検と修正（2026-10-13） <span class="phase-pct">実装・実DB検証 完了 / 画面確認と本番反映はユーザー判断</span></h2>
   <table>
     <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
     <tbody>
@@ -60,10 +60,10 @@
       <tr><td>閲覧レポートの閲覧ログをページング取得</td><td class="files">app/api/reports/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>閲覧ログ4種 + 研修の提出履歴。<code>fetchAllRows</code> + <code>order('id')</code></td></tr>
       <tr><td>管理者ダッシュボードの記録をページング取得</td><td class="files">app/(admin)/admin/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>提出・確認・既読の5表。「最終完了日時」が正しくなる（率は DB ビューで計算しており元から正しい）。失敗時はトースト</td></tr>
       <tr><td>シフト管理ダッシュボードを件数判定に</td><td class="files">app/(admin)/admin/shifts/dashboard/page.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>行を取らず「全件」と「未公開」を DB で数える。送迎は月で inner join（URL に id を数百個並べない）</td></tr>
-      <tr><td>閲覧レポートの列を新しい投稿が左に</td><td class="files">components/admin/ReportMatrix.tsx</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>先方要望。管理画面の並び（sort_order→作成日）の逆。「すべて」ではカテゴリ順を保ち、カテゴリ内で新しい順。CSV も同じ順</td></tr>
+      <tr><td>閲覧レポートの列を新しい投稿が左に</td><td class="files">components/admin/ReportMatrix.tsx</td><td><span class="status todo">保留</span></td><td class="pct">0%</td><td>一度カテゴリ内を逆順にしたが、カテゴリ順は変わらず新しい投稿は右のまま・章の順（「■最後に」が先頭）が崩れたため、ユーザー判断で元の並びに戻した。横に長いのはカテゴリが多い（遵守事項 7カテゴリ52件）ため。案：新しい投稿があるカテゴリを左に寄せ、カテゴリ内は読む順</td></tr>
       <tr><td>実 DB 検証</td><td class="files">scripts/verify-1000-cap-fixes.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>修正後のクエリ形を本番に投げ、SQL の正解と全項目一致（小さいページでも重複・取りこぼし無し）</td></tr>
       <tr><td>型チェック / lint / dev 起動</td><td class="files">—</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>tsc 0エラー / eslint は既存の any のみ / dev サーバーエラー0。ログインが要る画面の目視は未実施</td></tr>
-      <tr class="check"><td>別視点確認</td><td colspan="4">① 閲覧レポート（遵守事項・お知らせ）の既読率が上がり、実際に見た人が ✓ になっているか ② 列が左から新しい順か（「すべて」とカテゴリ絞り込みの両方）③ 管理者ダッシュボードの「最終完了日時」が全員分出るか ④ シフト管理ダッシュボードのシフト・送迎カードが下書きありの月で「作成中」になるか ⑤ manager でログインした閲覧レポートが自施設だけで正しく出るか</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 閲覧レポート（遵守事項・お知らせ）の既読率が上がり、実際に見た人が ✓ になっているか ② 列の並びが変更前（管理画面と同じ順）のままか ③ 管理者ダッシュボードの「最終完了日時」が全員分出るか ④ シフト管理ダッシュボードのシフト・送迎カードが下書きありの月で「作成中」になるか ⑤ manager でログインした閲覧レポートが自施設だけで正しく出るか</td></tr>
     </tbody>
   </table>
 </div>

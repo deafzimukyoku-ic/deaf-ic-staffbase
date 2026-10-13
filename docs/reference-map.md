@@ -67,7 +67,7 @@
 
 ---
 
-## 0.22 集計・レポートの 1000 行上限を全画面点検して修正 + 閲覧レポートの列を新しい順に（2026-10-13）
+## 0.22 集計・レポートの 1000 行上限を全画面点検して修正（2026-10-13）
 
 ### 背景
 - 0.21 の後、全画面を点検。法人全体で増え続けるログ系テーブルが 1000 行を超え、閲覧レポートの既読率が約半分に出ていた（詳細は `docs/error-log.md` 同日エントリ）
@@ -77,7 +77,7 @@
 - `app/api/reports/route.ts`: 閲覧ログ（`{category}_view_logs`）と `training_submissions` を `fetchAllRows` 経由に
 - `app/(admin)/admin/dashboard/page.tsx`: `document_submissions` / `compliance_acknowledgments` / `training_submissions` / `announcement_reads` / `manual_reads` を `fetchAllRows` 経由に（ローカル関数 `allRows`）
 - `app/(admin)/admin/shifts/dashboard/page.tsx`: `schedule_entries` / `shift_assignments` / `transport_assignments` を件数（全件・`publish_status <> 'published'`）で判定。送迎は `schedule_entries!inner(date)` で月を絞る
-- `components/admin/ReportMatrix.tsx`: 列を API の並び（`sort_order` → `created_at` 昇順）の**逆＝新しい投稿が左**に。「すべて」表示ではカテゴリ順は保ち、カテゴリ内だけ新しい順
+- `components/admin/ReportMatrix.tsx`: 列の並びは変更なし（一度カテゴリ内を新しい順にしたが、章の順が崩れるためユーザー判断で戻した）
 
 ### 参照（テーブル・列・関数）
 - テーブル: `compliance_view_logs` / `training_view_logs` / `announcement_view_logs` / `manual_view_logs`（`id` / `tenant_id` / `employee_id` / `item_id` / `viewed_at`）、`compliance_acknowledgments`（`id` / `employee_id` / `acknowledged_at`）、`announcement_reads`（PK `announcement_id, employee_id` / `read_at`）、`manual_reads`（PK `manual_id, employee_id` / `read_at`）、`document_submissions`（`id` / `status`）、`training_submissions`（`id` / `result` / `submitted_at`）、`shift_assignments` / `transport_assignments`（`tenant_id` / `publish_status`）、`schedule_entries`（`date`）
