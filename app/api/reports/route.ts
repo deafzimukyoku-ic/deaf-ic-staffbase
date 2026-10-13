@@ -30,24 +30,27 @@ type Category = keyof typeof CATEGORY_CONFIG;
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
-
-  const { data: me } = await supabase
-    .from('employees')
-    .select('id, tenant_id, role, facility_id')
-    .eq('auth_user_id', user.id)
-    .single();
-  if (!me) return NextResponse.json({ error: '社員情報が見つかりません' }, { status: 404 });
-  if (me.role !== 'admin' && me.role !== 'manager') {
-    return NextResponse.json({ error: '権限がありません' }, { status: 403 });
-  }
+  /* getClaims(): JWT をローカル検証（Auth サーバーへの往復なし）。middleware・shifts dashboard と同じ方式。
+     この API は DB と往復するたびに数百 ms かかっていた（2026-10-13 実測 7.5 秒）ため往復を 1 回でも減らす */
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub ?? null;
+  if (!userId) return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
 
   const category = req.nextUrl.searchParams.get('category') as Category | null;
   if (!category || !(category in CATEGORY_CONFIG)) {
     return NextResponse.json({ error: '無効な category です' }, { status: 400 });
   }
   const cfg = CATEGORY_CONFIG[category];
+
+  const { data: me } = await supabase
+    .from('employees')
+    .select('id, tenant_id, role, facility_id')
+    .eq('auth_user_id', userId)
+    .single();
+  if (!me) return NextResponse.json({ error: '社員情報が見つかりません' }, { status: 404 });
+  if (me.role !== 'admin' && me.role !== 'manager') {
+    return NextResponse.json({ error: '権限がありません' }, { status: 403 });
+  }
 
   /* days=30|7|all。指定無しは全期間。view_logs 側に viewed_at >= の条件を入れる。 */
   const daysParam = req.nextUrl.searchParams.get('days');
@@ -59,106 +62,92 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  /* manager は担当事業所の社員のみ。manager_facilities + 自分の facility_id を集める。
-     admin は全社員（tenant 内）。 */
-  let allowedFacilityIds: string[] | null = null;
-  if (me.role === 'manager') {
-    const ids = new Set<string>();
-    if (me.facility_id) ids.add(me.facility_id);
-    const { data: mfs } = await supabase
-      .from('manager_facilities')
-      .select('facility_id')
-      .eq('employee_id', me.id);
-    for (const mf of (mfs || [])) ids.add(mf.facility_id as string);
-    allowedFacilityIds = Array.from(ids);
-    if (allowedFacilityIds.length === 0) {
-      return NextResponse.json({ items: [], employees: [], views: [] });
-    }
-  }
-
-  /* items: アイテム本体。target_type / target_facility_ids / target_position_ids / category_id を含める。
-     compliance/training/announcement/manual すべて 036 / 091 で同じ列構成 + 034 で category_id 追加済。
-     並び順は admin/{category} ページと揃える: sort_order ASC（NULL は末尾）→ created_at ASC。
-     target_position_ids は ReportMatrix の audienceFor (isItemInAudience) で position フィルタに使う。 */
   /* version_at: 旧版/現版 判定の基準列 (content-version-tracking, migration 188/189)。
      training は recert_at (admin が「再受講を求める」を選んだときだけ前進)、
      compliance/announcement/manual は updated_at (全編集で前進)。
-     レスポンスでは version_at に正規化して返す。 */
+     レスポンスでは version_at に正規化して返す。
+     items の並び順は admin/{category} ページと揃える: sort_order ASC（NULL は末尾）→ created_at ASC。 */
   const versionCol = category === 'training' ? 'recert_at' : 'updated_at';
   const itemsSel = `id, ${cfg.titleField}, target_type, target_facility_ids, target_position_ids, category_id, sort_order, created_at, ${versionCol}`;
-  const { data: itemsData, error: itemsErr } = await supabase
-    .from(cfg.itemsTable)
-    .select(itemsSel)
-    .eq('tenant_id', me.tenant_id)
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true });
-  if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 });
 
-  /* このカテゴリ種別のカテゴリ一覧（フロントのフィルタドロップダウン用） */
-  const { data: categoriesData } = await supabase
-    .from('categories')
-    .select('id, name, icon, color')
-    .eq('tenant_id', me.tenant_id)
-    .eq('type', category)
-    .order('sort_order', { ascending: true });
+  /* 本人確認以外は互いに依存しないので全部同時に投げる。旧実装は 8 本前後を順番に await しており、
+     その往復の積み重ねが閲覧レポートの遅さの主因だった（2026-10-13）。
+     社員の事業所絞り込み（manager）と兼任の突き合わせは、取得後に JS で行う */
 
-  /* employees: active な社員。manager の場合は担当 facility に絞る。
-     対象オーディエンス（target_type='all' / 'facility'）の判定にも使う。
-     171: shift_manager は閲覧レポート対象から除外 (運用上「進捗管理対象外」) */
-  let empQuery = supabase
-    .from('employees')
-    .select('id, employee_number, last_name, first_name, facility_id, position_id, role, status')
-    .eq('tenant_id', me.tenant_id)
-    .eq('status', 'active')
-    .neq('role', 'shift_manager');
-  if (allowedFacilityIds) empQuery = empQuery.in('facility_id', allowedFacilityIds);
-  const { data: employeesData, error: empErr } = await empQuery;
-  if (empErr) return NextResponse.json({ error: empErr.message }, { status: 500 });
-
-  /* 兼任 facility (employee_facilities) を employee_id でまとめて引いて、
-     ReportMatrix の audienceFor (isItemInAudience) に渡せる形にする */
-  const empIds = (employeesData ?? []).map((e) => e.id);
-  const efByEmp = new Map<string, string[]>();
-  if (empIds.length > 0) {
-    const { data: efRows } = await supabase
-      .from('employee_facilities')
-      .select('employee_id, facility_id')
-      .in('employee_id', empIds);
-    for (const r of (efRows ?? []) as { employee_id: string; facility_id: string }[]) {
-      const arr = efByEmp.get(r.employee_id) ?? [];
-      arr.push(r.facility_id);
-      efByEmp.set(r.employee_id, arr);
-    }
-  }
-
-  /* facility 名解決 */
-  const { data: facilities } = await supabase
-    .from('facilities')
-    .select('id, name')
-    .eq('tenant_id', me.tenant_id);
-  const facMap = new Map((facilities || []).map((f) => [f.id, f.name]));
-
-  /* views: tenant 内の閲覧ログ全部を 1 クエリで取って、クライアント側で集計しても良いが、
-     SQL 側で GROUP BY して count + max(viewed_at) を返した方が転送量削減。
-     Supabase は raw SQL を直接叩けないので、view_logs を全件取って JS で集計する。
-     append-only でもログ数 = 社員数 × アイテム数 × 平均閲覧回数 程度なので現実的。 */
-  /* ページング必須（2026-10-13）: 単発取得だと PostgREST max-rows(1000) で黙って切れ、
-     遵守事項 2020 行・お知らせ 1219 行のうち 1000 行しか集計されず「見たのに未読」が出ていた */
-  let rawViews: { employee_id: string; item_id: string; viewed_at: string }[];
+  let results;
   try {
-    rawViews = await fetchAllRows<{ employee_id: string; item_id: string; viewed_at: string }>(() => {
-      let q = supabase
-        .from(cfg.viewsTable)
-        .select('employee_id, item_id, viewed_at')
-        .eq('tenant_id', me.tenant_id);
-      if (sinceIso) q = q.gte('viewed_at', sinceIso);
-      /* ページ間で並びがぶれると取りこぼし・重複が起きるため順序を固定する */
-      return q.order('id', { ascending: true });
-    });
+    results = await Promise.all([
+      me.role === 'manager'
+        ? supabase.from('manager_facilities').select('facility_id').eq('employee_id', me.id)
+        : Promise.resolve({ data: [] as { facility_id: string }[], error: null }),
+      supabase
+        .from(cfg.itemsTable)
+        .select(itemsSel)
+        .eq('tenant_id', me.tenant_id)
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true }),
+      /* このカテゴリ種別のカテゴリ一覧（フロントのフィルタドロップダウン用） */
+      supabase
+        .from('categories')
+        .select('id, name, icon, color')
+        .eq('tenant_id', me.tenant_id)
+        .eq('type', category)
+        .order('sort_order', { ascending: true }),
+      /* active な社員。171: shift_manager は閲覧レポート対象から除外 (運用上「進捗管理対象外」) */
+      supabase
+        .from('employees')
+        .select('id, employee_number, last_name, first_name, facility_id, position_id, role, status')
+        .eq('tenant_id', me.tenant_id)
+        .eq('status', 'active')
+        .neq('role', 'shift_manager'),
+      /* 兼任 facility。RLS (ef_tenant_read) で自テナント分だけ返る */
+      supabase.from('employee_facilities').select('employee_id, facility_id'),
+      supabase.from('facilities').select('id, name').eq('tenant_id', me.tenant_id),
+      /* ページング必須（2026-10-13）: 単発取得だと PostgREST max-rows(1000) で黙って切れ、
+         遵守事項 2020 行・お知らせ 1219 行のうち 1000 行しか集計されず「見たのに未読」が出ていた */
+      fetchAllRows<{ employee_id: string; item_id: string; viewed_at: string }>(() => {
+        let q = supabase
+          .from(cfg.viewsTable)
+          .select('employee_id, item_id, viewed_at')
+          .eq('tenant_id', me.tenant_id);
+        if (sinceIso) q = q.gte('viewed_at', sinceIso);
+        /* ページ間で並びがぶれると取りこぼし・重複が起きるため順序を固定する */
+        return q.order('id', { ascending: true });
+      }),
+    ]);
   } catch (e) {
     const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? '閲覧ログの取得に失敗しました';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+  const [mfRes, itemsRes, categoriesRes, employeesRes, efRes, facilitiesRes, viewsRows] = results;
+  if (itemsRes.error) return NextResponse.json({ error: itemsRes.error.message }, { status: 500 });
+  if (employeesRes.error) return NextResponse.json({ error: employeesRes.error.message }, { status: 500 });
+  if (efRes.error) return NextResponse.json({ error: efRes.error.message }, { status: 500 });
+  if (mfRes.error) return NextResponse.json({ error: mfRes.error.message }, { status: 500 });
+  const itemsData = itemsRes.data;
+  const categoriesData = categoriesRes.data;
+  const rawViews = viewsRows;
+
+  /* manager は担当事業所（manager_facilities + 自分の facility_id）の社員のみ。admin は全社員（tenant 内） */
+  let employeesData = employeesRes.data ?? [];
+  if (me.role === 'manager') {
+    const allowed = new Set<string>((mfRes.data ?? []).map((mf) => mf.facility_id as string));
+    if (me.facility_id) allowed.add(me.facility_id);
+    if (allowed.size === 0) {
+      return NextResponse.json({ items: [], employees: [], views: [] });
+    }
+    employeesData = employeesData.filter((e) => e.facility_id != null && allowed.has(e.facility_id));
+  }
+
+  /* 兼任 facility を employee_id でまとめて、ReportMatrix の audienceFor (isItemInAudience) に渡せる形にする */
+  const efByEmp = new Map<string, string[]>();
+  for (const r of (efRes.data ?? []) as { employee_id: string; facility_id: string }[]) {
+    const arr = efByEmp.get(r.employee_id) ?? [];
+    arr.push(r.facility_id);
+    efByEmp.set(r.employee_id, arr);
+  }
+
+  const facMap = new Map((facilitiesRes.data || []).map((f) => [f.id, f.name]));
 
   /* (employee_id, item_id) で集計: count, 最終閲覧日時, 直近10件の閲覧日時 (新しい順)
      recent_viewed_at は ② tooltip 表示用 (ホバー時に最新10件を YYYY/MM/DD HH:mm:ss で表示) */

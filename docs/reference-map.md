@@ -67,6 +67,16 @@
 
 ---
 
+## 0.23 読み込み速度の改善（2026-10-13）
+
+### 変更
+- `vercel.json`（新規）: `regions: ["sin1"]`。Supabase（ap-southeast-1）と同じ地域で Functions を動かす。**Supabase の地域を変えるときはここも合わせる**
+- `app/api/reports/route.ts`: 本人確認を `auth.getClaims()` に、以降の取得（`manager_facilities` / items / `categories` / `employees` / `employee_facilities` / `facilities` / `{category}_view_logs`）を `Promise.all` で同時実行。manager の事業所絞り込みは取得後に JS で（`employees.facility_id` ∈ `manager_facilities` ∪ 自分の `facility_id`）
+- `lib/supabase/client.ts`: `shareGetUser()` — ブラウザのシングルトンの `auth.getUser()` を合流 + 5 分共有（`GET_USER_SHARE_MS`）。`onAuthStateChange` の INITIAL_SESSION 以外で破棄。JWT 引数つき呼び出しは共有しない
+- 調査: `scripts/probe-rls-timing.mjs`（指定ロールの JWT を偽装して RLS 込みのクエリ時間を計測）
+
+---
+
 ## 0.22 集計・レポートの 1000 行上限を全画面点検して修正（2026-10-13）
 
 ### 背景

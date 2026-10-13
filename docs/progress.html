@@ -47,7 +47,23 @@
 <body>
 
 <h1>deaf-ic 統合実装 進捗表</h1>
-<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-10-13（集計・レポートの1000行上限 全画面点検と修正・閲覧レポートに新着順） / 全体完了率: 約 98%</p>
+<p class="sub">認定NPO法人名古屋ろう国際センター向け統合アプリ / 最終更新: 2026-10-13（集計・レポートの1000行上限 全画面点検と修正・閲覧レポートに新着順・読み込み速度の改善） / 全体完了率: 約 98%</p>
+
+<!-- 2026-10-13 性能改善（実行地域・閲覧レポートAPI・getUser 共有） -->
+<div class="phase">
+  <h2>読み込み速度の改善（2026-10-13） <span class="phase-pct">実装・本番反映 完了</span></h2>
+  <table>
+    <thead><tr><th>機能</th><th>対象ファイル</th><th>ステータス</th><th>完了率</th><th>備考</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:#f3f4f6; font-weight:bold; padding:8px 12px;">ユーザー指摘「全体的に遅い・閲覧レポートは死ぬほど遅い・シフトモード切替も遅い」。本番で実測：閲覧レポート API 7.5〜8.8秒 / シフト管理ダッシュボード 2.3〜3.4秒 / 各画面で getUser が4回順番に約0.8秒。真因は Functions が米国東部・DB がシンガポール。詳細 docs/error-log.md 同日エントリ。</td></tr>
+      <tr><td>実行地域をシンガポールへ</td><td class="files">vercel.json（新規）</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td><code>"regions": ["sin1"]</code>。全 API・サーバー描画ページに効く</td></tr>
+      <tr><td>閲覧レポート API の同時実行化</td><td class="files">app/api/reports/route.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>getClaims + 本人確認以外の7本を Promise.all。manager 絞り込みは JS で</td></tr>
+      <tr><td>ブラウザ側 getUser の共有</td><td class="files">lib/supabase/client.ts</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>同時呼び出しの合流 + 5分共有、ログイン状態変化で破棄。呼び出し側57ファイルは無変更</td></tr>
+      <tr><td>性能調査スクリプト</td><td class="files">scripts/probe-rls-timing.mjs</td><td><span class="status done">完了</span></td><td class="pct">100%</td><td>JWT 偽装で RLS 込みのクエリ時間を測る（DB は無実と確認）</td></tr>
+      <tr class="check"><td>別視点確認</td><td colspan="4">① 閲覧レポート・シフトモード切替・送迎表の体感速度 ② ログアウト→別ユーザーでログインしたとき前のユーザーの情報が出ないか ③ manager でログインした閲覧レポートが自施設の社員だけか ④ 保存系（送迎・シフト・料金表）が今まで通り動くか</td></tr>
+    </tbody>
+  </table>
+</div>
 
 <!-- 2026-10-13 集計・レポートの1000行上限 全画面点検 + 閲覧レポート列順 -->
 <div class="phase">
